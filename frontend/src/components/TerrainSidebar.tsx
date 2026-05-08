@@ -151,6 +151,9 @@ export function TerrainSidebar() {
 
   const typeLabels: Record<string, string> = { city: 'City', town: 'Town', village: 'Village' }
 
+  const [elevExpanded, setElevExpanded] = useState(false)
+  const [railsExpanded, setRailsExpanded] = useState(false)
+
   // Settlement edit local state
   const [expandedSettlement, setExpandedSettlement] = useState<number | null>(null)
   const [placeTab, setPlaceTab] = useState<'custom' | 'real'>('custom')
@@ -422,6 +425,156 @@ export function TerrainSidebar() {
               </div>
             </div>
           )}
+
+          {/* ── ELEVATION (collapsible) ── */}
+          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 10 }}>
+            <button
+              onClick={() => setElevExpanded(!elevExpanded)}
+              style={{
+                width: '100%', background: 'none', border: 'none',
+                color: elevExpanded ? '#9ab8d8' : '#6a8aaa',
+                cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0 0 6px 0',
+              }}
+            >
+              <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+                Elevation{elevationStatus === 'done' ? ' ●' : ''}
+              </span>
+              <span>{elevExpanded ? '▴' : '▾'}</span>
+            </button>
+            {elevExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  onClick={fetchElevation}
+                  disabled={elevationStatus === 'loading'}
+                  style={{
+                    width: '100%', padding: '9px 0',
+                    background: elevationStatus === 'loading' ? '#2a3a5a' : '#2a4a6a',
+                    color: elevationStatus === 'loading' ? '#7a9aba' : '#c0d8f0',
+                    border: '1px solid #3a6a9a', borderRadius: 4,
+                    cursor: elevationStatus === 'loading' ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+                  }}
+                >
+                  {elevationStatus === 'loading' ? 'Fetching…' : elevationStatus === 'done' ? 'Re-fetch Elevation' : 'Fetch Elevation'}
+                </button>
+
+                {elevationProgress && (
+                  <div>
+                    <div style={{ width: '100%', height: 5, background: '#1e1f2a', borderRadius: 3, overflow: 'hidden', marginBottom: 5 }}>
+                      <div style={{ height: '100%', width: `${elevationProgress.progress}%`, background: '#3a6a9a', borderRadius: 3, transition: 'width 0.3s ease' }} />
+                    </div>
+                    <div style={{ color: '#7a9aba', fontSize: 11 }}>{elevationProgress.message}</div>
+                  </div>
+                )}
+
+                {elevationError && (
+                  <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word' }}>{elevationError}</div>
+                )}
+
+                {elevationStatus === 'done' && (
+                  <>
+                    <div>
+                      <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Style</div>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {([
+                          { value: 'hachure', label: 'Hachure' },
+                          { value: 'contour', label: 'Contour lines' },
+                        ] as const).map(({ value, label }) => (
+                          <button key={value} onClick={() => setElevationStyle(value)} style={{
+                            flex: 1, padding: '5px 0',
+                            background: elevationStyle === value ? '#2a3a2a' : '#1e1f2a',
+                            color: elevationStyle === value ? '#90d870' : '#5a5a7a',
+                            border: `1px solid ${elevationStyle === value ? '#5a9a40' : '#2a2a3a'}`,
+                            borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 10, fontWeight: elevationStyle === value ? 700 : 400,
+                          }}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {elevationStyle === 'contour' && (
+                      <div>
+                        <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Contour interval</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {[0, 10, 25, 50, 100, 200, 500].map((v) => (
+                            <button key={v} onClick={() => setContourInterval(v)} style={{
+                              padding: '3px 8px',
+                              background: contourInterval === v ? '#2a3a2a' : '#1e1f2a',
+                              color: contourInterval === v ? '#90d870' : '#6a6a8a',
+                              border: `1px solid ${contourInterval === v ? '#5a9a40' : '#2a2a3a'}`,
+                              borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                              fontWeight: contourInterval === v ? 700 : 400,
+                            }}>{v === 0 ? 'auto' : `${v}m`}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Mode A — Terrain Class</span>
+                        <InfoTooltip text={
+                          'Each hex is classified by two independent methods, and gets the higher result:\n\n' +
+                          '• Local relief — how much higher this hex is than its neighbours. Catches hills and peaks that stand out from surrounding terrain.\n\n' +
+                          '• Absolute elevation — raw altitude above sea level. Catches high plateaus where all neighbours are equally high.\n\n' +
+                          'Raise a threshold if too many hexes are being classified up. Lower it if real hills are showing as flat.'
+                        } />
+                      </div>
+                      <ElevSlider label="Hills — local relief" value={elevationThresholds.hills_relief_m} min={10} max={500} step={10} unit="m" onChange={(v) => setElevationThreshold('hills_relief_m', v)} />
+                      <ElevSlider label="Mountains — local relief" value={elevationThresholds.mountains_relief_m} min={50} max={2000} step={25} unit="m" onChange={(v) => setElevationThreshold('mountains_relief_m', v)} />
+                      <ElevSlider label="Hills — absolute" value={elevationThresholds.hills_absolute_m} min={50} max={2000} step={25} unit="m" onChange={(v) => setElevationThreshold('hills_absolute_m', v)} />
+                      <ElevSlider label="Mountains — absolute" value={elevationThresholds.mountains_absolute_m} min={200} max={5000} step={50} unit="m" onChange={(v) => setElevationThreshold('mountains_absolute_m', v)} />
+                    </div>
+
+                    <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>Elevation overlay</div>
+                      <HeatmapToggle label="Relief heatmap" active={showReliefHeatmap} onToggle={() => setShowReliefHeatmap(!showReliefHeatmap)} />
+                      <HeatmapToggle label="Elevation heatmap" active={showElevHeatmap} onToggle={() => setShowElevHeatmap(!showElevHeatmap)} />
+                    </div>
+
+                    <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
+                      <button
+                        onClick={() => setElevationPaintMode(!elevationPaintMode)}
+                        style={{
+                          width: '100%', padding: '6px 0',
+                          background: elevationPaintMode ? '#1a2a1a' : '#1e1f2a',
+                          color: elevationPaintMode ? '#90d870' : '#5a5a7a',
+                          border: `1px solid ${elevationPaintMode ? '#5a9a40' : '#2a2a3a'}`,
+                          borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+                          fontSize: 11, fontWeight: elevationPaintMode ? 700 : 400,
+                        }}
+                      >
+                        {elevationPaintMode ? '✎ painting elevation' : '✎ paint elevation'}
+                      </button>
+                      {elevationPaintMode && (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Brush</div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {([
+                              { value: 'flat', label: 'Flat', color: '#a8b870' },
+                              { value: 'hills', label: 'Hills', color: '#9e8c6a' },
+                              { value: 'mountains', label: 'Mountains', color: '#8a7a6a' },
+                            ] as const).map(({ value, label, color }) => (
+                              <button key={value} onClick={() => setElevationPaintBrush(value)} style={{
+                                flex: 1, padding: '4px 0',
+                                background: elevationPaintBrush === value ? color : '#1e1f2a',
+                                color: elevationPaintBrush === value ? '#12131a' : '#a0a0b8',
+                                border: `1px solid ${elevationPaintBrush === value ? color : '#2a2a3a'}`,
+                                borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                              }}>{label}</button>
+                            ))}
+                          </div>
+                          <div style={{ color: '#5a8a5a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click or drag hexes to paint.</div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -708,113 +861,122 @@ export function TerrainSidebar() {
               </div>
             )
           })()}
-        </>
-      )}
 
-      {/* ── RAILS PANEL ── */}
-      {activePanel === 'rails' && (
-        <>
-          {/* Rail types */}
-          <div>
-            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Rail types</div>
-            {(['rail', 'light_rail', 'narrow_gauge', 'tram'] as const).map((rt) => (
-              <label key={rt} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer' }}>
-                <input type="checkbox" checked={railsFetchTypes.includes(rt)}
-                  onChange={(e) => {
-                    const next = e.target.checked ? [...railsFetchTypes, rt] : railsFetchTypes.filter((t) => t !== rt)
-                    setRailsFetchTypes(next.length > 0 ? next : railsFetchTypes)
-                  }}
-                />
-                <span style={{ color: '#b0b0c8' }}>{rt.replace('_', ' ')}</span>
-              </label>
-            ))}
-          </div>
-
-          {/* Fetch button */}
-          <button
-            onClick={fetchRails}
-            disabled={railsStatus === 'loading'}
-            style={{
-              padding: '7px 0',
-              background: railsStatus === 'loading' ? '#1a1f2e' : '#1a2a3a',
-              color: railsStatus === 'loading' ? '#4a5a6a' : '#7ab8d8',
-              border: '1px solid #2a3a4a',
-              borderRadius: 4,
-              cursor: railsStatus === 'loading' ? 'default' : 'pointer',
-              fontFamily: 'inherit',
-              fontSize: 12,
-              width: '100%',
-            }}
-          >
-            {railsStatus === 'loading' ? 'Fetching…' : 'Fetch from OSM'}
-          </button>
-
-          {railsError && (
-            <div style={{ color: '#e06060', fontSize: 11 }}>{railsError}</div>
-          )}
-
-          {railEdges.length > 0 && (
-            <>
-              {/* Display mode */}
-              <div>
-                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Display mode</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {(['per_hex', 'raw'] as const).map((mode) => (
-                    <button key={mode} onClick={() => setRailsDisplayMode(mode)} style={{
-                      flex: 1, padding: '5px 0',
-                      background: railsDisplayMode === mode ? '#1a2a3a' : 'none',
-                      color: railsDisplayMode === mode ? '#7ab8d8' : '#5a5a7a',
-                      border: `1px solid ${railsDisplayMode === mode ? '#3a5a7a' : '#2a2a3a'}`,
-                      borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                    }}>{mode === 'per_hex' ? 'Hex' : 'Raw'}</button>
+          {/* ── RAILS (collapsible) ── */}
+          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 10 }}>
+            <button
+              onClick={() => setRailsExpanded(!railsExpanded)}
+              style={{
+                width: '100%', background: 'none', border: 'none',
+                color: railsExpanded ? '#9ab8d8' : '#6a8aaa',
+                cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0 0 6px 0',
+              }}
+            >
+              <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+                Rails{railEdges.length > 0 ? ` ● ${railEdges.length}` : ''}
+              </span>
+              <span>{railsExpanded ? '▴' : '▾'}</span>
+            </button>
+            {railsExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Rail types</div>
+                  {(['rail', 'light_rail', 'narrow_gauge', 'tram'] as const).map((rt) => (
+                    <label key={rt} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={railsFetchTypes.includes(rt)}
+                        onChange={(e) => {
+                          const next = e.target.checked ? [...railsFetchTypes, rt] : railsFetchTypes.filter((t) => t !== rt)
+                          setRailsFetchTypes(next.length > 0 ? next : railsFetchTypes)
+                        }}
+                      />
+                      <span style={{ color: '#b0b0c8' }}>{rt.replace('_', ' ')}</span>
+                    </label>
                   ))}
                 </div>
-              </div>
 
-              {/* Paint mode */}
-              <div>
-                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Edit</div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                  <button onClick={() => setRailPaintMode(!railPaintMode)} style={{
-                    flex: 1, padding: '5px 0',
-                    background: railPaintMode && !railPaintEraser ? '#1a2a1a' : 'none',
-                    color: railPaintMode && !railPaintEraser ? '#7ad878' : '#5a5a7a',
-                    border: `1px solid ${railPaintMode && !railPaintEraser ? '#3a6a3a' : '#2a2a3a'}`,
-                    borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                  }}>Draw</button>
-                  <button onClick={() => { setRailPaintMode(true); setRailPaintEraser(true) }} style={{
-                    flex: 1, padding: '5px 0',
-                    background: railPaintMode && railPaintEraser ? '#2a1a1a' : 'none',
-                    color: railPaintMode && railPaintEraser ? '#e07070' : '#5a5a7a',
-                    border: `1px solid ${railPaintMode && railPaintEraser ? '#6a3a3a' : '#2a2a3a'}`,
-                    borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                  }}>Erase</button>
-                </div>
-                {railPaintMode && (
-                  <div style={{ color: '#4a6a4a', fontSize: 11 }}>
-                    {railPaintEraser ? 'Click/drag to erase rail segments' : 'Drag between adjacent hexes to draw rails'}
-                  </div>
+                <button
+                  onClick={fetchRails}
+                  disabled={railsStatus === 'loading'}
+                  style={{
+                    padding: '7px 0',
+                    background: railsStatus === 'loading' ? '#1a1f2e' : '#1a2a3a',
+                    color: railsStatus === 'loading' ? '#4a5a6a' : '#7ab8d8',
+                    border: '1px solid #2a3a4a', borderRadius: 4,
+                    cursor: railsStatus === 'loading' ? 'default' : 'pointer',
+                    fontFamily: 'inherit', fontSize: 12, width: '100%',
+                  }}
+                >
+                  {railsStatus === 'loading' ? 'Fetching…' : 'Fetch from OSM'}
+                </button>
+
+                {railsError && (
+                  <div style={{ color: '#e06060', fontSize: 11 }}>{railsError}</div>
+                )}
+
+                {railEdges.length > 0 && (
+                  <>
+                    <div>
+                      <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Display mode</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {(['per_hex', 'raw'] as const).map((mode) => (
+                          <button key={mode} onClick={() => setRailsDisplayMode(mode)} style={{
+                            flex: 1, padding: '5px 0',
+                            background: railsDisplayMode === mode ? '#1a2a3a' : 'none',
+                            color: railsDisplayMode === mode ? '#7ab8d8' : '#5a5a7a',
+                            border: `1px solid ${railsDisplayMode === mode ? '#3a5a7a' : '#2a2a3a'}`,
+                            borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                          }}>{mode === 'per_hex' ? 'Hex' : 'Raw'}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Edit</div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                        <button onClick={() => setRailPaintMode(!railPaintMode)} style={{
+                          flex: 1, padding: '5px 0',
+                          background: railPaintMode && !railPaintEraser ? '#1a2a1a' : 'none',
+                          color: railPaintMode && !railPaintEraser ? '#7ad878' : '#5a5a7a',
+                          border: `1px solid ${railPaintMode && !railPaintEraser ? '#3a6a3a' : '#2a2a3a'}`,
+                          borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                        }}>Draw</button>
+                        <button onClick={() => { setRailPaintMode(true); setRailPaintEraser(true) }} style={{
+                          flex: 1, padding: '5px 0',
+                          background: railPaintMode && railPaintEraser ? '#2a1a1a' : 'none',
+                          color: railPaintMode && railPaintEraser ? '#e07070' : '#5a5a7a',
+                          border: `1px solid ${railPaintMode && railPaintEraser ? '#6a3a3a' : '#2a2a3a'}`,
+                          borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                        }}>Erase</button>
+                      </div>
+                      {railPaintMode && (
+                        <div style={{ color: '#4a6a4a', fontSize: 11 }}>
+                          {railPaintEraser ? 'Click/drag to erase rail segments' : 'Drag between adjacent hexes to draw rails'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={clearRails} style={{
+                        flex: 1, padding: '5px 0', background: 'none', color: '#5a5a7a',
+                        border: '1px solid #2a2a3a', borderRadius: 4,
+                        cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                      }}>Clear all</button>
+                    </div>
+
+                    <div style={{ color: '#4a4a6a', fontSize: 11 }}>
+                      {railEdges.length} rail edge{railEdges.length !== 1 ? 's' : ''}
+                    </div>
+                  </>
+                )}
+
+                {railsStatus === 'done' && railEdges.length === 0 && (
+                  <div style={{ color: '#4a4a6a', fontSize: 11 }}>No rails found in this area.</div>
                 )}
               </div>
-
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={clearRails} style={{
-                  flex: 1, padding: '5px 0',
-                  background: 'none', color: '#5a5a7a',
-                  border: '1px solid #2a2a3a', borderRadius: 4,
-                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                }}>Clear all</button>
-              </div>
-
-              <div style={{ color: '#4a4a6a', fontSize: 11 }}>
-                {railEdges.length} rail edge{railEdges.length !== 1 ? 's' : ''}
-              </div>
-            </>
-          )}
-
-          {railsStatus === 'done' && railEdges.length === 0 && (
-            <div style={{ color: '#4a4a6a', fontSize: 11 }}>No rails found in this area.</div>
-          )}
+            )}
+          </div>
         </>
       )}
 
@@ -1312,217 +1474,6 @@ export function TerrainSidebar() {
                 })}
               </div>
             </div>
-          )}
-        </>
-      )}
-
-      {/* ── Elevation panel ────────────────────────────────── */}
-      {activePanel === 'elevation' && (
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button
-              onClick={fetchElevation}
-              disabled={elevationStatus === 'loading'}
-              style={{
-                width: '100%',
-                padding: '9px 0',
-                background: elevationStatus === 'loading' ? '#2a3a5a' : '#2a4a6a',
-                color: elevationStatus === 'loading' ? '#7a9aba' : '#c0d8f0',
-                border: '1px solid #3a6a9a',
-                borderRadius: 4,
-                cursor: elevationStatus === 'loading' ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-              }}
-            >
-              {elevationStatus === 'loading' ? 'Fetching…' : elevationStatus === 'done' ? 'Re-fetch Elevation' : 'Fetch Elevation'}
-            </button>
-
-            {elevationProgress && (
-              <div>
-                <div style={{ width: '100%', height: 5, background: '#1e1f2a', borderRadius: 3, overflow: 'hidden', marginBottom: 5 }}>
-                  <div style={{ height: '100%', width: `${elevationProgress.progress}%`, background: '#3a6a9a', borderRadius: 3, transition: 'width 0.3s ease' }} />
-                </div>
-                <div style={{ color: '#7a9aba', fontSize: 11 }}>{elevationProgress.message}</div>
-              </div>
-            )}
-
-            {elevationError && (
-              <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word' }}>{elevationError}</div>
-            )}
-          </div>
-
-          {elevationStatus === 'done' && (
-            <>
-              <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
-                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Style
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {([
-                    { value: 'hachure', label: 'Hachure' },
-                    { value: 'contour', label: 'Contour lines' },
-                  ] as const).map(({ value, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => setElevationStyle(value)}
-                      style={{
-                        flex: 1,
-                        padding: '5px 0',
-                        background: elevationStyle === value ? '#2a3a2a' : '#1e1f2a',
-                        color: elevationStyle === value ? '#90d870' : '#5a5a7a',
-                        border: `1px solid ${elevationStyle === value ? '#5a9a40' : '#2a2a3a'}`,
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        fontSize: 10,
-                        fontWeight: elevationStyle === value ? 700 : 400,
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {elevationStyle === 'contour' && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                    Contour interval
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {[0, 10, 25, 50, 100, 200, 500].map((v) => (
-                      <button key={v} onClick={() => setContourInterval(v)} style={{
-                        padding: '3px 8px',
-                        background: contourInterval === v ? '#2a3a2a' : '#1e1f2a',
-                        color: contourInterval === v ? '#90d870' : '#6a6a8a',
-                        border: `1px solid ${contourInterval === v ? '#5a9a40' : '#2a2a3a'}`,
-                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
-                        fontWeight: contourInterval === v ? 700 : 400,
-                      }}>
-                        {v === 0 ? 'auto' : `${v}m`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                    Mode A — Terrain Class
-                  </span>
-                  <InfoTooltip text={
-                    'Each hex is classified by two independent methods, and gets the higher result:\n\n' +
-                    '• Local relief — how much higher this hex is than its neighbours. Catches hills and peaks that stand out from surrounding terrain.\n\n' +
-                    '• Absolute elevation — raw altitude above sea level. Catches high plateaus where all neighbours are equally high.\n\n' +
-                    'Raise a threshold if too many hexes are being classified up. Lower it if real hills are showing as flat.'
-                  } />
-                </div>
-
-                <ElevSlider
-                  label="Hills — local relief"
-                  value={elevationThresholds.hills_relief_m}
-                  min={10} max={500} step={10}
-                  unit="m"
-                  onChange={(v) => setElevationThreshold('hills_relief_m', v)}
-                />
-                <ElevSlider
-                  label="Mountains — local relief"
-                  value={elevationThresholds.mountains_relief_m}
-                  min={50} max={2000} step={25}
-                  unit="m"
-                  onChange={(v) => setElevationThreshold('mountains_relief_m', v)}
-                />
-                <ElevSlider
-                  label="Hills — absolute"
-                  value={elevationThresholds.hills_absolute_m}
-                  min={50} max={2000} step={25}
-                  unit="m"
-                  onChange={(v) => setElevationThreshold('hills_absolute_m', v)}
-                />
-                <ElevSlider
-                  label="Mountains — absolute"
-                  value={elevationThresholds.mountains_absolute_m}
-                  min={200} max={5000} step={50}
-                  unit="m"
-                  onChange={(v) => setElevationThreshold('mountains_absolute_m', v)}
-                />
-              </div>
-
-              <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>
-                  Elevation overlay
-                </div>
-                <HeatmapToggle
-                  label="Relief heatmap"
-                  active={showReliefHeatmap}
-                  onToggle={() => setShowReliefHeatmap(!showReliefHeatmap)}
-                />
-                <HeatmapToggle
-                  label="Elevation heatmap"
-                  active={showElevHeatmap}
-                  onToggle={() => setShowElevHeatmap(!showElevHeatmap)}
-                />
-              </div>
-
-              <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
-                <button
-                  onClick={() => setElevationPaintMode(!elevationPaintMode)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 0',
-                    background: elevationPaintMode ? '#1a2a1a' : '#1e1f2a',
-                    color: elevationPaintMode ? '#90d870' : '#5a5a7a',
-                    border: `1px solid ${elevationPaintMode ? '#5a9a40' : '#2a2a3a'}`,
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: 11,
-                    fontWeight: elevationPaintMode ? 700 : 400,
-                  }}
-                >
-                  {elevationPaintMode ? '✎ painting elevation' : '✎ paint elevation'}
-                </button>
-                {elevationPaintMode && (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                      Brush
-                    </div>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {([
-                        { value: 'flat', label: 'Flat', color: '#a8b870' },
-                        { value: 'hills', label: 'Hills', color: '#9e8c6a' },
-                        { value: 'mountains', label: 'Mountains', color: '#8a7a6a' },
-                      ] as const).map(({ value, label, color }) => (
-                        <button
-                          key={value}
-                          onClick={() => setElevationPaintBrush(value)}
-                          style={{
-                            flex: 1,
-                            padding: '4px 0',
-                            background: elevationPaintBrush === value ? color : '#1e1f2a',
-                            color: elevationPaintBrush === value ? '#12131a' : '#a0a0b8',
-                            border: `1px solid ${elevationPaintBrush === value ? color : '#2a2a3a'}`,
-                            borderRadius: 3,
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                            fontSize: 10,
-                          }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ color: '#5a8a5a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>
-                      Click or drag hexes to paint.
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
           )}
         </>
       )}

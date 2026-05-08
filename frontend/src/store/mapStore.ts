@@ -953,7 +953,7 @@ interface MapStore {
   showReliefHeatmap: boolean
   showElevHeatmap: boolean
 
-  activePanel: 'terrain' | 'settlements' | 'roads' | 'rails' | 'rivers' | 'elevation' | 'style'
+  activePanel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'style'
 
   setPaperSize: (v: PaperSize) => void
   setOrientation: (v: Orientation) => void
@@ -1058,7 +1058,7 @@ interface MapStore {
   setRailPaintMode: (v: boolean) => void
   setRailPaintEraser: (v: boolean) => void
 
-  setActivePanel: (panel: 'terrain' | 'settlements' | 'roads' | 'rails' | 'rivers' | 'elevation' | 'style') => void
+  setActivePanel: (panel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'style') => void
 
   // Style
   elevationStyle: 'hachure' | 'contour'
