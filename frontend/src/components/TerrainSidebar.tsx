@@ -101,10 +101,12 @@ export function TerrainSidebar() {
     terrainNoiseFrequency,
     terrainNoiseSeed,
     terrainNoiseOctaves,
+    illustratedStyle,
     setTerrainDisplacement,
     setTerrainNoiseFrequency,
     setTerrainNoiseSeed,
     setTerrainNoiseOctaves,
+    setIllustratedStyle,
   } = useMapStore()
 
 
@@ -1249,6 +1251,34 @@ export function TerrainSidebar() {
         <>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#c8b88a', letterSpacing: 0.5 }}>
             Terrain style
+          </div>
+
+          {/* Illustrated tile toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: illustratedStyle ? '#1a2a1a' : '#1a1a26', border: `1px solid ${illustratedStyle ? '#3a6a3a' : '#2a2a3a'}`, borderRadius: 6 }}>
+            <div>
+              <div style={{ color: illustratedStyle ? '#7de0a0' : '#8a8aaa', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                Illustrated tiles
+              </div>
+              <div style={{ color: '#5a5a7a', fontSize: 10, marginTop: 2 }}>
+                Uses tile art from public/tiles/
+              </div>
+            </div>
+            <button
+              onClick={() => setIllustratedStyle(!illustratedStyle)}
+              style={{
+                padding: '4px 12px',
+                background: illustratedStyle ? '#2a5a2a' : '#1e1f2a',
+                color: illustratedStyle ? '#7de0a0' : '#5a5a7a',
+                border: `1px solid ${illustratedStyle ? '#4a7a4a' : '#2a2a3a'}`,
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {illustratedStyle ? 'ON' : 'OFF'}
+            </button>
           </div>
 
           <StyleSlider
