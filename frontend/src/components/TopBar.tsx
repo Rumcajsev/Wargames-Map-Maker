@@ -1,22 +1,20 @@
 import { useMapStore } from '../store/mapStore'
 
 const TABS = [
-  { id: 'terrain',     label: 'Terrain'   },
-  { id: 'elevation',   label: 'Elevation' },
-  { id: 'settlements', label: 'Places'    },
-  { id: 'roads',       label: 'Roads'     },
-  { id: 'rivers',      label: 'Rivers'    },
-  { id: 'style',       label: 'Style'     },
+  { id: 'terrain',     label: 'Terrain'     },
+  { id: 'roads',       label: 'Roads'       },
+  { id: 'settlements', label: 'Places'      },
+  { id: 'rivers',      label: 'Rivers'      },
+  { id: 'style',       label: 'Style'       },
 ] as const
 
 export function TopBar() {
-  const { activePanel, setActivePanel, resetToSetup, elevationStatus, settlements, roadEdges, riverFeatures, terrainDisplacement } = useMapStore()
+  const { activePanel, setActivePanel, resetToSetup, elevationStatus, settlements, roadEdges, railEdges, riverFeatures, terrainDisplacement } = useMapStore()
 
   const tabDot: Record<string, string | null> = {
-    terrain: null,
-    elevation: elevationStatus === 'done' ? '#6ab0e0' : null,
+    terrain: elevationStatus === 'done' ? '#6ab0e0' : null,
     settlements: settlements.length > 0 ? '#d0b060' : null,
-    roads: roadEdges.length > 0 ? '#e08040' : null,
+    roads: (roadEdges.length > 0 || railEdges.length > 0) ? '#e08040' : null,
     rivers: riverFeatures.some(r => r.included) ? '#4a88c0' : null,
     style: terrainDisplacement > 0 ? '#c09060' : null,
   }
@@ -83,7 +81,7 @@ export function TopBar() {
         return (
           <button
             key={id}
-            onClick={() => setActivePanel(id)}
+            onClick={() => setActivePanel(id as typeof activePanel)}
             style={{
               height: '100%',
               padding: '0 16px',

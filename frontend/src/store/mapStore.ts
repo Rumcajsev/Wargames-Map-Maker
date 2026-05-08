@@ -814,9 +814,24 @@ export function roadEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: num
   return `${highway}:${a < b ? `${a}|${b}` : `${b}|${a}`}`
 }
 
+export interface RailEdge {
+  q1: number
+  r1: number
+  q2: number
+  r2: number
+  rail_type: string
+  manual?: boolean
+}
+
+export function railEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: number, rail_type: string): string {
+  const a = `${q1},${r1}`, b = `${q2},${r2}`
+  return `${rail_type}:${a < b ? `${a}|${b}` : `${b}|${a}`}`
+}
+
 export interface UndoSnapshot {
   terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean }>
   roadEdges: RoadEdge[]
+  railEdges: RailEdge[]
   riverEdges: RiverEdge[]
   settlements: Settlement[]
 }
@@ -882,6 +897,13 @@ interface MapStore {
   roadsStatus: 'idle' | 'loading' | 'error' | 'done'
   roadsError: string | null
 
+  // Rails state
+  railEdges: RailEdge[]
+  railsRailTypes: string[]
+  railsVisibleTypes: string[]
+  railsStatus: 'idle' | 'loading' | 'error' | 'done'
+  railsError: string | null
+
   // Rivers state
   riverEdges: RiverEdge[]
   riverChains: [number, number][][]
@@ -899,8 +921,6 @@ interface MapStore {
   elevationProgress: GenerateProgress | null
   showReliefHeatmap: boolean
   showElevHeatmap: boolean
-
-  activePanel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'elevation' | 'style'
 
   setPaperSize: (v: PaperSize) => void
   setOrientation: (v: Orientation) => void
@@ -953,6 +973,16 @@ interface MapStore {
   removeRoadHexEdges: (q: number, r: number, highway: string) => void
   removeAllRoadHexEdges: (q: number, r: number) => void
 
+  // Rails actions
+  fetchRails: () => Promise<void>
+  setRailsRailTypes: (types: string[]) => void
+  setRailsVisibleTypes: (types: string[]) => void
+  clearRails: () => void
+  clearManualRails: () => void
+  addRailEdge: (q1: number, r1: number, q2: number, r2: number, rail_type: string) => void
+  removeRailHexEdges: (q: number, r: number, rail_type: string) => void
+  removeAllRailHexEdges: (q: number, r: number) => void
+
   // Rivers actions
   fetchRivers: () => Promise<void>
   toggleRiverIncluded: (index: number) => void
@@ -984,7 +1014,16 @@ interface MapStore {
   setRoadPaintBrush: (v: string) => void
   setRoadPaintEraser: (v: boolean) => void
 
-  setActivePanel: (panel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'elevation' | 'style') => void
+  // Rail paint mode
+  railPaintMode: boolean
+  railPaintBrush: string
+  railPaintEraser: boolean
+  setRailPaintMode: (v: boolean) => void
+  setRailPaintBrush: (v: string) => void
+  setRailPaintEraser: (v: boolean) => void
+
+  setActivePanel: (panel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'style') => void
+  activePanel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'style'
 
   // Style
   terrainDisplacement: number
@@ -1052,6 +1091,12 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   roadsStatus: 'idle',
   roadsError: null,
 
+  railEdges: [],
+  railsRailTypes: ['rail'],
+  railsVisibleTypes: ['rail', 'narrow_gauge', 'light_rail'],
+  railsStatus: 'idle',
+  railsError: null,
+
   riverEdges: [],
   riverChains: [],
   riverFeatures: [],
@@ -1075,6 +1120,10 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   roadPaintMode: false,
   roadPaintBrush: 'primary',
   roadPaintEraser: false,
+
+  railPaintMode: false,
+  railPaintBrush: 'rail',
+  railPaintEraser: false,
 
   activePanel: 'terrain',
 
@@ -1152,6 +1201,10 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     roadsVisibleTypes: [],
     roadsStatus: 'idle',
     roadsError: null,
+    railEdges: [],
+    railsVisibleTypes: [],
+    railsStatus: 'idle',
+    railsError: null,
     riverEdges: [],
     riverChains: [],
     riverFeatures: [],
@@ -1166,6 +1219,8 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     terrainPaintMode: false,
     roadPaintMode: false,
     roadPaintEraser: false,
+    railPaintMode: false,
+    railPaintEraser: false,
     activePanel: 'terrain',
   }),
 
@@ -1481,12 +1536,16 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   setShowReliefHeatmap: (v) => set({ showReliefHeatmap: v, showElevHeatmap: v ? false : get().showElevHeatmap }),
   setShowElevHeatmap: (v) => set({ showElevHeatmap: v, showReliefHeatmap: v ? false : get().showReliefHeatmap }),
 
-  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, selectedHex: null } : {}) }),
+  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, selectedHex: null } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
 
-  setRoadPaintMode: (v) => set({ roadPaintMode: v, ...(v ? { terrainPaintMode: false, roadsDisplayMode: 'per_hex' } : { roadPaintEraser: false }) }),
+  setRoadPaintMode: (v) => set({ roadPaintMode: v, ...(v ? { terrainPaintMode: false, railPaintMode: false, roadsDisplayMode: 'per_hex' } : { roadPaintEraser: false }) }),
   setRoadPaintBrush: (v) => set({ roadPaintBrush: v }),
   setRoadPaintEraser: (v) => set({ roadPaintEraser: v }),
+
+  setRailPaintMode: (v) => set({ railPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false } : { railPaintEraser: false }) }),
+  setRailPaintBrush: (v) => set({ railPaintBrush: v }),
+  setRailPaintEraser: (v) => set({ railPaintEraser: v }),
 
   addRoadEdge: (q1, r1, q2, r2, highway) => {
     const { roadEdges, roadsVisibleTypes } = get()
@@ -1511,6 +1570,76 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   removeAllRoadHexEdges: (q, r) => {
     const { roadEdges } = get()
     set({ roadEdges: roadEdges.filter((e) => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) })
+  },
+
+  clearRails: () => set({ railEdges: [], railsVisibleTypes: [], railsStatus: 'idle', railsError: null }),
+  clearManualRails: () => { get().pushUndoSnapshot(); set((s) => ({ railEdges: s.railEdges.filter((e) => !e.manual) })) },
+  setRailsRailTypes: (types) => set({ railsRailTypes: types }),
+  setRailsVisibleTypes: (types) => set({ railsVisibleTypes: types }),
+
+  fetchRails: async () => {
+    const { generatedMetadata, hexOrientation, railsRailTypes } = get()
+    if (!generatedMetadata) return
+
+    set({ railsStatus: 'loading', railsError: null })
+
+    try {
+      const resp = await fetch('/api/generate/rails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          center_lon: generatedMetadata.center[0],
+          center_lat: generatedMetadata.center[1],
+          bearing: generatedMetadata.bearing,
+          width_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0],
+          height_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1],
+          hex_orientation: hexOrientation,
+          R_m: generatedMetadata.outer_radius_m,
+          rail_types: railsRailTypes,
+        }),
+      })
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+      const fetchedTypes = [...new Set<string>((data.raw_ways as { highway: string }[]).map((w) => w.highway))]
+      const edgeSet = new Set<string>()
+      const railEdges: RailEdge[] = []
+      for (const rh of data.road_hexes as { q: number; r: number; highway: string; connections: { q: number; r: number }[] }[]) {
+        for (const conn of rh.connections) {
+          const key = railEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r, rh.highway)
+          if (!edgeSet.has(key)) {
+            edgeSet.add(key)
+            railEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r, rail_type: rh.highway })
+          }
+        }
+      }
+      set({ railEdges, railsVisibleTypes: fetchedTypes, railsStatus: 'done' })
+    } catch (e) {
+      set({ railsStatus: 'error', railsError: String(e) })
+    }
+  },
+
+  addRailEdge: (q1, r1, q2, r2, rail_type) => {
+    const { railEdges, railsVisibleTypes } = get()
+    const newKey = railEdgeCanonicalKey(q1, r1, q2, r2, rail_type)
+    const pairKey = (e: RailEdge) => {
+      const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
+      return a < b ? `${a}|${b}` : `${b}|${a}`
+    }
+    const thisPair = (() => { const a = `${q1},${r1}`, b = `${q2},${r2}`; return a < b ? `${a}|${b}` : `${b}|${a}` })()
+    const filtered = railEdges.filter((e) => pairKey(e) !== thisPair)
+    if (filtered.some((e) => railEdgeCanonicalKey(e.q1, e.r1, e.q2, e.r2, e.rail_type) === newKey)) return
+    const visibleTypes = railsVisibleTypes.includes(rail_type) ? railsVisibleTypes : [...railsVisibleTypes, rail_type]
+    set({ railEdges: [...filtered, { q1, r1, q2, r2, rail_type, manual: true }], railsVisibleTypes: visibleTypes })
+  },
+
+  removeRailHexEdges: (q, r, rail_type) => {
+    const { railEdges } = get()
+    set({ railEdges: railEdges.filter((e) => !(e.rail_type === rail_type && ((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r)))) })
+  },
+
+  removeAllRailHexEdges: (q, r) => {
+    const { railEdges } = get()
+    set({ railEdges: railEdges.filter((e) => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) })
   },
 
   fetchElevation: async () => {
@@ -1572,10 +1701,11 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   setTerrainNoiseOctaves: (v) => set({ terrainNoiseOctaves: v }),
 
   pushUndoSnapshot: () => {
-    const { generatedHexes, roadEdges, riverEdges, settlements, undoStack } = get()
+    const { generatedHexes, roadEdges, railEdges, riverEdges, settlements, undoStack } = get()
     const snap: UndoSnapshot = {
       terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override }) => ({ q, r, terrain, manual_override })),
       roadEdges: [...roadEdges],
+      railEdges: [...railEdges],
       riverEdges: [...riverEdges],
       settlements: [...settlements],
     }
@@ -1583,12 +1713,13 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   },
 
   undo: () => {
-    const { undoStack, redoStack, generatedHexes, roadEdges, riverEdges, settlements } = get()
+    const { undoStack, redoStack, generatedHexes, roadEdges, railEdges, riverEdges, settlements } = get()
     if (undoStack.length === 0) return
     const prev = undoStack[undoStack.length - 1]
     const current: UndoSnapshot = {
       terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override }) => ({ q, r, terrain, manual_override })),
       roadEdges: [...roadEdges],
+      railEdges: [...railEdges],
       riverEdges: [...riverEdges],
       settlements: [...settlements],
     }
@@ -1603,6 +1734,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
       redoStack: [...redoStack, current],
       generatedHexes: restoredHexes,
       roadEdges: prev.roadEdges,
+      railEdges: prev.railEdges,
       riverEdges: prev.riverEdges,
       riverChains: restoredRiverChains,
       settlements: prev.settlements,
@@ -1610,12 +1742,13 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   },
 
   redo: () => {
-    const { undoStack, redoStack, generatedHexes, roadEdges, riverEdges, settlements } = get()
+    const { undoStack, redoStack, generatedHexes, roadEdges, railEdges, riverEdges, settlements } = get()
     if (redoStack.length === 0) return
     const next = redoStack[redoStack.length - 1]
     const current: UndoSnapshot = {
       terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override }) => ({ q, r, terrain, manual_override })),
       roadEdges: [...roadEdges],
+      railEdges: [...railEdges],
       riverEdges: [...riverEdges],
       settlements: [...settlements],
     }
@@ -1630,6 +1763,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
       undoStack: [...undoStack, current],
       generatedHexes: restoredHexes,
       roadEdges: next.roadEdges,
+      railEdges: next.railEdges,
       riverEdges: next.riverEdges,
       riverChains: restoredRiverChains,
       settlements: next.settlements,
@@ -1769,6 +1903,10 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     roadsHighwayTypes: s.roadsHighwayTypes,
     roadsVisibleTypes: s.roadsVisibleTypes,
     roadsStatus: s.roadsStatus,
+    railEdges: s.railEdges,
+    railsRailTypes: s.railsRailTypes,
+    railsVisibleTypes: s.railsVisibleTypes,
+    railsStatus: s.railsStatus,
     riverFeatures: s.riverFeatures,
     riverEdges: s.riverEdges,
     riverChains: s.riverChains,

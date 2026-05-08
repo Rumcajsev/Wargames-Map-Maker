@@ -28,6 +28,14 @@ const DEFAULT_ROAD_STYLE = { outer: '#d0d0c0', inner: '#606060', outerW: 2.0, in
 // Render order: lowest priority first so higher-priority roads draw on top
 const HIGHWAY_RENDER_ORDER = ['tertiary', 'secondary', 'primary', 'trunk', 'motorway']
 
+const RAIL_STYLES: Record<string, { color: string; width: number; dasharray?: string }> = {
+  rail:         { color: '#6a6a8a', width: 2.5 },
+  narrow_gauge: { color: '#5a7a5a', width: 2.0 },
+  light_rail:   { color: '#3a7a8a', width: 1.8, dasharray: '6,3' },
+}
+const DEFAULT_RAIL_STYLE = { color: '#6a6a8a', width: 2.0 }
+const RAIL_RENDER_ORDER = ['light_rail', 'narrow_gauge', 'rail']
+
 function elevHeatColor(value: number, min: number, max: number): string {
   const t = max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0
   // green (low) → brown (mid) → white (high)
@@ -82,7 +90,7 @@ export function TerrainView() {
   const holdStart = useCallback(() => setOverlayHeld(true), [])
   const holdEnd = useCallback(() => setOverlayHeld(false), [])
 
-  const { generatedHexes, generatedMetadata, selectedHex, setSelectedHex, settlements, rawRoadWays, roadEdges, roadsDisplayMode, roadsVisibleTypes, riverEdges, riverChains, riverFeatures, riversDisplayMode, hoveredRiverIndex, riverEditMode, toggleManualRiverEdge, elevationStatus, showReliefHeatmap, showElevHeatmap, terrainPaintMode, terrainPaintBrush, overrideHexTerrain, roadPaintMode, roadPaintBrush, roadPaintEraser, addRoadEdge, removeRoadHexEdges, removeAllRoadHexEdges, settlementEditMode, settlementMoveIndex, setSettlementPlaceTarget, setSettlementEditMode, updateSettlement, setSettlementMoveIndex, pushUndoSnapshot, terrainDisplacement, terrainNoiseFrequency, terrainNoiseSeed, terrainNoiseOctaves } = useMapStore()
+  const { generatedHexes, generatedMetadata, selectedHex, setSelectedHex, settlements, rawRoadWays, roadEdges, roadsDisplayMode, roadsVisibleTypes, riverEdges, riverChains, riverFeatures, riversDisplayMode, hoveredRiverIndex, riverEditMode, toggleManualRiverEdge, elevationStatus, showReliefHeatmap, showElevHeatmap, terrainPaintMode, terrainPaintBrush, overrideHexTerrain, roadPaintMode, roadPaintBrush, roadPaintEraser, addRoadEdge, removeAllRoadHexEdges, railEdges, railsVisibleTypes, railPaintMode, railPaintBrush, railPaintEraser, addRailEdge, removeAllRailHexEdges, settlementEditMode, settlementMoveIndex, setSettlementPlaceTarget, setSettlementEditMode, updateSettlement, setSettlementMoveIndex, pushUndoSnapshot, terrainDisplacement, terrainNoiseFrequency, terrainNoiseSeed, terrainNoiseOctaves } = useMapStore()
   const [hoveredEdgeKey, setHoveredEdgeKey] = useState<string | null>(null)
   const isPaintingRef = useRef(false)
   const roadPaintActionRef = useRef<'add' | 'remove' | null>(null)
@@ -96,7 +104,7 @@ export function TerrainView() {
   const mapPanOriginRef = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
-    const anyPaint = terrainPaintMode || roadPaintMode
+    const anyPaint = terrainPaintMode || roadPaintMode || railPaintMode
     if (!anyPaint) {
       isPaintingRef.current = false
       roadPaintActionRef.current = null
@@ -110,7 +118,7 @@ export function TerrainView() {
     }
     window.addEventListener('mouseup', onUp)
     return () => window.removeEventListener('mouseup', onUp)
-  }, [terrainPaintMode, roadPaintMode])
+  }, [terrainPaintMode, roadPaintMode, railPaintMode])
 
   const resetMapView = useCallback(() => {
     mapZoomRef.current = 1
@@ -364,6 +372,99 @@ export function TerrainView() {
     }
     return result
   }, [roadsDisplayMode, roadEdges, roadsVisibleTypes, generatedHexes])
+
+  // Smooth rail chains — same algorithm as roads but for rail edges
+  const smoothedRailChains = useMemo(() => {
+    if (railEdges.length === 0) return []
+
+    const byType = new Map<string, typeof railEdges>()
+    for (const e of railEdges) {
+      if (!railsVisibleTypes.includes(e.rail_type)) continue
+      if (!byType.has(e.rail_type)) byType.set(e.rail_type, [])
+      byType.get(e.rail_type)!.push(e)
+    }
+
+    const hexIdx = new Map(generatedHexes.map((h) => [`${h.q},${h.r}`, h]))
+    const result: { rail_type: string; chain: [number, number][] }[] = []
+
+    for (const [rail_type, edges] of byType) {
+      const adj = new Map<string, string[]>()
+      for (const e of edges) {
+        const k1 = `${e.q1},${e.r1}`, k2 = `${e.q2},${e.r2}`
+        if (!adj.has(k1)) adj.set(k1, [])
+        if (!adj.has(k2)) adj.set(k2, [])
+        if (!adj.get(k1)!.includes(k2)) adj.get(k1)!.push(k2)
+        if (!adj.get(k2)!.includes(k1)) adj.get(k2)!.push(k1)
+      }
+
+      const visitedPairs = new Set<string>()
+      const isJunction = (k: string) => (adj.get(k) ?? []).length > 2
+
+      const walk = (startKey: string): [number, number][] => {
+        const h0 = hexIdx.get(startKey)
+        if (!h0) return []
+        const startDeg = (adj.get(startKey) ?? []).length
+        const pts: [number, number][] = []
+        if (startDeg !== 2) pts.push([h0.center[0], h0.center[1]])
+        let cur = startKey
+        for (;;) {
+          const next = (adj.get(cur) ?? []).find((nk) => {
+            const ep = cur < nk ? `${cur}|${nk}` : `${nk}|${cur}`
+            return !visitedPairs.has(ep)
+          })
+          if (!next) break
+          const ep = cur < next ? `${cur}|${next}` : `${next}|${cur}`
+          visitedPairs.add(ep)
+          const h1 = hexIdx.get(cur), h2 = hexIdx.get(next)
+          if (h1 && h2) {
+            pts.push([(h1.center[0] + h2.center[0]) / 2, (h1.center[1] + h2.center[1]) / 2])
+          }
+          cur = next
+          const curDeg = (adj.get(cur) ?? []).length
+          if (curDeg === 1) {
+            const he = hexIdx.get(cur)
+            if (he) pts.push([he.center[0], he.center[1]])
+            break
+          }
+          if (isJunction(cur)) {
+            const hj = hexIdx.get(cur)
+            if (hj) pts.push([hj.center[0], hj.center[1]])
+            break
+          }
+        }
+        return pts
+      }
+
+      for (const [k, nbs] of adj) {
+        if (nbs.length === 1) {
+          const pts = walk(k)
+          if (pts.length >= 2) result.push({ rail_type, chain: chaikinSmooth(pts, 2) })
+        }
+      }
+      for (const [k, nbs] of adj) {
+        if (isJunction(k)) {
+          for (const nk of nbs) {
+            const ep = k < nk ? `${k}|${nk}` : `${nk}|${k}`
+            if (!visitedPairs.has(ep)) {
+              const pts = walk(k)
+              if (pts.length >= 2) result.push({ rail_type, chain: chaikinSmooth(pts, 2) })
+            }
+          }
+        }
+      }
+      for (const [k, nbs] of adj) {
+        for (const nk of nbs) {
+          const ep = k < nk ? `${k}|${nk}` : `${nk}|${k}`
+          if (!visitedPairs.has(ep)) {
+            const pts = walk(k)
+            if (pts.length >= 2) result.push({ rail_type, chain: chaikinSmooth(pts, 2) })
+          }
+        }
+      }
+    }
+    return result
+  }, [railEdges, railsVisibleTypes, generatedHexes])
+
 
   // All interior hex edges (shared by 2 hexes) — computed once, used for edit overlay
   const interiorEdges = useMemo(() => {
@@ -695,6 +796,26 @@ export function TerrainView() {
               )}
             </g>
 
+            {/* Rail lines */}
+            <g clipPath="url(#paper-clip)">
+              {RAIL_RENDER_ORDER.flatMap((rtType) =>
+                smoothedRailChains
+                  .filter((c) => c.rail_type === rtType)
+                  .map(({ rail_type, chain }, i) => {
+                    const s = RAIL_STYLES[rail_type] ?? DEFAULT_RAIL_STYLE
+                    const pts = chain.map(([lon, lat]) => toSVG(lon, lat))
+                    if (pts.length < 2) return null
+                    const d = pts.map((p, j) => `${j === 0 ? 'M' : 'L'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ')
+                    return (
+                      <g key={`${rtType}-${i}`} style={{ pointerEvents: 'none' }}>
+                        <path d={d} fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth={s.width + 1.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <path d={d} fill="none" stroke={s.color} strokeWidth={s.width} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={s.dasharray} />
+                      </g>
+                    )
+                  })
+              )}
+            </g>
+
             {/* Hovered river highlight — shows preview regardless of include/exclude state */}
             {hoveredRiverIndex !== null && riverFeatures[hoveredRiverIndex] && (() => {
               const river = riverFeatures[hoveredRiverIndex]
@@ -719,7 +840,7 @@ export function TerrainView() {
               {generatedHexes.map((hex) => {
                 const d = hexPath(hex)
                 const isSelected = selectedHex?.q === hex.q && selectedHex?.r === hex.r
-                const anyPaintMode = terrainPaintMode || roadPaintMode
+                const anyPaintMode = terrainPaintMode || roadPaintMode || railPaintMode
                 return (
                   <path
                     key={`outline-${hex.q}-${hex.r}`}
@@ -757,6 +878,14 @@ export function TerrainView() {
                           roadPaintActionRef.current = 'add'
                           lastRoadPaintHexRef.current = { q: hex.q, r: hex.r }
                         }
+                      } else if (railPaintMode) {
+                        if (railPaintEraser) {
+                          removeAllRailHexEdges(hex.q, hex.r)
+                          roadPaintActionRef.current = 'remove'
+                        } else {
+                          roadPaintActionRef.current = 'add'
+                          lastRoadPaintHexRef.current = { q: hex.q, r: hex.r }
+                        }
                       }
                     }}
                     onMouseEnter={() => {
@@ -774,6 +903,18 @@ export function TerrainView() {
                           lastRoadPaintHexRef.current = { q: hex.q, r: hex.r }
                         } else if (roadPaintActionRef.current === 'remove') {
                           removeAllRoadHexEdges(hex.q, hex.r)
+                        }
+                      } else if (railPaintMode) {
+                        if (roadPaintActionRef.current === 'add') {
+                          const last = lastRoadPaintHexRef.current
+                          if (last && !(last.q === hex.q && last.r === hex.r)) {
+                            const dq = hex.q - last.q, dr = hex.r - last.r
+                            const isAdj = Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr) === 2
+                            if (isAdj) addRailEdge(last.q, last.r, hex.q, hex.r, railPaintBrush)
+                          }
+                          lastRoadPaintHexRef.current = { q: hex.q, r: hex.r }
+                        } else if (roadPaintActionRef.current === 'remove') {
+                          removeAllRailHexEdges(hex.q, hex.r)
                         }
                       }
                     }}

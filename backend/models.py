@@ -56,6 +56,17 @@ class RoadsConfig(BaseModel):
     highway_types: list[str] = ["motorway", "trunk", "primary"]
 
 
+class RailsConfig(BaseModel):
+    center_lon: float
+    center_lat: float
+    bearing: float = 0.0
+    width_m: float
+    height_m: float
+    hex_orientation: str       # "flat" | "pointy"
+    R_m: float                 # hex outer radius in metres (outer_radius_m from metadata)
+    rail_types: list[str] = ["rail"]
+
+
 class ElevationConfig(BaseModel):
     hexes: list[dict]
     hills_relief_m: float = 80.0
