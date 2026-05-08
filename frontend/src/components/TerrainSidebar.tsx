@@ -152,8 +152,6 @@ export function TerrainSidebar() {
   const typeLabels: Record<string, string> = { city: 'City', town: 'Town', village: 'Village' }
 
   const [elevExpanded, setElevExpanded] = useState(false)
-  const [railsExpanded, setRailsExpanded] = useState(false)
-
   // Settlement edit local state
   const [expandedSettlement, setExpandedSettlement] = useState<number | null>(null)
   const [placeTab, setPlaceTab] = useState<'custom' | 'real'>('custom')
@@ -490,44 +488,125 @@ export function TerrainSidebar() {
       {/* ── ROADS PANEL ── */}
       {activePanel === 'roads' && (
         <>
-          {/* Display mode */}
+          {/* ── Paint tools (always visible) ── */}
           <div>
             <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-              Display mode
+              Paint roads
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  onClick={() => setRoadPaintMode(false)}
+                  title="Pointer"
+                  style={{
+                    padding: '5px 8px',
+                    background: !roadPaintMode && !railPaintMode ? '#1a1a2e' : 'none',
+                    color: !roadPaintMode && !railPaintMode ? '#c0c0d8' : '#4a4a6a',
+                    border: `1px solid ${!roadPaintMode && !railPaintMode ? '#4a4a7a' : '#2a2a3a'}`,
+                    borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+                  }}
+                >↖</button>
+                {([0, 1, 2] as const).map((tier) => {
+                  const active = roadPaintMode && !roadPaintEraser && roadPaintBrush === tier
+                  const s = roadTierStyles[tier]
+                  const tierNames = ['T1', 'T2', 'T3']
+                  return (
+                    <button
+                      key={tier}
+                      onClick={() => { setRoadPaintBrush(tier); setRoadPaintMode(true) }}
+                      title={tier === 0 ? 'Tier 1 — motorway, trunk' : tier === 1 ? 'Tier 2 — primary, secondary' : 'Tier 3 — tertiary'}
+                      style={{
+                        flex: 1, padding: '5px 6px',
+                        background: active ? '#1e1e2a' : '#161620',
+                        border: `1px solid ${active ? s.inner : '#2a2a3a'}`,
+                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 10, color: active ? s.inner : '#5a5a7a',
+                        fontWeight: active ? 700 : 400,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      }}
+                    >
+                      <span style={{ position: 'relative', width: 20, height: Math.max(s.outerW, 4), flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                        <span style={{ position: 'absolute', inset: 0, background: active ? s.outer : '#3a3a4a', borderRadius: 2 }} />
+                        <span style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: Math.max(s.outerW * 0.5, 2), transform: 'translateY(-50%)', background: active ? s.inner : '#2a2a3a', borderRadius: 1 }} />
+                      </span>
+                      {tierNames[tier]}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => { setRoadPaintMode(true); setRoadPaintEraser(!roadPaintEraser) }}
+                  title="Eraser"
+                  style={{
+                    padding: '5px 8px',
+                    background: roadPaintMode && roadPaintEraser ? '#2a1010' : '#161620',
+                    border: `1px solid ${roadPaintMode && roadPaintEraser ? '#aa4040' : '#2a2a3a'}`,
+                    borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 12, color: roadPaintMode && roadPaintEraser ? '#e07070' : '#5a5a7a',
+                  }}
+                >⌫</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Paint rail
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={() => { setRailPaintMode(true); setRailPaintEraser(false) }}
+                style={{
+                  flex: 1, padding: '5px 0',
+                  background: railPaintMode && !railPaintEraser ? '#1a2a1a' : '#161620',
+                  color: railPaintMode && !railPaintEraser ? '#7ad878' : '#5a5a7a',
+                  border: `1px solid ${railPaintMode && !railPaintEraser ? '#3a6a3a' : '#2a2a3a'}`,
+                  borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <span style={{ position: 'relative', width: 20, height: 6, display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                  <span style={{ position: 'absolute', inset: '0 0 4px', background: railPaintMode && !railPaintEraser ? '#5a6a5a' : '#3a3a4a', borderRadius: 1 }} />
+                  <span style={{ position: 'absolute', inset: '4px 0 0', background: railPaintMode && !railPaintEraser ? '#5a6a5a' : '#3a3a4a', borderRadius: 1 }} />
+                  <span style={{ position: 'absolute', left: 3, right: 3, top: 1, bottom: 1, background: railPaintMode && !railPaintEraser ? '#7ad878' : '#4a4a5a', borderRadius: 1 }} />
+                </span>
+                Draw
+              </button>
+              <button
+                onClick={() => { setRailPaintMode(true); setRailPaintEraser(true) }}
+                style={{
+                  flex: 1, padding: '5px 0',
+                  background: railPaintMode && railPaintEraser ? '#2a1a1a' : '#161620',
+                  color: railPaintMode && railPaintEraser ? '#e07070' : '#5a5a7a',
+                  border: `1px solid ${railPaintMode && railPaintEraser ? '#6a3a3a' : '#2a2a3a'}`,
+                  borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                }}
+              >⌫ Erase</button>
+            </div>
+          </div>
+
+          {/* ── Roads generation ── */}
+          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 10 }}>
+            <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Roads{roadEdges.length > 0 ? ` — ${roadEdges.length} edges` : ''}
+            </div>
+
+            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
               {([
                 { mode: 'raw', label: 'Raw OSM' },
                 { mode: 'per_hex', label: 'Hex edges' },
               ] as const).map(({ mode, label }) => (
-                <button
-                  key={mode}
-                  onClick={() => setRoadsDisplayMode(mode)}
-                  style={{
-                    flex: 1,
-                    padding: '5px 0',
-                    background: roadsDisplayMode === mode ? '#2a3a2a' : '#1e1f2a',
-                    color: roadsDisplayMode === mode ? '#8ad870' : '#5a5a7a',
-                    border: `1px solid ${roadsDisplayMode === mode ? '#4a7a3a' : '#2a2a3a'}`,
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: 9,
-                    fontWeight: roadsDisplayMode === mode ? 700 : 400,
-                  }}
-                >
-                  {label}
-                </button>
+                <button key={mode} onClick={() => setRoadsDisplayMode(mode)} style={{
+                  flex: 1, padding: '4px 0',
+                  background: roadsDisplayMode === mode ? '#2a3a2a' : '#1e1f2a',
+                  color: roadsDisplayMode === mode ? '#8ad870' : '#5a5a7a',
+                  border: `1px solid ${roadsDisplayMode === mode ? '#4a7a3a' : '#2a2a3a'}`,
+                  borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 9, fontWeight: roadsDisplayMode === mode ? 700 : 400,
+                }}>{label}</button>
               ))}
             </div>
-          </div>
 
-          {/* Fetch tiers */}
-          <div>
-            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-              Fetch tiers
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
               {([
                 { idx: 0, label: 'Tier 1 — motorway, trunk' },
                 { idx: 1, label: 'Tier 2 — primary, secondary' },
@@ -537,9 +616,7 @@ export function TerrainSidebar() {
                 const checked = roadsFetchTiers[idx]
                 return (
                   <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
+                    <input type="checkbox" checked={checked}
                       onChange={() => {
                         const next = [...roadsFetchTiers] as [boolean, boolean, boolean]
                         next[idx] = !checked
@@ -554,336 +631,143 @@ export function TerrainSidebar() {
                 )
               })}
             </div>
-          </div>
 
-          {/* Fetch button */}
-          <button
-            onClick={fetchRoads}
-            disabled={roadsStatus === 'loading' || roadsFetchTiers.every((v) => !v)}
-            style={{
-              width: '100%',
-              padding: '9px 0',
+            <button onClick={fetchRoads} disabled={roadsStatus === 'loading' || roadsFetchTiers.every((v) => !v)} style={{
+              width: '100%', padding: '8px 0',
               background: roadsStatus === 'loading' ? '#1e1f2a' : '#2a3a2a',
               color: roadsStatus === 'loading' ? '#4a4a5a' : '#8ad870',
               border: `1px solid ${roadsStatus === 'loading' ? '#2a2a3a' : '#4a7a3a'}`,
-              borderRadius: 4,
-              cursor: roadsStatus === 'loading' ? 'default' : 'pointer',
-              fontFamily: 'inherit',
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {roadsStatus === 'loading' ? 'Fetching…' : 'Fetch Roads'}
-          </button>
+              borderRadius: 4, cursor: roadsStatus === 'loading' ? 'default' : 'pointer',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+            }}>{roadsStatus === 'loading' ? 'Fetching…' : 'Fetch Roads'}</button>
 
-          {roadsStatus === 'error' && roadsError && (
-            <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word' }}>
-              Error: {roadsError}
-            </div>
-          )}
-
-          {/* Paint mode */}
-          <div>
-            <button
-              onClick={() => setRoadPaintMode(!roadPaintMode)}
-              style={{
-                width: '100%',
-                padding: '6px 0',
-                background: roadPaintMode ? '#2a1a3a' : '#1e1f2a',
-                color: roadPaintMode ? '#c090e8' : '#5a5a7a',
-                border: `1px solid ${roadPaintMode ? '#7a40b8' : '#2a2a3a'}`,
-                borderRadius: 4,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: 11,
-                fontWeight: roadPaintMode ? 700 : 400,
-              }}
-            >
-              {roadPaintMode ? '✎ painting roads' : '✎ paint roads'}
-            </button>
-            {roadPaintMode && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Tier
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-                  {([
-                    { tier: 0 as const, label: 'Tier 1' },
-                    { tier: 1 as const, label: 'Tier 2' },
-                    { tier: 2 as const, label: 'Tier 3' },
-                  ]).map(({ tier, label }) => {
-                    const active = roadPaintBrush === tier
-                    const s = roadTierStyles[tier]
-                    return (
-                      <button
-                        key={tier}
-                        onClick={() => setRoadPaintBrush(tier)}
-                        style={{
-                          padding: '4px 8px',
-                          background: active ? '#1e1e2a' : '#161620',
-                          border: `1px solid ${active ? s.inner : '#2a2a3a'}`,
-                          borderRadius: 3,
-                          color: active ? s.inner : '#5a5a7a',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontSize: 11,
-                          fontWeight: active ? 700 : 400,
-                          textAlign: 'left',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <span style={{ position: 'relative', width: 24, height: s.outerW, flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
-                          <span style={{ position: 'absolute', inset: 0, background: active ? s.outer : '#3a3a4a', borderRadius: 2 }} />
-                          <span style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: s.outerW * 0.5, transform: 'translateY(-50%)', background: active ? s.inner : '#2a2a3a', borderRadius: 1 }} />
-                        </span>
-                        {label}
-                      </button>
-                    )
-                  })}
-                </div>
-                <button
-                  onClick={() => setRoadPaintEraser(!roadPaintEraser)}
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    background: roadPaintEraser ? '#2a1010' : '#161620',
-                    border: `1px solid ${roadPaintEraser ? '#aa4040' : '#2a2a3a'}`,
-                    borderRadius: 3,
-                    color: roadPaintEraser ? '#e07070' : '#5a5a7a',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: 11,
-                    fontWeight: roadPaintEraser ? 700 : 400,
-                    textAlign: 'left',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginTop: 4,
-                  }}
-                >
-                  <span style={{ fontSize: 13 }}>⌫</span>
-                  Eraser
-                </button>
-                <div style={{ color: '#6a4a8a', fontSize: 10, lineHeight: 1.5, marginTop: 6 }}>
-                  {roadPaintEraser ? 'Click or drag to erase roads.' : 'Click or drag to draw roads.'}
-                </div>
-              </div>
+            {roadsStatus === 'error' && roadsError && (
+              <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word', marginTop: 6 }}>Error: {roadsError}</div>
             )}
-          </div>
 
-          {/* Road tier styles */}
-          <div>
-            <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-              Road styles
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {([0, 1, 2] as const).map((t) => {
-                const s = roadTierStyles[t]
-                const tierLabel = t === 0 ? 'Tier 1 — motorway, trunk' : t === 1 ? 'Tier 2 — primary, secondary' : 'Tier 3 — tertiary'
-                return (
-                  <div key={t}>
-                    <div style={{ color: '#4a4a6a', fontSize: 9, marginBottom: 5 }}>{tierLabel}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <input type="color" value={s.outer}
-                        onChange={(e) => setRoadTierStyle(t, { outer: e.target.value })}
-                        title="Casing color"
-                        style={{ width: 24, height: 20, padding: 1, border: '1px solid #3a3a5a', borderRadius: 3, cursor: 'pointer', background: 'none', flexShrink: 0 }} />
-                      <input type="color" value={s.inner}
-                        onChange={(e) => setRoadTierStyle(t, { inner: e.target.value })}
-                        title="Road color"
-                        style={{ width: 24, height: 20, padding: 1, border: '1px solid #3a3a5a', borderRadius: 3, cursor: 'pointer', background: 'none', flexShrink: 0 }} />
-                      <input type="range" min={0.5} max={10} step={0.25} value={s.outerW}
-                        onChange={(e) => setRoadTierStyle(t, { outerW: parseFloat(e.target.value) })}
-                        style={{ flex: 1, accentColor: s.outer }} />
-                      <span style={{ color: '#6a6a8a', fontSize: 10, minWidth: 26, textAlign: 'right' }}>{s.outerW.toFixed(1)}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {roadsStatus === 'done' && roadEdges.length > 0 && (() => {
-            const presentTiers = new Set(roadEdges.map((e) => e.tier))
-            return (
-              <div>
-                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Visible — {roadEdges.length} edge{roadEdges.length !== 1 ? 's' : ''}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {([0, 1, 2] as const).filter((t) => presentTiers.has(t)).map((t) => {
-                    const s = roadTierStyles[t]
-                    const on = roadsVisibleTiers[t]
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => {
+            {roadEdges.length > 0 && (() => {
+              const presentTiers = new Set(roadEdges.map((e) => e.tier))
+              return (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Visible tiers</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                    {([0, 1, 2] as const).filter((t) => presentTiers.has(t)).map((t) => {
+                      const s = roadTierStyles[t]
+                      const on = roadsVisibleTiers[t]
+                      return (
+                        <button key={t} onClick={() => {
                           const next = [...roadsVisibleTiers] as [boolean, boolean, boolean]
                           next[t] = !on
                           setRoadsVisibleTiers(next)
-                        }}
-                        style={{
+                        }} style={{
                           padding: '3px 8px',
                           background: on ? '#1e1e2a' : '#141420',
                           border: `1px solid ${on ? s.inner : '#2a2a3a'}`,
-                          borderRadius: 3,
+                          borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                          fontSize: 10, fontWeight: on ? 600 : 400,
                           color: on ? s.inner : '#3a3a4a',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontSize: 10,
-                          fontWeight: on ? 600 : 400,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 5,
-                        }}
-                      >
-                        <span style={{ width: 20, height: 3, background: on ? s.outer : '#3a3a4a', borderRadius: 2, display: 'inline-block' }} />
-                        Tier {t + 1}
-                      </button>
-                    )
-                  })}
-                  {roadEdges.some((e) => e.manual) && (
-                    <button
-                      onClick={clearManualRoads}
-                      style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                        }}>
+                          <span style={{ width: 20, height: 3, background: on ? s.outer : '#3a3a4a', borderRadius: 2, display: 'inline-block' }} />
+                          Tier {t + 1}
+                        </button>
+                      )
+                    })}
+                    {roadEdges.some((e) => e.manual) && (
+                      <button onClick={clearManualRoads} style={{
                         padding: '3px 8px', background: 'none',
                         border: '1px solid #2a2a3a', borderRadius: 3,
                         color: '#6a5a3a', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
-                      }}
-                    >
-                      Clear painted
-                    </button>
-                  )}
-                  <button
-                    onClick={clearRoads}
-                    style={{
+                      }}>Clear painted</button>
+                    )}
+                    <button onClick={clearRoads} style={{
                       padding: '3px 8px', background: 'none',
                       border: '1px solid #3a2a2a', borderRadius: 3,
                       color: '#7a4a4a', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
-                    }}
-                  >
-                    Clear all
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
+                    }}>Clear all</button>
+                  </div>
 
-          {/* ── RAILS (collapsible) ── */}
-          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 10 }}>
-            <button
-              onClick={() => setRailsExpanded(!railsExpanded)}
-              style={{
-                width: '100%', background: 'none', border: 'none',
-                color: railsExpanded ? '#9ab8d8' : '#6a8aaa',
-                cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '0 0 6px 0',
-              }}
-            >
-              <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                Rails{railEdges.length > 0 ? ` ● ${railEdges.length}` : ''}
-              </span>
-              <span>{railsExpanded ? '▴' : '▾'}</span>
-            </button>
-            {railsExpanded && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div>
-                  <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Rail types</div>
-                  {(['rail', 'light_rail', 'narrow_gauge', 'tram'] as const).map((rt) => (
-                    <label key={rt} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={railsFetchTypes.includes(rt)}
-                        onChange={(e) => {
-                          const next = e.target.checked ? [...railsFetchTypes, rt] : railsFetchTypes.filter((t) => t !== rt)
-                          setRailsFetchTypes(next.length > 0 ? next : railsFetchTypes)
-                        }}
-                      />
-                      <span style={{ color: '#b0b0c8' }}>{rt.replace('_', ' ')}</span>
-                    </label>
-                  ))}
-                </div>
-
-                <button
-                  onClick={fetchRails}
-                  disabled={railsStatus === 'loading'}
-                  style={{
-                    padding: '7px 0',
-                    background: railsStatus === 'loading' ? '#1a1f2e' : '#1a2a3a',
-                    color: railsStatus === 'loading' ? '#4a5a6a' : '#7ab8d8',
-                    border: '1px solid #2a3a4a', borderRadius: 4,
-                    cursor: railsStatus === 'loading' ? 'default' : 'pointer',
-                    fontFamily: 'inherit', fontSize: 12, width: '100%',
-                  }}
-                >
-                  {railsStatus === 'loading' ? 'Fetching…' : 'Fetch from OSM'}
-                </button>
-
-                {railsError && (
-                  <div style={{ color: '#e06060', fontSize: 11 }}>{railsError}</div>
-                )}
-
-                {railEdges.length > 0 && (
-                  <>
-                    <div>
-                      <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Display mode</div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {(['per_hex', 'raw'] as const).map((mode) => (
-                          <button key={mode} onClick={() => setRailsDisplayMode(mode)} style={{
-                            flex: 1, padding: '5px 0',
-                            background: railsDisplayMode === mode ? '#1a2a3a' : 'none',
-                            color: railsDisplayMode === mode ? '#7ab8d8' : '#5a5a7a',
-                            border: `1px solid ${railsDisplayMode === mode ? '#3a5a7a' : '#2a2a3a'}`,
-                            borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                          }}>{mode === 'per_hex' ? 'Hex' : 'Raw'}</button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Edit</div>
-                      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                        <button onClick={() => setRailPaintMode(!railPaintMode)} style={{
-                          flex: 1, padding: '5px 0',
-                          background: railPaintMode && !railPaintEraser ? '#1a2a1a' : 'none',
-                          color: railPaintMode && !railPaintEraser ? '#7ad878' : '#5a5a7a',
-                          border: `1px solid ${railPaintMode && !railPaintEraser ? '#3a6a3a' : '#2a2a3a'}`,
-                          borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                        }}>Draw</button>
-                        <button onClick={() => { setRailPaintMode(true); setRailPaintEraser(true) }} style={{
-                          flex: 1, padding: '5px 0',
-                          background: railPaintMode && railPaintEraser ? '#2a1a1a' : 'none',
-                          color: railPaintMode && railPaintEraser ? '#e07070' : '#5a5a7a',
-                          border: `1px solid ${railPaintMode && railPaintEraser ? '#6a3a3a' : '#2a2a3a'}`,
-                          borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                        }}>Erase</button>
-                      </div>
-                      {railPaintMode && (
-                        <div style={{ color: '#4a6a4a', fontSize: 11 }}>
-                          {railPaintEraser ? 'Click/drag to erase rail segments' : 'Drag between adjacent hexes to draw rails'}
+                  <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Road styles</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {([0, 1, 2] as const).map((t) => {
+                      const s = roadTierStyles[t]
+                      const tierLabel = t === 0 ? 'T1 — motorway, trunk' : t === 1 ? 'T2 — primary, secondary' : 'T3 — tertiary'
+                      return (
+                        <div key={t}>
+                          <div style={{ color: '#4a4a6a', fontSize: 9, marginBottom: 4 }}>{tierLabel}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input type="color" value={s.outer} onChange={(e) => setRoadTierStyle(t, { outer: e.target.value })} title="Casing"
+                              style={{ width: 24, height: 20, padding: 1, border: '1px solid #3a3a5a', borderRadius: 3, cursor: 'pointer', background: 'none', flexShrink: 0 }} />
+                            <input type="color" value={s.inner} onChange={(e) => setRoadTierStyle(t, { inner: e.target.value })} title="Road"
+                              style={{ width: 24, height: 20, padding: 1, border: '1px solid #3a3a5a', borderRadius: 3, cursor: 'pointer', background: 'none', flexShrink: 0 }} />
+                            <input type="range" min={0.5} max={10} step={0.25} value={s.outerW} onChange={(e) => setRoadTierStyle(t, { outerW: parseFloat(e.target.value) })}
+                              style={{ flex: 1, accentColor: s.outer }} />
+                            <span style={{ color: '#6a6a8a', fontSize: 10, minWidth: 26, textAlign: 'right' }}>{s.outerW.toFixed(1)}</span>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
 
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={clearRails} style={{
-                        flex: 1, padding: '5px 0', background: 'none', color: '#5a5a7a',
-                        border: '1px solid #2a2a3a', borderRadius: 4,
-                        cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                      }}>Clear all</button>
-                    </div>
+          {/* ── Rails generation ── */}
+          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 10 }}>
+            <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Rails{railEdges.length > 0 ? ` — ${railEdges.length} edges` : ''}
+            </div>
 
-                    <div style={{ color: '#4a4a6a', fontSize: 11 }}>
-                      {railEdges.length} rail edge{railEdges.length !== 1 ? 's' : ''}
-                    </div>
-                  </>
-                )}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+              {(['per_hex', 'raw'] as const).map((mode) => (
+                <button key={mode} onClick={() => setRailsDisplayMode(mode)} style={{
+                  flex: 1, padding: '4px 0',
+                  background: railsDisplayMode === mode ? '#1a2a3a' : '#1e1f2a',
+                  color: railsDisplayMode === mode ? '#7ab8d8' : '#5a5a7a',
+                  border: `1px solid ${railsDisplayMode === mode ? '#3a5a7a' : '#2a2a3a'}`,
+                  borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 9, fontWeight: railsDisplayMode === mode ? 700 : 400,
+                }}>{mode === 'per_hex' ? 'Hex edges' : 'Raw OSM'}</button>
+              ))}
+            </div>
 
-                {railsStatus === 'done' && railEdges.length === 0 && (
-                  <div style={{ color: '#4a4a6a', fontSize: 11 }}>No rails found in this area.</div>
-                )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+              {(['rail', 'light_rail', 'narrow_gauge', 'tram'] as const).map((rt) => (
+                <label key={rt} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={railsFetchTypes.includes(rt)}
+                    onChange={(e) => {
+                      const next = e.target.checked ? [...railsFetchTypes, rt] : railsFetchTypes.filter((t) => t !== rt)
+                      setRailsFetchTypes(next.length > 0 ? next : railsFetchTypes)
+                    }}
+                  />
+                  <span style={{ color: '#b0b0c8', fontSize: 11 }}>{rt.replace(/_/g, ' ')}</span>
+                </label>
+              ))}
+            </div>
+
+            <button onClick={fetchRails} disabled={railsStatus === 'loading'} style={{
+              width: '100%', padding: '8px 0',
+              background: railsStatus === 'loading' ? '#1a1f2e' : '#1a2a3a',
+              color: railsStatus === 'loading' ? '#4a5a6a' : '#7ab8d8',
+              border: '1px solid #2a3a4a', borderRadius: 4,
+              cursor: railsStatus === 'loading' ? 'default' : 'pointer',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+            }}>{railsStatus === 'loading' ? 'Fetching…' : 'Fetch Rails'}</button>
+
+            {railsError && <div style={{ color: '#e06060', fontSize: 11, marginTop: 6 }}>{railsError}</div>}
+
+            {railEdges.length > 0 && (
+              <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
+                <button onClick={clearRails} style={{
+                  flex: 1, padding: '4px 0', background: 'none', color: '#7a4a4a',
+                  border: '1px solid #3a2a2a', borderRadius: 3,
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                }}>Clear all</button>
               </div>
+            )}
+            {railsStatus === 'done' && railEdges.length === 0 && (
+              <div style={{ color: '#4a4a6a', fontSize: 11, marginTop: 6 }}>No rails found in this area.</div>
             )}
           </div>
         </>
