@@ -181,134 +181,84 @@ export function TerrainSidebar() {
       {/* ── TERRAIN PANEL ── */}
       {activePanel === 'terrain' && (
         <>
-          {/* Legend + per-terrain thresholds + disable toggles */}
+          {/* ── Paint tools (always visible) ── */}
           <div>
-            <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-              Terrain types
+            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Paint terrain
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {ALL_TERRAINS.filter(t => t !== 'river').map((terrain) => {
-                const color = TERRAIN_COLORS[terrain]
-                const disabled = disabledTerrains.has(terrain)
-                const isFallback = terrain === 'clear'
-                const thr = thresholds[terrain] ?? DEFAULT_THRESHOLDS[terrain] ?? 0.25
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              <button
+                onClick={() => setTerrainPaintMode(false)}
+                title="Pointer"
+                style={{
+                  padding: '4px 8px',
+                  background: !terrainPaintMode && !elevationPaintMode ? '#1a1a2e' : 'none',
+                  color: !terrainPaintMode && !elevationPaintMode ? '#c0c0d8' : '#4a4a6a',
+                  border: `1px solid ${!terrainPaintMode && !elevationPaintMode ? '#4a4a7a' : '#2a2a3a'}`,
+                  borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+                }}
+              >↖</button>
+              {ALL_TERRAINS.map((t) => {
+                const active = terrainPaintMode && terrainPaintBrush === t
+                const color = TERRAIN_COLORS[t]
                 return (
-                  <div key={terrain}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: isFallback ? 0 : 4 }}>
-                      <div style={{
-                        width: 12,
-                        height: 12,
-                        background: color,
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: 2,
-                        flexShrink: 0,
-                        opacity: disabled ? 0.25 : 1,
-                      }} />
-                      <span style={{
-                        color: disabled ? '#4a4a5a' : '#c0c0d0',
-                        textTransform: 'capitalize',
-                        flex: 1,
-                        fontSize: 11,
-                        textDecoration: disabled ? 'line-through' : 'none',
-                      }}>{terrain}</span>
-                      {!isFallback && (
-                        <span style={{ color: '#5a7a6a', fontSize: 10, minWidth: 28, textAlign: 'right' }}>
-                          {Math.round(thr * 100)}%
-                        </span>
-                      )}
-                      <button
-                        onClick={() => toggleTerrainDisabled(terrain)}
-                        style={{
-                          background: 'none',
-                          border: '1px solid #2a2a3a',
-                          borderRadius: 3,
-                          color: disabled ? '#4a4a5a' : '#7a9e8a',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontSize: 10,
-                          padding: '1px 5px',
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {disabled ? 'off' : 'on'}
-                      </button>
-                    </div>
-                    {!isFallback && (
-                      <input
-                        type="range"
-                        min={0.05}
-                        max={0.8}
-                        step={0.05}
-                        value={thr}
-                        disabled={disabled}
-                        onChange={(e) => setTerrainThreshold(terrain, Number(e.target.value))}
-                        style={{ width: '100%', accentColor: color, opacity: disabled ? 0.3 : 1 }}
-                      />
-                    )}
-                  </div>
+                  <button
+                    key={t}
+                    onClick={() => { setTerrainPaintBrush(t); setTerrainPaintMode(true) }}
+                    style={{
+                      padding: '4px 7px',
+                      background: active ? color : '#1e1f2a',
+                      color: active ? '#12131a' : '#a0a0b8',
+                      border: `1px solid ${active ? color : '#2a2a3a'}`,
+                      borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: 10, textTransform: 'capitalize',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    <span style={{
+                      width: 8, height: 8, borderRadius: 1, flexShrink: 0,
+                      background: active ? 'rgba(0,0,0,0.35)' : color,
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      display: 'inline-block',
+                    }} />
+                    {t}
+                  </button>
                 )
               })}
             </div>
           </div>
 
-          {/* Paint mode */}
-          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
-            <button
-              onClick={() => setTerrainPaintMode(!terrainPaintMode)}
-              style={{
-                width: '100%',
-                padding: '6px 0',
-                background: terrainPaintMode ? '#2a1a3a' : '#1e1f2a',
-                color: terrainPaintMode ? '#c090e8' : '#5a5a7a',
-                border: `1px solid ${terrainPaintMode ? '#7a40b8' : '#2a2a3a'}`,
-                borderRadius: 4,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: 11,
-                fontWeight: terrainPaintMode ? 700 : 400,
-              }}
-            >
-              {terrainPaintMode ? '✎ painting' : '✎ paint terrain'}
-            </button>
-            {terrainPaintMode && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Brush
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-                  {ALL_TERRAINS.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTerrainPaintBrush(t)}
-                      style={{
-                        padding: '3px 7px',
-                        background: terrainPaintBrush === t ? TERRAIN_COLORS[t] : '#1e1f2a',
-                        color: terrainPaintBrush === t ? '#12131a' : '#a0a0b8',
-                        border: `1px solid ${terrainPaintBrush === t ? TERRAIN_COLORS[t] : '#2a2a3a'}`,
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        fontSize: 10,
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ color: '#6a4a8a', fontSize: 10, lineHeight: 1.5 }}>
-                  Click or drag hexes to paint.
-                </div>
-              </div>
-            )}
+          <div>
+            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Paint elevation
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {([
+                { value: 'flat',      label: 'Flat',      color: '#a8b870' },
+                { value: 'hills',     label: 'Hills',     color: '#9e8c6a' },
+                { value: 'mountains', label: 'Mountains', color: '#8a7a6a' },
+              ] as const).map(({ value, label, color }) => {
+                const active = elevationPaintMode && elevationPaintBrush === value
+                return (
+                  <button
+                    key={value}
+                    onClick={() => { setElevationPaintBrush(value); setElevationPaintMode(true) }}
+                    style={{
+                      flex: 1, padding: '5px 0',
+                      background: active ? color : '#1e1f2a',
+                      color: active ? '#12131a' : '#a0a0b8',
+                      border: `1px solid ${active ? color : '#2a2a3a'}`,
+                      borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                    }}
+                  >{label}</button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Hex inspector */}
           {selectedHex && (
-            <div style={{
-              borderTop: '1px solid #2a2a3a',
-              paddingTop: 14,
-            }}>
+            <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div style={{ color: '#7a9e8a', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                   Hex {selectedHex.q}, {selectedHex.r}
@@ -319,87 +269,47 @@ export function TerrainSidebar() {
                 <button
                   onClick={() => setSelectedHex(null)}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#5a5a7a',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    padding: '0 2px',
-                    lineHeight: 1,
-                    fontFamily: 'inherit',
+                    background: 'none', border: 'none', color: '#5a5a7a',
+                    cursor: 'pointer', fontSize: 14, padding: '0 2px',
+                    lineHeight: 1, fontFamily: 'inherit',
                   }}
-                >
-                  ×
-                </button>
+                >×</button>
               </div>
 
-              {/* Terrain type */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <div style={{
-                  width: 12,
-                  height: 12,
+                  width: 12, height: 12,
                   background: TERRAIN_COLORS[selectedHex.terrain] ?? '#ede8d5',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: 2,
-                  flexShrink: 0,
+                  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 2, flexShrink: 0,
                 }} />
-                <span style={{ color: '#d0d0d8', textTransform: 'capitalize' }}>
-                  {selectedHex.terrain}
-                </span>
+                <span style={{ color: '#d0d0d8', textTransform: 'capitalize' }}>{selectedHex.terrain}</span>
               </div>
 
-              {/* Terrain picker */}
               <div style={{ marginBottom: 10 }}>
-                <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Override Terrain
-                </div>
+                <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Override terrain</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {ALL_TERRAINS.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => overrideHexTerrain(selectedHex.q, selectedHex.r, t)}
-                      style={{
-                        padding: '3px 7px',
-                        background: selectedHex.terrain === t ? TERRAIN_COLORS[t] : '#1e1f2a',
-                        color: selectedHex.terrain === t ? '#12131a' : '#a0a0b8',
-                        border: `1px solid ${selectedHex.terrain === t ? TERRAIN_COLORS[t] : '#2a2a3a'}`,
-                        borderRadius: 3,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        fontSize: 10,
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {t}
-                    </button>
+                    <button key={t} onClick={() => overrideHexTerrain(selectedHex.q, selectedHex.r, t)} style={{
+                      padding: '3px 7px',
+                      background: selectedHex.terrain === t ? TERRAIN_COLORS[t] : '#1e1f2a',
+                      color: selectedHex.terrain === t ? '#12131a' : '#a0a0b8',
+                      border: `1px solid ${selectedHex.terrain === t ? TERRAIN_COLORS[t] : '#2a2a3a'}`,
+                      borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, textTransform: 'capitalize',
+                    }}>{t}</button>
                   ))}
                 </div>
                 {selectedHex.manual_override && (
-                  <button
-                    onClick={() => resetHexOverride(selectedHex.q, selectedHex.r)}
-                    style={{
-                      marginTop: 6,
-                      padding: '3px 8px',
-                      background: 'none',
-                      color: '#e09040',
-                      border: '1px solid #604020',
-                      borderRadius: 3,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      fontSize: 10,
-                    }}
-                  >
-                    Reset override
-                  </button>
+                  <button onClick={() => resetHexOverride(selectedHex.q, selectedHex.r)} style={{
+                    marginTop: 6, padding: '3px 8px', background: 'none',
+                    color: '#e09040', border: '1px solid #604020', borderRadius: 3,
+                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                  }}>Reset override</button>
                 )}
               </div>
 
-              {/* Coverage breakdown */}
               {Object.keys(selectedHex.coverage).length > 0 && (
                 <div style={{ marginBottom: 10 }}>
-                  <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                    Coverage
-                  </div>
+                  <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Coverage</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {Object.entries(selectedHex.coverage)
                       .filter(([, v]) => v > 0.01)
@@ -414,26 +324,69 @@ export function TerrainSidebar() {
                 </div>
               )}
 
-              {/* Center coords */}
               <div>
-                <div style={{ color: '#5a5a7a', marginBottom: 4, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Center
-                </div>
-                <div style={{ color: '#7a9e8a', fontSize: 11 }}>
-                  {selectedHex.center[0].toFixed(4)}, {selectedHex.center[1].toFixed(4)}
-                </div>
+                <div style={{ color: '#5a5a7a', marginBottom: 4, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Center</div>
+                <div style={{ color: '#7a9e8a', fontSize: 11 }}>{selectedHex.center[0].toFixed(4)}, {selectedHex.center[1].toFixed(4)}</div>
               </div>
             </div>
           )}
 
-          {/* ── ELEVATION (collapsible) ── */}
+          {/* ── Terrain sliders ── */}
+          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
+            <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Terrain thresholds
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {ALL_TERRAINS.filter(t => t !== 'river').map((terrain) => {
+                const color = TERRAIN_COLORS[terrain]
+                const disabled = disabledTerrains.has(terrain)
+                const isFallback = terrain === 'clear'
+                const thr = thresholds[terrain] ?? DEFAULT_THRESHOLDS[terrain] ?? 0.25
+                return (
+                  <div key={terrain}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: isFallback ? 0 : 4 }}>
+                      <div style={{
+                        width: 12, height: 12, background: color,
+                        border: '1px solid rgba(255,255,255,0.15)', borderRadius: 2,
+                        flexShrink: 0, opacity: disabled ? 0.25 : 1,
+                      }} />
+                      <span style={{
+                        color: disabled ? '#4a4a5a' : '#c0c0d0',
+                        textTransform: 'capitalize', flex: 1, fontSize: 11,
+                        textDecoration: disabled ? 'line-through' : 'none',
+                      }}>{terrain}</span>
+                      {!isFallback && (
+                        <span style={{ color: '#5a7a6a', fontSize: 10, minWidth: 28, textAlign: 'right' }}>
+                          {Math.round(thr * 100)}%
+                        </span>
+                      )}
+                      <button onClick={() => toggleTerrainDisabled(terrain)} style={{
+                        background: 'none', border: '1px solid #2a2a3a', borderRadius: 3,
+                        color: disabled ? '#4a4a5a' : '#7a9e8a', cursor: 'pointer',
+                        fontFamily: 'inherit', fontSize: 10, padding: '1px 5px', lineHeight: 1.4,
+                      }}>{disabled ? 'off' : 'on'}</button>
+                    </div>
+                    {!isFallback && (
+                      <input type="range" min={0.05} max={0.8} step={0.05} value={thr}
+                        disabled={disabled}
+                        onChange={(e) => setTerrainThreshold(terrain, Number(e.target.value))}
+                        style={{ width: '100%', accentColor: color, opacity: disabled ? 0.3 : 1 }}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* ── Elevation section ── */}
           <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 10 }}>
             <button
               onClick={() => setElevExpanded(!elevExpanded)}
               style={{
                 width: '100%', background: 'none', border: 'none',
                 color: elevExpanded ? '#9ab8d8' : '#6a8aaa',
-                cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                cursor: 'pointer', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '0 0 6px 0',
               }}
@@ -441,22 +394,18 @@ export function TerrainSidebar() {
               <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
                 Elevation{elevationStatus === 'done' ? ' ●' : ''}
               </span>
-              <span>{elevExpanded ? '▴' : '▾'}</span>
+              <span style={{ fontSize: 10 }}>{elevExpanded ? '▴' : '▾'}</span>
             </button>
             {elevExpanded && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <button
-                  onClick={fetchElevation}
-                  disabled={elevationStatus === 'loading'}
-                  style={{
-                    width: '100%', padding: '9px 0',
-                    background: elevationStatus === 'loading' ? '#2a3a5a' : '#2a4a6a',
-                    color: elevationStatus === 'loading' ? '#7a9aba' : '#c0d8f0',
-                    border: '1px solid #3a6a9a', borderRadius: 4,
-                    cursor: elevationStatus === 'loading' ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-                  }}
-                >
+                <button onClick={fetchElevation} disabled={elevationStatus === 'loading'} style={{
+                  width: '100%', padding: '9px 0',
+                  background: elevationStatus === 'loading' ? '#2a3a5a' : '#2a4a6a',
+                  color: elevationStatus === 'loading' ? '#7a9aba' : '#c0d8f0',
+                  border: '1px solid #3a6a9a', borderRadius: 4,
+                  cursor: elevationStatus === 'loading' ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+                }}>
                   {elevationStatus === 'loading' ? 'Fetching…' : elevationStatus === 'done' ? 'Re-fetch Elevation' : 'Fetch Elevation'}
                 </button>
 
@@ -468,10 +417,7 @@ export function TerrainSidebar() {
                     <div style={{ color: '#7a9aba', fontSize: 11 }}>{elevationProgress.message}</div>
                   </div>
                 )}
-
-                {elevationError && (
-                  <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word' }}>{elevationError}</div>
-                )}
+                {elevationError && <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word' }}>{elevationError}</div>}
 
                 {elevationStatus === 'done' && (
                   <>
@@ -514,7 +460,7 @@ export function TerrainSidebar() {
 
                     <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Mode A — Terrain Class</span>
+                        <span style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>Terrain class thresholds</span>
                         <InfoTooltip text={
                           'Each hex is classified by two independent methods, and gets the higher result:\n\n' +
                           '• Local relief — how much higher this hex is than its neighbours. Catches hills and peaks that stand out from surrounding terrain.\n\n' +
@@ -532,43 +478,6 @@ export function TerrainSidebar() {
                       <div style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>Elevation overlay</div>
                       <HeatmapToggle label="Relief heatmap" active={showReliefHeatmap} onToggle={() => setShowReliefHeatmap(!showReliefHeatmap)} />
                       <HeatmapToggle label="Elevation heatmap" active={showElevHeatmap} onToggle={() => setShowElevHeatmap(!showElevHeatmap)} />
-                    </div>
-
-                    <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
-                      <button
-                        onClick={() => setElevationPaintMode(!elevationPaintMode)}
-                        style={{
-                          width: '100%', padding: '6px 0',
-                          background: elevationPaintMode ? '#1a2a1a' : '#1e1f2a',
-                          color: elevationPaintMode ? '#90d870' : '#5a5a7a',
-                          border: `1px solid ${elevationPaintMode ? '#5a9a40' : '#2a2a3a'}`,
-                          borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
-                          fontSize: 11, fontWeight: elevationPaintMode ? 700 : 400,
-                        }}
-                      >
-                        {elevationPaintMode ? '✎ painting elevation' : '✎ paint elevation'}
-                      </button>
-                      {elevationPaintMode && (
-                        <div style={{ marginTop: 8 }}>
-                          <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Brush</div>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            {([
-                              { value: 'flat', label: 'Flat', color: '#a8b870' },
-                              { value: 'hills', label: 'Hills', color: '#9e8c6a' },
-                              { value: 'mountains', label: 'Mountains', color: '#8a7a6a' },
-                            ] as const).map(({ value, label, color }) => (
-                              <button key={value} onClick={() => setElevationPaintBrush(value)} style={{
-                                flex: 1, padding: '4px 0',
-                                background: elevationPaintBrush === value ? color : '#1e1f2a',
-                                color: elevationPaintBrush === value ? '#12131a' : '#a0a0b8',
-                                border: `1px solid ${elevationPaintBrush === value ? color : '#2a2a3a'}`,
-                                borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
-                              }}>{label}</button>
-                            ))}
-                          </div>
-                          <div style={{ color: '#5a8a5a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click or drag hexes to paint.</div>
-                        </div>
-                      )}
                     </div>
                   </>
                 )}
