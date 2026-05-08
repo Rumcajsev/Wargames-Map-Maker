@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useMapStore, TERRAIN_COLORS, DEFAULT_THRESHOLDS, DEFAULT_ELEVATION_THRESHOLDS, type RiverFeature } from '../store/mapStore'
+import { useMapStore, type RoadTierStyle, TERRAIN_COLORS, DEFAULT_THRESHOLDS, DEFAULT_ELEVATION_THRESHOLDS, type RiverFeature } from '../store/mapStore'
 
 const ALL_TERRAINS = Object.keys(TERRAIN_COLORS)
 
@@ -53,14 +53,14 @@ export function TerrainSidebar() {
     // roads
     roadEdges,
     roadsDisplayMode,
-    roadsHighwayTypes,
-    roadsVisibleTypes,
+    roadsFetchTiers,
+    roadsVisibleTiers,
     roadsStatus,
     roadsError,
     fetchRoads,
     setRoadsDisplayMode,
-    setRoadsHighwayTypes,
-    setRoadsVisibleTypes,
+    setRoadsFetchTiers,
+    setRoadsVisibleTiers,
     clearRoads,
     clearManualRoads,
     roadPaintMode,
@@ -69,6 +69,20 @@ export function TerrainSidebar() {
     setRoadPaintMode,
     setRoadPaintBrush,
     setRoadPaintEraser,
+    // rails
+    railEdges,
+    railsDisplayMode,
+    railsFetchTypes,
+    railsStatus,
+    railsError,
+    fetchRails,
+    setRailsDisplayMode,
+    setRailsFetchTypes,
+    clearRails,
+    railPaintMode,
+    railPaintEraser,
+    setRailPaintMode,
+    setRailPaintEraser,
     // rivers
     riverEdges,
     riverFeatures,
@@ -92,11 +106,23 @@ export function TerrainSidebar() {
     elevationProgress,
     showReliefHeatmap,
     showElevHeatmap,
+    elevationStyle,
+    contourInterval,
     fetchElevation,
     setElevationThreshold,
     setShowReliefHeatmap,
     setShowElevHeatmap,
+    setElevationStyle,
+    setContourInterval,
+    elevationPaintMode,
+    elevationPaintBrush,
+    setElevationPaintMode,
+    setElevationPaintBrush,
     // style
+    hexBorderMode,
+    setHexBorderMode,
+    roadTierStyles,
+    setRoadTierStyle,
     terrainDisplacement,
     terrainNoiseFrequency,
     terrainNoiseSeed,
@@ -107,6 +133,19 @@ export function TerrainSidebar() {
     setTerrainNoiseSeed,
     setTerrainNoiseOctaves,
     setIllustratedStyle,
+    riverWidthScale,
+    riverCurveSteps,
+    riverMeander,
+    riverMeanderSeed,
+    riverStraighten,
+    urbanHexStyle,
+    woodsHexStyle,
+    setRiverWidthScale,
+    setRiverCurveSteps,
+    setRiverMeander,
+    setRiverMeanderSeed,
+    setRiverStraighten,
+    applyMapPreset,
   } = useMapStore()
 
 
@@ -421,32 +460,33 @@ export function TerrainSidebar() {
             </div>
           </div>
 
-          {/* Highway types */}
+          {/* Fetch tiers */}
           <div>
             <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-              Road types
+              Fetch tiers
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {([
-                { key: 'motorway', label: 'Motorway', color: '#e08040' },
-                { key: 'trunk',    label: 'Trunk',    color: '#d0a040' },
-                { key: 'primary',  label: 'Primary',  color: '#c8c840' },
-                { key: 'secondary',label: 'Secondary', color: '#8a9a50' },
-                { key: 'tertiary', label: 'Tertiary', color: '#707870' },
-              ] as const).map(({ key, label, color }) => {
-                const checked = roadsHighwayTypes.includes(key)
+                { idx: 0, label: 'Tier 1 — motorway, trunk' },
+                { idx: 1, label: 'Tier 2 — primary, secondary' },
+                { idx: 2, label: 'Tier 3 — tertiary' },
+              ] as const).map(({ idx, label }) => {
+                const s = roadTierStyles[idx]
+                const checked = roadsFetchTiers[idx]
                 return (
-                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={() =>
-                        setRoadsHighwayTypes(checked ? roadsHighwayTypes.filter((t) => t !== key) : [...roadsHighwayTypes, key])
-                      }
-                      style={{ accentColor: color }}
+                      onChange={() => {
+                        const next = [...roadsFetchTiers] as [boolean, boolean, boolean]
+                        next[idx] = !checked
+                        setRoadsFetchTiers(next)
+                      }}
+                      style={{ accentColor: s.inner }}
                     />
                     <span style={{ color: '#c0c0d0', fontSize: 11 }}>
-                      <span style={{ color, marginRight: 4 }}>●</span>{label}
+                      <span style={{ color: s.inner, marginRight: 4 }}>●</span>{label}
                     </span>
                   </label>
                 )
@@ -457,7 +497,7 @@ export function TerrainSidebar() {
           {/* Fetch button */}
           <button
             onClick={fetchRoads}
-            disabled={roadsStatus === 'loading' || roadsHighwayTypes.length === 0}
+            disabled={roadsStatus === 'loading' || roadsFetchTiers.every((v) => !v)}
             style={{
               width: '100%',
               padding: '9px 0',
@@ -502,27 +542,26 @@ export function TerrainSidebar() {
             {roadPaintMode && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
-                  Road type
+                  Tier
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
                   {([
-                    { key: 'motorway',  label: 'Motorway',  color: '#c05818' },
-                    { key: 'trunk',     label: 'Trunk',     color: '#b07820' },
-                    { key: 'primary',   label: 'Primary',   color: '#8a5c2a' },
-                    { key: 'secondary', label: 'Secondary', color: '#6a7040' },
-                    { key: 'tertiary',  label: 'Tertiary',  color: '#606060' },
-                  ] as const).map(({ key, label, color }) => {
-                    const active = roadPaintBrush === key
+                    { tier: 0 as const, label: 'Tier 1' },
+                    { tier: 1 as const, label: 'Tier 2' },
+                    { tier: 2 as const, label: 'Tier 3' },
+                  ]).map(({ tier, label }) => {
+                    const active = roadPaintBrush === tier
+                    const s = roadTierStyles[tier]
                     return (
                       <button
-                        key={key}
-                        onClick={() => setRoadPaintBrush(key)}
+                        key={tier}
+                        onClick={() => setRoadPaintBrush(tier)}
                         style={{
                           padding: '4px 8px',
                           background: active ? '#1e1e2a' : '#161620',
-                          border: `1px solid ${active ? color : '#2a2a3a'}`,
+                          border: `1px solid ${active ? s.inner : '#2a2a3a'}`,
                           borderRadius: 3,
-                          color: active ? color : '#5a5a7a',
+                          color: active ? s.inner : '#5a5a7a',
                           cursor: 'pointer',
                           fontFamily: 'inherit',
                           fontSize: 11,
@@ -533,7 +572,10 @@ export function TerrainSidebar() {
                           gap: 8,
                         }}
                       >
-                        <span style={{ width: 24, height: 3, background: active ? color : '#3a3a4a', borderRadius: 2, flexShrink: 0, display: 'inline-block' }} />
+                        <span style={{ position: 'relative', width: 24, height: s.outerW, flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                          <span style={{ position: 'absolute', inset: 0, background: active ? s.outer : '#3a3a4a', borderRadius: 2 }} />
+                          <span style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: s.outerW * 0.5, transform: 'translateY(-50%)', background: active ? s.inner : '#2a2a3a', borderRadius: 1 }} />
+                        </span>
                         {label}
                       </button>
                     )
@@ -569,34 +611,63 @@ export function TerrainSidebar() {
             )}
           </div>
 
+          {/* Road tier styles */}
+          <div>
+            <div style={{ color: '#5a5a7a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Road styles
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {([0, 1, 2] as const).map((t) => {
+                const s = roadTierStyles[t]
+                const tierLabel = t === 0 ? 'Tier 1 — motorway, trunk' : t === 1 ? 'Tier 2 — primary, secondary' : 'Tier 3 — tertiary'
+                return (
+                  <div key={t}>
+                    <div style={{ color: '#4a4a6a', fontSize: 9, marginBottom: 5 }}>{tierLabel}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input type="color" value={s.outer}
+                        onChange={(e) => setRoadTierStyle(t, { outer: e.target.value })}
+                        title="Casing color"
+                        style={{ width: 24, height: 20, padding: 1, border: '1px solid #3a3a5a', borderRadius: 3, cursor: 'pointer', background: 'none', flexShrink: 0 }} />
+                      <input type="color" value={s.inner}
+                        onChange={(e) => setRoadTierStyle(t, { inner: e.target.value })}
+                        title="Road color"
+                        style={{ width: 24, height: 20, padding: 1, border: '1px solid #3a3a5a', borderRadius: 3, cursor: 'pointer', background: 'none', flexShrink: 0 }} />
+                      <input type="range" min={0.5} max={10} step={0.25} value={s.outerW}
+                        onChange={(e) => setRoadTierStyle(t, { outerW: parseFloat(e.target.value) })}
+                        style={{ flex: 1, accentColor: s.outer }} />
+                      <span style={{ color: '#6a6a8a', fontSize: 10, minWidth: 26, textAlign: 'right' }}>{s.outerW.toFixed(1)}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           {roadsStatus === 'done' && roadEdges.length > 0 && (() => {
-            const fetchedTypes = [...new Set(roadEdges.map((e) => e.highway))]
-            const typesMeta: Record<string, { label: string; color: string }> = {
-              motorway:  { label: 'Motorway',  color: '#c05818' },
-              trunk:     { label: 'Trunk',     color: '#b07820' },
-              primary:   { label: 'Primary',   color: '#8a5c2a' },
-              secondary: { label: 'Secondary', color: '#6a7040' },
-              tertiary:  { label: 'Tertiary',  color: '#606060' },
-            }
+            const presentTiers = new Set(roadEdges.map((e) => e.tier))
             return (
               <div>
                 <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
                   Visible — {roadEdges.length} edge{roadEdges.length !== 1 ? 's' : ''}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {fetchedTypes.map((type) => {
-                    const meta = typesMeta[type] ?? { label: type, color: '#606060' }
-                    const on = roadsVisibleTypes.includes(type)
+                  {([0, 1, 2] as const).filter((t) => presentTiers.has(t)).map((t) => {
+                    const s = roadTierStyles[t]
+                    const on = roadsVisibleTiers[t]
                     return (
                       <button
-                        key={type}
-                        onClick={() => setRoadsVisibleTypes(on ? roadsVisibleTypes.filter((t) => t !== type) : [...roadsVisibleTypes, type])}
+                        key={t}
+                        onClick={() => {
+                          const next = [...roadsVisibleTiers] as [boolean, boolean, boolean]
+                          next[t] = !on
+                          setRoadsVisibleTiers(next)
+                        }}
                         style={{
                           padding: '3px 8px',
                           background: on ? '#1e1e2a' : '#141420',
-                          border: `1px solid ${on ? meta.color : '#2a2a3a'}`,
+                          border: `1px solid ${on ? s.inner : '#2a2a3a'}`,
                           borderRadius: 3,
-                          color: on ? meta.color : '#3a3a4a',
+                          color: on ? s.inner : '#3a3a4a',
                           cursor: 'pointer',
                           fontFamily: 'inherit',
                           fontSize: 10,
@@ -606,8 +677,8 @@ export function TerrainSidebar() {
                           gap: 5,
                         }}
                       >
-                        <span style={{ width: 20, height: 3, background: on ? meta.color : '#3a3a4a', borderRadius: 2, display: 'inline-block' }} />
-                        {meta.label}
+                        <span style={{ width: 20, height: 3, background: on ? s.outer : '#3a3a4a', borderRadius: 2, display: 'inline-block' }} />
+                        Tier {t + 1}
                       </button>
                     )
                   })}
@@ -626,14 +697,9 @@ export function TerrainSidebar() {
                   <button
                     onClick={clearRoads}
                     style={{
-                      padding: '3px 8px',
-                      background: 'none',
-                      border: '1px solid #3a2a2a',
-                      borderRadius: 3,
-                      color: '#7a4a4a',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      fontSize: 10,
+                      padding: '3px 8px', background: 'none',
+                      border: '1px solid #3a2a2a', borderRadius: 3,
+                      color: '#7a4a4a', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
                     }}
                   >
                     Clear all
@@ -642,6 +708,113 @@ export function TerrainSidebar() {
               </div>
             )
           })()}
+        </>
+      )}
+
+      {/* ── RAILS PANEL ── */}
+      {activePanel === 'rails' && (
+        <>
+          {/* Rail types */}
+          <div>
+            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Rail types</div>
+            {(['rail', 'light_rail', 'narrow_gauge', 'tram'] as const).map((rt) => (
+              <label key={rt} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, cursor: 'pointer' }}>
+                <input type="checkbox" checked={railsFetchTypes.includes(rt)}
+                  onChange={(e) => {
+                    const next = e.target.checked ? [...railsFetchTypes, rt] : railsFetchTypes.filter((t) => t !== rt)
+                    setRailsFetchTypes(next.length > 0 ? next : railsFetchTypes)
+                  }}
+                />
+                <span style={{ color: '#b0b0c8' }}>{rt.replace('_', ' ')}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* Fetch button */}
+          <button
+            onClick={fetchRails}
+            disabled={railsStatus === 'loading'}
+            style={{
+              padding: '7px 0',
+              background: railsStatus === 'loading' ? '#1a1f2e' : '#1a2a3a',
+              color: railsStatus === 'loading' ? '#4a5a6a' : '#7ab8d8',
+              border: '1px solid #2a3a4a',
+              borderRadius: 4,
+              cursor: railsStatus === 'loading' ? 'default' : 'pointer',
+              fontFamily: 'inherit',
+              fontSize: 12,
+              width: '100%',
+            }}
+          >
+            {railsStatus === 'loading' ? 'Fetching…' : 'Fetch from OSM'}
+          </button>
+
+          {railsError && (
+            <div style={{ color: '#e06060', fontSize: 11 }}>{railsError}</div>
+          )}
+
+          {railEdges.length > 0 && (
+            <>
+              {/* Display mode */}
+              <div>
+                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Display mode</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['per_hex', 'raw'] as const).map((mode) => (
+                    <button key={mode} onClick={() => setRailsDisplayMode(mode)} style={{
+                      flex: 1, padding: '5px 0',
+                      background: railsDisplayMode === mode ? '#1a2a3a' : 'none',
+                      color: railsDisplayMode === mode ? '#7ab8d8' : '#5a5a7a',
+                      border: `1px solid ${railsDisplayMode === mode ? '#3a5a7a' : '#2a2a3a'}`,
+                      borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                    }}>{mode === 'per_hex' ? 'Hex' : 'Raw'}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Paint mode */}
+              <div>
+                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>Edit</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <button onClick={() => setRailPaintMode(!railPaintMode)} style={{
+                    flex: 1, padding: '5px 0',
+                    background: railPaintMode && !railPaintEraser ? '#1a2a1a' : 'none',
+                    color: railPaintMode && !railPaintEraser ? '#7ad878' : '#5a5a7a',
+                    border: `1px solid ${railPaintMode && !railPaintEraser ? '#3a6a3a' : '#2a2a3a'}`,
+                    borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  }}>Draw</button>
+                  <button onClick={() => { setRailPaintMode(true); setRailPaintEraser(true) }} style={{
+                    flex: 1, padding: '5px 0',
+                    background: railPaintMode && railPaintEraser ? '#2a1a1a' : 'none',
+                    color: railPaintMode && railPaintEraser ? '#e07070' : '#5a5a7a',
+                    border: `1px solid ${railPaintMode && railPaintEraser ? '#6a3a3a' : '#2a2a3a'}`,
+                    borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  }}>Erase</button>
+                </div>
+                {railPaintMode && (
+                  <div style={{ color: '#4a6a4a', fontSize: 11 }}>
+                    {railPaintEraser ? 'Click/drag to erase rail segments' : 'Drag between adjacent hexes to draw rails'}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={clearRails} style={{
+                  flex: 1, padding: '5px 0',
+                  background: 'none', color: '#5a5a7a',
+                  border: '1px solid #2a2a3a', borderRadius: 4,
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                }}>Clear all</button>
+              </div>
+
+              <div style={{ color: '#4a4a6a', fontSize: 11 }}>
+                {railEdges.length} rail edge{railEdges.length !== 1 ? 's' : ''}
+              </div>
+            </>
+          )}
+
+          {railsStatus === 'done' && railEdges.length === 0 && (
+            <div style={{ color: '#4a4a6a', fontSize: 11 }}>No rails found in this area.</div>
+          )}
         </>
       )}
 
@@ -1183,6 +1356,59 @@ export function TerrainSidebar() {
 
           {elevationStatus === 'done' && (
             <>
+              <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
+                <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+                  Style
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {([
+                    { value: 'hachure', label: 'Hachure' },
+                    { value: 'contour', label: 'Contour lines' },
+                  ] as const).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => setElevationStyle(value)}
+                      style={{
+                        flex: 1,
+                        padding: '5px 0',
+                        background: elevationStyle === value ? '#2a3a2a' : '#1e1f2a',
+                        color: elevationStyle === value ? '#90d870' : '#5a5a7a',
+                        border: `1px solid ${elevationStyle === value ? '#5a9a40' : '#2a2a3a'}`,
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        fontSize: 10,
+                        fontWeight: elevationStyle === value ? 700 : 400,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {elevationStyle === 'contour' && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+                    Contour interval
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {[0, 10, 25, 50, 100, 200, 500].map((v) => (
+                      <button key={v} onClick={() => setContourInterval(v)} style={{
+                        padding: '3px 8px',
+                        background: contourInterval === v ? '#2a3a2a' : '#1e1f2a',
+                        color: contourInterval === v ? '#90d870' : '#6a6a8a',
+                        border: `1px solid ${contourInterval === v ? '#5a9a40' : '#2a2a3a'}`,
+                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        fontWeight: contourInterval === v ? 700 : 400,
+                      }}>
+                        {v === 0 ? 'auto' : `${v}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ color: '#5a5a7a', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>
@@ -1241,6 +1467,61 @@ export function TerrainSidebar() {
                   onToggle={() => setShowElevHeatmap(!showElevHeatmap)}
                 />
               </div>
+
+              <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 12 }}>
+                <button
+                  onClick={() => setElevationPaintMode(!elevationPaintMode)}
+                  style={{
+                    width: '100%',
+                    padding: '6px 0',
+                    background: elevationPaintMode ? '#1a2a1a' : '#1e1f2a',
+                    color: elevationPaintMode ? '#90d870' : '#5a5a7a',
+                    border: `1px solid ${elevationPaintMode ? '#5a9a40' : '#2a2a3a'}`,
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    fontWeight: elevationPaintMode ? 700 : 400,
+                  }}
+                >
+                  {elevationPaintMode ? '✎ painting elevation' : '✎ paint elevation'}
+                </button>
+                {elevationPaintMode && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ color: '#5a5a7a', marginBottom: 5, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+                      Brush
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {([
+                        { value: 'flat', label: 'Flat', color: '#a8b870' },
+                        { value: 'hills', label: 'Hills', color: '#9e8c6a' },
+                        { value: 'mountains', label: 'Mountains', color: '#8a7a6a' },
+                      ] as const).map(({ value, label, color }) => (
+                        <button
+                          key={value}
+                          onClick={() => setElevationPaintBrush(value)}
+                          style={{
+                            flex: 1,
+                            padding: '4px 0',
+                            background: elevationPaintBrush === value ? color : '#1e1f2a',
+                            color: elevationPaintBrush === value ? '#12131a' : '#a0a0b8',
+                            border: `1px solid ${elevationPaintBrush === value ? color : '#2a2a3a'}`,
+                            borderRadius: 3,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            fontSize: 10,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ color: '#5a8a5a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>
+                      Click or drag hexes to paint.
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </>
@@ -1249,6 +1530,38 @@ export function TerrainSidebar() {
       {/* ── STYLE PANEL ── */}
       {activePanel === 'style' && (
         <>
+          <div>
+            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Hex borders
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {([
+                { mode: 'full', label: 'Full' },
+                { mode: 'dots', label: 'Vertices' },
+                { mode: 'none', label: 'Hidden' },
+              ] as const).map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setHexBorderMode(mode)}
+                  style={{
+                    flex: 1,
+                    padding: '5px 0',
+                    background: hexBorderMode === mode ? '#2a3a2a' : '#1e1f2a',
+                    color: hexBorderMode === mode ? '#a0d890' : '#5a5a7a',
+                    border: `1px solid ${hexBorderMode === mode ? '#4a7a3a' : '#2a2a3a'}`,
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 10,
+                    fontWeight: hexBorderMode === mode ? 700 : 400,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div style={{ fontSize: 13, fontWeight: 700, color: '#c8b88a', letterSpacing: 0.5 }}>
             Terrain style
           </div>
@@ -1347,6 +1660,58 @@ export function TerrainSidebar() {
                   fontSize: 11,
                 }}
               />
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, fontSize: 13, fontWeight: 700, color: '#8ab8d8', letterSpacing: 0.5 }}>
+            Rivers
+          </div>
+
+          <StyleSlider
+            label="River width"
+            value={riverWidthScale}
+            min={0.3} max={3} step={0.1}
+            unit="×"
+            onChange={setRiverWidthScale}
+          />
+
+          <StyleSlider
+            label="Straighten"
+            value={riverStraighten}
+            min={0} max={1} step={0.05}
+            hint="Blends each waypoint toward the midpoint of its neighbours, reducing hex-grid jaggedness."
+            onChange={setRiverStraighten}
+          />
+
+          <StyleSlider
+            label="Meander"
+            value={riverMeander}
+            min={0} max={10} step={1}
+            unit="px"
+            hint="Lateral offset applied to each waypoint before curving. Creates natural sinuous flow."
+            onChange={setRiverMeander}
+          />
+
+          <div>
+            <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+              Meander seed — {riverMeanderSeed}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4, 5, 7, 12].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setRiverMeanderSeed(s)}
+                  style={{
+                    padding: '3px 9px',
+                    background: riverMeanderSeed === s ? '#1e3a5a' : '#1e1f2a',
+                    color: riverMeanderSeed === s ? '#88c0e0' : '#5a5a7a',
+                    border: `1px solid ${riverMeanderSeed === s ? '#3a6a9a' : '#2a2a3a'}`,
+                    borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
           </div>
 

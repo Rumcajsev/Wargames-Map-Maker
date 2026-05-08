@@ -600,7 +600,7 @@ export function chainsFromRiverEdges(
   for (const [vk, nbs] of adjVerts) {
     if (nbs.length === 1) {
       const chain = walkFrom(vk)
-      if (chain.length >= 2) chains.push(chaikin(chain, 1))
+      if (chain.length >= 2) chains.push(chain)
     }
   }
   for (const [vk, nbs] of adjVerts) {
@@ -608,7 +608,7 @@ export function chainsFromRiverEdges(
       const ep = vk < nextVk ? `${vk}|${nextVk}` : `${nextVk}|${vk}`
       if (!visitedPairs.has(ep)) {
         const chain = walkFrom(vk)
-        if (chain.length >= 2) chains.push(chaikin(chain, 1))
+        if (chain.length >= 2) chains.push(chain)
       }
     }
   }
@@ -686,6 +686,7 @@ export interface GeneratedHex {
   elevation_m: number | null
   elevation_relief_m: number | null
   elevation_class: 'flat' | 'hills' | 'mountains' | null
+  elevation_manual_override?: boolean
 }
 
 export interface GridMetadata {
@@ -754,6 +755,12 @@ function classifyHex(coverage: Record<string, number>, thresholds: Record<string
   return 'clear'
 }
 
+export interface RoadTierStyle {
+  outer: string
+  inner: string
+  outerW: number
+}
+
 export interface Settlement {
   name: string
   type: 'city' | 'town' | 'village' | string
@@ -800,23 +807,61 @@ export interface RoadHex {
   connections: { q: number; r: number }[]
 }
 
+export const TIER_HIGHWAYS: [string[], string[], string[]] = [
+  ['motorway', 'trunk'],
+  ['primary', 'secondary'],
+  ['tertiary'],
+]
+
+export const HIGHWAY_TO_TIER: Record<string, 0 | 1 | 2> = {
+  motorway: 0, trunk: 0,
+  primary: 1, secondary: 1,
+  tertiary: 2,
+}
+
 export interface RoadEdge {
   q1: number
   r1: number
   q2: number
   r2: number
-  highway: string
+  tier: 0 | 1 | 2
   manual?: boolean
 }
 
-export function roadEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: number, highway: string): string {
+export function roadEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: number, tier: 0 | 1 | 2): string {
   const a = `${q1},${r1}`, b = `${q2},${r2}`
-  return `${highway}:${a < b ? `${a}|${b}` : `${b}|${a}`}`
+  return `${tier}:${a < b ? `${a}|${b}` : `${b}|${a}`}`
+}
+
+export interface RawRailWay {
+  railway: string
+  coords: [number, number][]
+}
+
+export interface RailHex {
+  q: number
+  r: number
+  railway: string
+  connections: { q: number; r: number }[]
+}
+
+export interface RailEdge {
+  q1: number
+  r1: number
+  q2: number
+  r2: number
+  manual?: boolean
+}
+
+export function railEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: number): string {
+  const a = `${q1},${r1}`, b = `${q2},${r2}`
+  return a < b ? `${a}|${b}` : `${b}|${a}`
 }
 
 export interface UndoSnapshot {
-  terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean }>
+  terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean; elevation_class: 'flat' | 'hills' | 'mountains' | null; elevation_manual_override: boolean }>
   roadEdges: RoadEdge[]
+  railEdges: RailEdge[]
   riverEdges: RiverEdge[]
   settlements: Settlement[]
 }
@@ -877,10 +922,18 @@ interface MapStore {
   rawRoadWays: RawRoadWay[]
   roadEdges: RoadEdge[]
   roadsDisplayMode: 'raw' | 'per_hex'
-  roadsHighwayTypes: string[]
-  roadsVisibleTypes: string[]
+  roadsFetchTiers: [boolean, boolean, boolean]
+  roadsVisibleTiers: [boolean, boolean, boolean]
   roadsStatus: 'idle' | 'loading' | 'error' | 'done'
   roadsError: string | null
+
+  // Rails state
+  rawRailWays: RawRailWay[]
+  railEdges: RailEdge[]
+  railsDisplayMode: 'raw' | 'per_hex'
+  railsFetchTypes: string[]
+  railsStatus: 'idle' | 'loading' | 'error' | 'done'
+  railsError: string | null
 
   // Rivers state
   riverEdges: RiverEdge[]
@@ -900,7 +953,7 @@ interface MapStore {
   showReliefHeatmap: boolean
   showElevHeatmap: boolean
 
-  activePanel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'elevation' | 'style'
+  activePanel: 'terrain' | 'settlements' | 'roads' | 'rails' | 'rivers' | 'elevation' | 'style'
 
   setPaperSize: (v: PaperSize) => void
   setOrientation: (v: Orientation) => void
@@ -945,13 +998,21 @@ interface MapStore {
   // Roads actions
   fetchRoads: () => Promise<void>
   setRoadsDisplayMode: (mode: 'raw' | 'per_hex') => void
-  setRoadsHighwayTypes: (types: string[]) => void
-  setRoadsVisibleTypes: (types: string[]) => void
+  setRoadsFetchTiers: (tiers: [boolean, boolean, boolean]) => void
+  setRoadsVisibleTiers: (tiers: [boolean, boolean, boolean]) => void
   clearRoads: () => void
   clearManualRoads: () => void
-  addRoadEdge: (q1: number, r1: number, q2: number, r2: number, highway: string) => void
-  removeRoadHexEdges: (q: number, r: number, highway: string) => void
+  addRoadEdge: (q1: number, r1: number, q2: number, r2: number, tier: 0 | 1 | 2) => void
+  removeRoadHexEdges: (q: number, r: number, tier: 0 | 1 | 2) => void
   removeAllRoadHexEdges: (q: number, r: number) => void
+
+  // Rails actions
+  fetchRails: () => Promise<void>
+  setRailsDisplayMode: (mode: 'raw' | 'per_hex') => void
+  setRailsFetchTypes: (types: string[]) => void
+  clearRails: () => void
+  addRailEdge: (q1: number, r1: number, q2: number, r2: number) => void
+  removeRailHexEdges: (q: number, r: number) => void
 
   // Rivers actions
   fetchRivers: () => Promise<void>
@@ -976,27 +1037,63 @@ interface MapStore {
   setTerrainPaintMode: (v: boolean) => void
   setTerrainPaintBrush: (v: string) => void
 
+  // Elevation paint mode
+  elevationPaintMode: boolean
+  elevationPaintBrush: 'flat' | 'hills' | 'mountains'
+  setElevationPaintMode: (v: boolean) => void
+  setElevationPaintBrush: (v: 'flat' | 'hills' | 'mountains') => void
+  overrideHexElevation: (q: number, r: number, elevation_class: 'flat' | 'hills' | 'mountains') => void
+
   // Road paint mode
   roadPaintMode: boolean
-  roadPaintBrush: string
+  roadPaintBrush: 0 | 1 | 2
   roadPaintEraser: boolean
   setRoadPaintMode: (v: boolean) => void
-  setRoadPaintBrush: (v: string) => void
+  setRoadPaintBrush: (v: 0 | 1 | 2) => void
   setRoadPaintEraser: (v: boolean) => void
 
-  setActivePanel: (panel: 'terrain' | 'settlements' | 'roads' | 'rivers' | 'elevation' | 'style') => void
+  // Rail paint mode
+  railPaintMode: boolean
+  railPaintEraser: boolean
+  setRailPaintMode: (v: boolean) => void
+  setRailPaintEraser: (v: boolean) => void
+
+  setActivePanel: (panel: 'terrain' | 'settlements' | 'roads' | 'rails' | 'rivers' | 'elevation' | 'style') => void
 
   // Style
+  elevationStyle: 'hachure' | 'contour'
+  setElevationStyle: (v: 'hachure' | 'contour') => void
+  contourInterval: number
+  setContourInterval: (v: number) => void
+  hexBorderMode: 'full' | 'dots' | 'none'
+  setHexBorderMode: (v: 'full' | 'dots' | 'none') => void
+  roadTierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
+  setRoadTierStyle: (tier: 0 | 1 | 2, update: Partial<RoadTierStyle>) => void
   terrainDisplacement: number
   terrainNoiseFrequency: number
   terrainNoiseSeed: number
   terrainNoiseOctaves: number
   illustratedStyle: boolean
+  riverWidthScale: number
+  riverCurveSteps: number
+  riverMeander: number
+  riverMeanderSeed: number
+  riverStraighten: number
+  urbanHexStyle: 'default' | 'modern'
+  woodsHexStyle: 'default' | 'modern' | 'xix'
   setTerrainDisplacement: (v: number) => void
   setTerrainNoiseFrequency: (v: number) => void
   setTerrainNoiseSeed: (v: number) => void
   setTerrainNoiseOctaves: (v: number) => void
   setIllustratedStyle: (v: boolean) => void
+  setRiverWidthScale: (v: number) => void
+  setRiverCurveSteps: (v: number) => void
+  setRiverMeander: (v: number) => void
+  setRiverMeanderSeed: (v: number) => void
+  setRiverStraighten: (v: number) => void
+  setUrbanHexStyle: (style: 'default' | 'modern') => void
+  setWoodsHexStyle: (style: 'default' | 'modern' | 'xix') => void
+  applyMapPreset: (preset: 'default' | 'modern' | 'xix') => void
 
   // Undo / redo
   undoStack: UndoSnapshot[]
@@ -1049,10 +1146,17 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   rawRoadWays: [],
   roadEdges: [],
   roadsDisplayMode: 'per_hex',
-  roadsHighwayTypes: ['motorway', 'trunk', 'primary'],
-  roadsVisibleTypes: ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'],
+  roadsFetchTiers: [true, true, false] as [boolean, boolean, boolean],
+  roadsVisibleTiers: [true, true, true] as [boolean, boolean, boolean],
   roadsStatus: 'idle',
   roadsError: null,
+
+  rawRailWays: [],
+  railEdges: [],
+  railsDisplayMode: 'per_hex' as 'raw' | 'per_hex',
+  railsFetchTypes: ['rail'],
+  railsStatus: 'idle',
+  railsError: null,
 
   riverEdges: [],
   riverChains: [],
@@ -1074,17 +1178,38 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   terrainPaintMode: false,
   terrainPaintBrush: 'clear',
 
+  elevationPaintMode: false,
+  elevationPaintBrush: 'hills' as 'flat' | 'hills' | 'mountains',
+
   roadPaintMode: false,
-  roadPaintBrush: 'primary',
+  roadPaintBrush: 1 as 0 | 1 | 2,
   roadPaintEraser: false,
+
+  railPaintMode: false,
+  railPaintEraser: false,
 
   activePanel: 'terrain',
 
+  elevationStyle: 'hachure' as 'hachure' | 'contour',
+  contourInterval: 0,
+  hexBorderMode: 'full' as 'full' | 'dots' | 'none',
   terrainDisplacement: 18,
   terrainNoiseFrequency: 6,
   terrainNoiseSeed: 2,
   terrainNoiseOctaves: 3,
   illustratedStyle: false,
+  riverWidthScale: 1.0,
+  riverCurveSteps: 10,
+  riverMeander: 0,
+  riverMeanderSeed: 1,
+  riverStraighten: 0,
+  roadTierStyles: [
+    { outer: '#ffe8a8', inner: '#b07820', outerW: 4.5 },
+    { outer: '#f0e0b8', inner: '#8a5c2a', outerW: 3.0 },
+    { outer: '#d8d8c0', inner: '#606060', outerW: 2.0 },
+  ] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+  urbanHexStyle: 'default',
+  woodsHexStyle: 'default',
 
   undoStack: [],
   redoStack: [],
@@ -1152,9 +1277,15 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     rawRoadWays: [],
     roadEdges: [],
     roadsDisplayMode: 'per_hex',
-    roadsVisibleTypes: [],
+    roadsVisibleTiers: [true, true, true],
     roadsStatus: 'idle',
     roadsError: null,
+    rawRailWays: [],
+    railEdges: [],
+    railsStatus: 'idle',
+    railsError: null,
+    railPaintMode: false,
+    railPaintEraser: false,
     riverEdges: [],
     riverChains: [],
     riverFeatures: [],
@@ -1167,6 +1298,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     showReliefHeatmap: false,
     showElevHeatmap: false,
     terrainPaintMode: false,
+    elevationPaintMode: false,
     roadPaintMode: false,
     roadPaintEraser: false,
     activePanel: 'terrain',
@@ -1322,17 +1454,21 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   setSettlementsLimit: (v) => set({ settlementsLimit: v }),
   setSettlementsTypes: (v) => set({ settlementsTypes: v }),
 
-  clearRoads: () => set({ rawRoadWays: [], roadEdges: [], roadsVisibleTypes: [], roadsStatus: 'idle', roadsError: null }),
+  clearRoads: () => set({ rawRoadWays: [], roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null }),
   clearManualRoads: () => { get().pushUndoSnapshot(); set((s) => ({ roadEdges: s.roadEdges.filter((e) => !e.manual) })) },
   setRoadsDisplayMode: (mode) => set({ roadsDisplayMode: mode }),
-  setRoadsHighwayTypes: (types) => set({ roadsHighwayTypes: types }),
-  setRoadsVisibleTypes: (types) => set({ roadsVisibleTypes: types }),
+  setRoadsFetchTiers: (tiers) => set({ roadsFetchTiers: tiers }),
+  setRoadsVisibleTiers: (tiers) => set({ roadsVisibleTiers: tiers }),
 
   fetchRoads: async () => {
-    const { generatedMetadata, hexOrientation, roadsHighwayTypes } = get()
+    const { generatedMetadata, hexOrientation, roadsFetchTiers } = get()
     if (!generatedMetadata) return
 
     set({ roadsStatus: 'loading', roadsError: null })
+
+    const highway_types = roadsFetchTiers.flatMap(
+      (on, t) => on ? TIER_HIGHWAYS[t as 0 | 1 | 2] : []
+    )
 
     try {
       const resp = await fetch('/api/generate/roads', {
@@ -1346,30 +1482,26 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
           height_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1],
           hex_orientation: hexOrientation,
           R_m: generatedMetadata.outer_radius_m,
-          highway_types: roadsHighwayTypes,
+          highway_types,
         }),
       })
       if (!resp.ok) throw new Error(await resp.text())
       const data = await resp.json()
-      const fetchedTypes = [...new Set<string>((data.raw_ways as RawRoadWay[]).map((w) => w.highway))]
-      // Convert per-hex connections to deduplicated edge list
+
+      // Collapse highway → tier on import; deduplicate by (q1,r1,q2,r2,tier)
       const edgeSet = new Set<string>()
       const roadEdges: RoadEdge[] = []
       for (const rh of data.road_hexes as RoadHex[]) {
+        const tier = (HIGHWAY_TO_TIER[rh.highway] ?? 2) as 0 | 1 | 2
         for (const conn of rh.connections) {
-          const key = roadEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r, rh.highway)
+          const key = roadEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r, tier)
           if (!edgeSet.has(key)) {
             edgeSet.add(key)
-            roadEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r, highway: rh.highway })
+            roadEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r, tier })
           }
         }
       }
-      set({
-        rawRoadWays: data.raw_ways,
-        roadEdges,
-        roadsVisibleTypes: fetchedTypes,
-        roadsStatus: 'done',
-      })
+      set({ rawRoadWays: data.raw_ways, roadEdges, roadsStatus: 'done' })
     } catch (e) {
       set({ roadsStatus: 'error', roadsError: String(e) })
     }
@@ -1406,13 +1538,12 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   },
 
   fetchRivers: async () => {
-    const { paperSize, orientation, bearing, center, zoom, framePixelWidth, riversTypes, generatedHexes, generatedMetadata } = get()
-    if (framePixelWidth === 0) return
+    const { paperSize, orientation, riversTypes, generatedHexes, generatedMetadata } = get()
+    if (!generatedMetadata) return
 
-    const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
-    const widthM = framePixelWidth * mapResolutionMpx(center[1], zoom)
-    const heightM = widthM * (phMm / pwMm)
-    const hexSizeKm = generatedMetadata?.hex_size_km ?? 10
+    const widthM = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0]
+    const heightM = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1]
+    const hexSizeKm = generatedMetadata.hex_size_km
 
     set({ riversStatus: 'loading', riversError: null })
 
@@ -1421,9 +1552,9 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          center_lon: center[0],
-          center_lat: center[1],
-          bearing,
+          center_lon: generatedMetadata.center[0],
+          center_lat: generatedMetadata.center[1],
+          bearing: generatedMetadata.bearing,
           width_m: widthM,
           height_m: heightM,
           paper_size: paperSize,
@@ -1474,6 +1605,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     const next = { ...elevationThresholds, [key]: v }
     const SKIP = new Set(['sea', 'lake'])
     const updated = generatedHexes.map((h) => {
+      if (h.elevation_manual_override) return h
       if (SKIP.has(h.terrain) || h.elevation_m === null || h.elevation_m === undefined) return h
       if (h.elevation_relief_m === null || h.elevation_relief_m === undefined) return h
       return { ...h, elevation_class: classifyElevationModeA(h.elevation_m, h.elevation_relief_m, next) }
@@ -1484,36 +1616,103 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   setShowReliefHeatmap: (v) => set({ showReliefHeatmap: v, showElevHeatmap: v ? false : get().showElevHeatmap }),
   setShowElevHeatmap: (v) => set({ showElevHeatmap: v, showReliefHeatmap: v ? false : get().showReliefHeatmap }),
 
-  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, selectedHex: null } : {}) }),
+  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, selectedHex: null } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
 
-  setRoadPaintMode: (v) => set({ roadPaintMode: v, ...(v ? { terrainPaintMode: false, roadsDisplayMode: 'per_hex' } : { roadPaintEraser: false }) }),
+  setElevationPaintMode: (v) => set({ elevationPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false, selectedHex: null } : {}) }),
+  setElevationPaintBrush: (v) => set({ elevationPaintBrush: v }),
+  overrideHexElevation: (q, r, elevation_class) => {
+    const { generatedHexes } = get()
+    const updated = generatedHexes.map((h) =>
+      h.q === q && h.r === r ? { ...h, elevation_class, elevation_manual_override: true } : h
+    )
+    set({ generatedHexes: updated })
+  },
+
+  setRoadPaintMode: (v) => set({ roadPaintMode: v, ...(v ? { terrainPaintMode: false, elevationPaintMode: false, railPaintMode: false, roadsDisplayMode: 'per_hex' } : { roadPaintEraser: false }) }),
   setRoadPaintBrush: (v) => set({ roadPaintBrush: v }),
   setRoadPaintEraser: (v) => set({ roadPaintEraser: v }),
 
-  addRoadEdge: (q1, r1, q2, r2, highway) => {
-    const { roadEdges, roadsVisibleTypes } = get()
-    const newKey = roadEdgeCanonicalKey(q1, r1, q2, r2, highway)
-    // Replace same hex-pair edges of a different type (one type per edge)
+  addRoadEdge: (q1, r1, q2, r2, tier) => {
+    const { roadEdges } = get()
+    const newKey = roadEdgeCanonicalKey(q1, r1, q2, r2, tier)
     const pairKey = (e: RoadEdge) => {
       const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
       return a < b ? `${a}|${b}` : `${b}|${a}`
     }
     const thisPair = (() => { const a = `${q1},${r1}`, b = `${q2},${r2}`; return a < b ? `${a}|${b}` : `${b}|${a}` })()
     const filtered = roadEdges.filter((e) => pairKey(e) !== thisPair)
-    if (filtered.some((e) => roadEdgeCanonicalKey(e.q1, e.r1, e.q2, e.r2, e.highway) === newKey)) return
-    const visibleTypes = roadsVisibleTypes.includes(highway) ? roadsVisibleTypes : [...roadsVisibleTypes, highway]
-    set({ roadEdges: [...filtered, { q1, r1, q2, r2, highway, manual: true }], roadsVisibleTypes: visibleTypes })
+    if (filtered.some((e) => roadEdgeCanonicalKey(e.q1, e.r1, e.q2, e.r2, e.tier) === newKey)) return
+    set({ roadEdges: [...filtered, { q1, r1, q2, r2, tier, manual: true }] })
   },
 
-  removeRoadHexEdges: (q, r, highway) => {
+  removeRoadHexEdges: (q, r, tier) => {
     const { roadEdges } = get()
-    set({ roadEdges: roadEdges.filter((e) => !(e.highway === highway && ((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r)))) })
+    set({ roadEdges: roadEdges.filter((e) => !(e.tier === tier && ((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r)))) })
   },
 
   removeAllRoadHexEdges: (q, r) => {
     const { roadEdges } = get()
     set({ roadEdges: roadEdges.filter((e) => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) })
+  },
+
+  clearRails: () => set({ rawRailWays: [], railEdges: [], railsStatus: 'idle', railsError: null, railPaintMode: false, railPaintEraser: false }),
+  setRailsDisplayMode: (mode) => set({ railsDisplayMode: mode }),
+  setRailsFetchTypes: (types) => set({ railsFetchTypes: types }),
+  setRailPaintMode: (v) => set({ railPaintMode: v, ...(v ? { terrainPaintMode: false, elevationPaintMode: false, roadPaintMode: false, railsDisplayMode: 'per_hex' } : { railPaintEraser: false }) }),
+  setRailPaintEraser: (v) => set({ railPaintEraser: v }),
+
+  addRailEdge: (q1, r1, q2, r2) => {
+    const { railEdges } = get()
+    const key = railEdgeCanonicalKey(q1, r1, q2, r2)
+    if (railEdges.some((e) => railEdgeCanonicalKey(e.q1, e.r1, e.q2, e.r2) === key)) return
+    set({ railEdges: [...railEdges, { q1, r1, q2, r2, manual: true }] })
+  },
+
+  removeRailHexEdges: (q, r) => {
+    const { railEdges } = get()
+    set({ railEdges: railEdges.filter((e) => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) })
+  },
+
+  fetchRails: async () => {
+    const { generatedMetadata, hexOrientation, railsFetchTypes } = get()
+    if (!generatedMetadata) return
+
+    set({ railsStatus: 'loading', railsError: null })
+
+    try {
+      const resp = await fetch('/api/generate/rails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          center_lon: generatedMetadata.center[0],
+          center_lat: generatedMetadata.center[1],
+          bearing: generatedMetadata.bearing,
+          width_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0],
+          height_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1],
+          hex_orientation: hexOrientation,
+          R_m: generatedMetadata.outer_radius_m,
+          rail_types: railsFetchTypes,
+        }),
+      })
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+
+      const edgeSet = new Set<string>()
+      const railEdges: RailEdge[] = []
+      for (const rh of data.rail_hexes as RailHex[]) {
+        for (const conn of rh.connections) {
+          const key = railEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r)
+          if (!edgeSet.has(key)) {
+            edgeSet.add(key)
+            railEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r })
+          }
+        }
+      }
+      set({ rawRailWays: data.raw_ways, railEdges, railsStatus: 'done' })
+    } catch (e) {
+      set({ railsStatus: 'error', railsError: String(e) })
+    }
   },
 
   fetchElevation: async () => {
@@ -1569,17 +1768,74 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
 
   setActivePanel: (panel) => set({ activePanel: panel }),
 
+  setElevationStyle: (v) => set({ elevationStyle: v }),
+  setContourInterval: (v) => set({ contourInterval: v }),
+  setHexBorderMode: (v) => set({ hexBorderMode: v }),
   setTerrainDisplacement: (v) => set({ terrainDisplacement: v }),
   setTerrainNoiseFrequency: (v) => set({ terrainNoiseFrequency: v }),
   setTerrainNoiseSeed: (v) => set({ terrainNoiseSeed: v }),
   setTerrainNoiseOctaves: (v) => set({ terrainNoiseOctaves: v }),
   setIllustratedStyle: (v) => set({ illustratedStyle: v }),
+  setRiverWidthScale: (v) => set({ riverWidthScale: v }),
+  setRiverCurveSteps: (v) => set({ riverCurveSteps: v }),
+  setRiverMeander: (v) => set({ riverMeander: v }),
+  setRiverMeanderSeed: (v) => set({ riverMeanderSeed: v }),
+  setRiverStraighten: (v) => set({ riverStraighten: v }),
+  setRoadTierStyle: (tier, update) => set((state) => {
+    const styles = [...state.roadTierStyles] as [RoadTierStyle, RoadTierStyle, RoadTierStyle]
+    styles[tier] = { ...styles[tier], ...update }
+    return { roadTierStyles: styles }
+  }),
+  setUrbanHexStyle: (style) => set({ urbanHexStyle: style }),
+  setWoodsHexStyle: (style) => set({ woodsHexStyle: style }),
+  applyMapPreset: (preset) => {
+    const presets = {
+      default: {
+        urbanHexStyle: 'default' as const,
+        woodsHexStyle: 'default' as const,
+        terrainDisplacement: 18,
+        terrainNoiseFrequency: 6,
+        terrainNoiseOctaves: 3,
+        terrainNoiseSeed: 2,
+        riverWidthScale: 1.0,
+        riverMeander: 0,
+        riverStraighten: 0,
+      },
+      modern: {
+        urbanHexStyle: 'modern' as const,
+        woodsHexStyle: 'modern' as const,
+        terrainDisplacement: 0,
+        terrainNoiseFrequency: 6,
+        terrainNoiseOctaves: 3,
+        terrainNoiseSeed: 2,
+        riverWidthScale: 1.2,
+        riverMeander: 0,
+        riverStraighten: 0.3,
+      },
+      xix: {
+        urbanHexStyle: 'default' as const,
+        woodsHexStyle: 'xix' as const,
+        terrainDisplacement: 22,
+        terrainNoiseFrequency: 5,
+        terrainNoiseOctaves: 4,
+        terrainNoiseSeed: 2,
+        riverWidthScale: 0.9,
+        riverMeander: 3,
+        riverStraighten: 0.1,
+      },
+    }
+    set(presets[preset])
+  },
 
   pushUndoSnapshot: () => {
-    const { generatedHexes, roadEdges, riverEdges, settlements, undoStack } = get()
+    const { generatedHexes, roadEdges, railEdges, riverEdges, settlements, undoStack } = get()
     const snap: UndoSnapshot = {
-      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override }) => ({ q, r, terrain, manual_override })),
+      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override, elevation_class, elevation_manual_override }) => ({
+        q, r, terrain, manual_override: manual_override ?? false,
+        elevation_class: elevation_class ?? null, elevation_manual_override: elevation_manual_override ?? false,
+      })),
       roadEdges: [...roadEdges],
+      railEdges: [...railEdges],
       riverEdges: [...riverEdges],
       settlements: [...settlements],
     }
@@ -1587,19 +1843,23 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   },
 
   undo: () => {
-    const { undoStack, redoStack, generatedHexes, roadEdges, riverEdges, settlements } = get()
+    const { undoStack, redoStack, generatedHexes, roadEdges, railEdges, riverEdges, settlements } = get()
     if (undoStack.length === 0) return
     const prev = undoStack[undoStack.length - 1]
     const current: UndoSnapshot = {
-      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override }) => ({ q, r, terrain, manual_override })),
+      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override, elevation_class, elevation_manual_override }) => ({
+        q, r, terrain, manual_override: manual_override ?? false,
+        elevation_class: elevation_class ?? null, elevation_manual_override: elevation_manual_override ?? false,
+      })),
       roadEdges: [...roadEdges],
+      railEdges: [...railEdges],
       riverEdges: [...riverEdges],
       settlements: [...settlements],
     }
     const hexMap = new Map(prev.terrainHexes.map((h) => [`${h.q},${h.r}`, h]))
     const restoredHexes = generatedHexes.map((h) => {
       const snap = hexMap.get(`${h.q},${h.r}`)
-      return snap ? { ...h, terrain: snap.terrain, manual_override: snap.manual_override } : h
+      return snap ? { ...h, terrain: snap.terrain, manual_override: snap.manual_override, elevation_class: snap.elevation_class, elevation_manual_override: snap.elevation_manual_override } : h
     })
     const restoredRiverChains = chainsFromRiverEdges(prev.riverEdges, restoredHexes)
     set({
@@ -1607,6 +1867,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
       redoStack: [...redoStack, current],
       generatedHexes: restoredHexes,
       roadEdges: prev.roadEdges,
+      railEdges: prev.railEdges ?? railEdges,
       riverEdges: prev.riverEdges,
       riverChains: restoredRiverChains,
       settlements: prev.settlements,
@@ -1614,19 +1875,23 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   },
 
   redo: () => {
-    const { undoStack, redoStack, generatedHexes, roadEdges, riverEdges, settlements } = get()
+    const { undoStack, redoStack, generatedHexes, roadEdges, railEdges, riverEdges, settlements } = get()
     if (redoStack.length === 0) return
     const next = redoStack[redoStack.length - 1]
     const current: UndoSnapshot = {
-      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override }) => ({ q, r, terrain, manual_override })),
+      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override, elevation_class, elevation_manual_override }) => ({
+        q, r, terrain, manual_override: manual_override ?? false,
+        elevation_class: elevation_class ?? null, elevation_manual_override: elevation_manual_override ?? false,
+      })),
       roadEdges: [...roadEdges],
+      railEdges: [...railEdges],
       riverEdges: [...riverEdges],
       settlements: [...settlements],
     }
     const hexMap = new Map(next.terrainHexes.map((h) => [`${h.q},${h.r}`, h]))
     const restoredHexes = generatedHexes.map((h) => {
       const snap = hexMap.get(`${h.q},${h.r}`)
-      return snap ? { ...h, terrain: snap.terrain, manual_override: snap.manual_override } : h
+      return snap ? { ...h, terrain: snap.terrain, manual_override: snap.manual_override, elevation_class: snap.elevation_class, elevation_manual_override: snap.elevation_manual_override } : h
     })
     const restoredRiverChains = chainsFromRiverEdges(next.riverEdges, restoredHexes)
     set({
@@ -1634,6 +1899,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
       undoStack: [...undoStack, current],
       generatedHexes: restoredHexes,
       roadEdges: next.roadEdges,
+      railEdges: next.railEdges ?? railEdges,
       riverEdges: next.riverEdges,
       riverChains: restoredRiverChains,
       settlements: next.settlements,
@@ -1681,14 +1947,13 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
 
   fetchSettlements: async () => {
     const {
-      paperSize, orientation, bearing, center, zoom, framePixelWidth,
-      settlementsLimit, settlementsTypes, generatedHexes,
+      paperSize, orientation,
+      settlementsLimit, settlementsTypes, generatedHexes, generatedMetadata,
     } = get()
-    if (framePixelWidth === 0) return
+    if (!generatedMetadata) return
 
-    const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
-    const widthM = framePixelWidth * mapResolutionMpx(center[1], zoom)
-    const heightM = widthM * (phMm / pwMm)
+    const widthM = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0]
+    const heightM = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1]
 
     set({ settlementsStatus: 'loading', settlementsError: null })
 
@@ -1697,9 +1962,9 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          center_lon: center[0],
-          center_lat: center[1],
-          bearing,
+          center_lon: generatedMetadata.center[0],
+          center_lat: generatedMetadata.center[1],
+          bearing: generatedMetadata.bearing,
           width_m: widthM,
           height_m: heightM,
           paper_size: paperSize,
@@ -1760,7 +2025,6 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     hexEdgeMode: s.hexEdgeMode,
     generatedHexes: s.generatedHexes,
     generatedMetadata: s.generatedMetadata,
-    generateStatus: s.generateStatus,
     thresholds: s.thresholds,
     disabledTerrains: Array.from(s.disabledTerrains) as unknown as Set<string>,
     settlements: s.settlements,
@@ -1770,9 +2034,14 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     roadEdges: s.roadEdges,
     rawRoadWays: s.rawRoadWays,
     roadsDisplayMode: s.roadsDisplayMode,
-    roadsHighwayTypes: s.roadsHighwayTypes,
-    roadsVisibleTypes: s.roadsVisibleTypes,
+    roadsFetchTiers: s.roadsFetchTiers,
+    roadsVisibleTiers: s.roadsVisibleTiers,
     roadsStatus: s.roadsStatus,
+    railEdges: s.railEdges,
+    rawRailWays: s.rawRailWays,
+    railsDisplayMode: s.railsDisplayMode,
+    railsFetchTypes: s.railsFetchTypes,
+    railsStatus: s.railsStatus,
     riverFeatures: s.riverFeatures,
     riverEdges: s.riverEdges,
     riverChains: s.riverChains,
@@ -1783,15 +2052,39 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     showReliefHeatmap: s.showReliefHeatmap,
     showElevHeatmap: s.showElevHeatmap,
     activePanel: s.activePanel,
+    elevationStyle: s.elevationStyle,
+    contourInterval: s.contourInterval,
+    hexBorderMode: s.hexBorderMode,
     terrainDisplacement: s.terrainDisplacement,
     terrainNoiseFrequency: s.terrainNoiseFrequency,
     terrainNoiseSeed: s.terrainNoiseSeed,
     terrainNoiseOctaves: s.terrainNoiseOctaves,
     illustratedStyle: s.illustratedStyle,
+    riverWidthScale: s.riverWidthScale,
+    riverCurveSteps: s.riverCurveSteps,
+    riverMeander: s.riverMeander,
+    riverMeanderSeed: s.riverMeanderSeed,
+    riverStraighten: s.riverStraighten,
+    roadTierStyles: s.roadTierStyles,
+    urbanHexStyle: s.urbanHexStyle,
+    woodsHexStyle: s.woodsHexStyle,
   }),
   onRehydrateStorage: () => (state) => {
     if (state) {
       state.disabledTerrains = new Set(state.disabledTerrains as unknown as string[])
+      // Never restore a loading state — the request is gone after page reload
+      if (state.generateStatus === 'loading') state.generateStatus = 'idle'
+      if (state.elevationStatus === 'loading') state.elevationStatus = 'idle'
+      if (state.settlementsStatus === 'loading') state.settlementsStatus = 'idle'
+      if (state.roadsStatus === 'loading') state.roadsStatus = 'idle'
+      if (state.railsStatus === 'loading') state.railsStatus = 'idle'
+      if (state.riversStatus === 'loading') state.riversStatus = 'idle'
+      // Drop old-format road edges that used `highway` string instead of `tier` number
+      if (Array.isArray(state.roadEdges)) {
+        state.roadEdges = (state.roadEdges as RoadEdge[]).filter(
+          (e) => e.tier === 0 || e.tier === 1 || e.tier === 2
+        )
+      }
     }
   },
 }))

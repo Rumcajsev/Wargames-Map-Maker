@@ -1,7 +1,7 @@
 import json
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RiversConfig, ElevationConfig, HexLookupConfig
+from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RailsConfig, RiversConfig, ElevationConfig, HexLookupConfig
 from services.hex_grid import generate_hex_grid
 from services.terrain import generate_terrain, compute_geo_bbox, classify_hex
 from services.worldcover import load_worldcover_window, compute_hex_coverage
@@ -106,6 +106,15 @@ async def generate_roads(config: RoadsConfig) -> dict:
     from services.roads import generate_road_hexes
     try:
         return await generate_road_hexes(config)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Overpass API error: {exc}")
+
+
+@router.post("/rails")
+async def generate_rails(config: RailsConfig) -> dict:
+    from services.rails import generate_rail_hexes
+    try:
+        return await generate_rail_hexes(config)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Overpass API error: {exc}")
 
