@@ -991,10 +991,12 @@ interface MapStore {
   terrainNoiseFrequency: number
   terrainNoiseSeed: number
   terrainNoiseOctaves: number
+  illustratedStyle: boolean
   setTerrainDisplacement: (v: number) => void
   setTerrainNoiseFrequency: (v: number) => void
   setTerrainNoiseSeed: (v: number) => void
   setTerrainNoiseOctaves: (v: number) => void
+  setIllustratedStyle: (v: boolean) => void
 
   // Undo / redo
   undoStack: UndoSnapshot[]
@@ -1082,6 +1084,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   terrainNoiseFrequency: 6,
   terrainNoiseSeed: 2,
   terrainNoiseOctaves: 3,
+  illustratedStyle: false,
 
   undoStack: [],
   redoStack: [],
@@ -1570,6 +1573,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   setTerrainNoiseFrequency: (v) => set({ terrainNoiseFrequency: v }),
   setTerrainNoiseSeed: (v) => set({ terrainNoiseSeed: v }),
   setTerrainNoiseOctaves: (v) => set({ terrainNoiseOctaves: v }),
+  setIllustratedStyle: (v) => set({ illustratedStyle: v }),
 
   pushUndoSnapshot: () => {
     const { generatedHexes, roadEdges, riverEdges, settlements, undoStack } = get()
@@ -1783,6 +1787,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     terrainNoiseFrequency: s.terrainNoiseFrequency,
     terrainNoiseSeed: s.terrainNoiseSeed,
     terrainNoiseOctaves: s.terrainNoiseOctaves,
+    illustratedStyle: s.illustratedStyle,
   }),
   onRehydrateStorage: () => (state) => {
     if (state) {

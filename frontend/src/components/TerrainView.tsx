@@ -2,6 +2,20 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import maplibregl from 'maplibre-gl'
 import { useMapStore, TERRAIN_COLORS, riverEdgeCanonicalKey, type GridMetadata, type GeneratedHex, type RiverFeature } from '../store/mapStore'
 
+// Maps terrain type → public tile URL. Add entries as assets are dropped into public/tiles/.
+const TILE_MAP: Partial<Record<string, string>> = {
+  // clear:   '/tiles/clear_01.png',
+  // woods:   '/tiles/woods_01.png',
+  // rough:   '/tiles/rough_01.png',
+  // marsh:   '/tiles/marsh_01.png',
+  // hills:   '/tiles/hills_01.png',
+  // mountains: '/tiles/mountains_01.png',
+  // lake:    '/tiles/lake_01.png',
+  // sea:     '/tiles/sea_01.png',
+  // urban:   '/tiles/urban_01.png',
+  // river:   '/tiles/river_01.png',
+}
+
 function chaikinSmooth(pts: [number, number][], iterations = 2): [number, number][] {
   let r = pts
   for (let n = 0; n < iterations; n++) {
@@ -82,7 +96,7 @@ export function TerrainView() {
   const holdStart = useCallback(() => setOverlayHeld(true), [])
   const holdEnd = useCallback(() => setOverlayHeld(false), [])
 
-  const { generatedHexes, generatedMetadata, selectedHex, setSelectedHex, settlements, rawRoadWays, roadEdges, roadsDisplayMode, roadsVisibleTypes, riverEdges, riverChains, riverFeatures, riversDisplayMode, hoveredRiverIndex, riverEditMode, toggleManualRiverEdge, elevationStatus, showReliefHeatmap, showElevHeatmap, terrainPaintMode, terrainPaintBrush, overrideHexTerrain, roadPaintMode, roadPaintBrush, roadPaintEraser, addRoadEdge, removeRoadHexEdges, removeAllRoadHexEdges, settlementEditMode, settlementMoveIndex, setSettlementPlaceTarget, setSettlementEditMode, updateSettlement, setSettlementMoveIndex, pushUndoSnapshot, terrainDisplacement, terrainNoiseFrequency, terrainNoiseSeed, terrainNoiseOctaves } = useMapStore()
+  const { generatedHexes, generatedMetadata, selectedHex, setSelectedHex, settlements, rawRoadWays, roadEdges, roadsDisplayMode, roadsVisibleTypes, riverEdges, riverChains, riverFeatures, riversDisplayMode, hoveredRiverIndex, riverEditMode, toggleManualRiverEdge, elevationStatus, showReliefHeatmap, showElevHeatmap, terrainPaintMode, terrainPaintBrush, overrideHexTerrain, roadPaintMode, roadPaintBrush, roadPaintEraser, addRoadEdge, removeRoadHexEdges, removeAllRoadHexEdges, settlementEditMode, settlementMoveIndex, setSettlementPlaceTarget, setSettlementEditMode, updateSettlement, setSettlementMoveIndex, pushUndoSnapshot, terrainDisplacement, terrainNoiseFrequency, terrainNoiseSeed, terrainNoiseOctaves, illustratedStyle } = useMapStore()
   const [hoveredEdgeKey, setHoveredEdgeKey] = useState<string | null>(null)
   const isPaintingRef = useRef(false)
   const roadPaintActionRef = useRef<'add' | 'remove' | null>(null)
@@ -541,6 +555,13 @@ export function TerrainView() {
                   />
                 </filter>
               )}
+              {illustratedStyle && generatedHexes.map((hex) =>
+                TILE_MAP[hex.terrain] ? (
+                  <clipPath key={`clip-${hex.q}-${hex.r}`} id={`hex-clip-${hex.q}-${hex.r}`}>
+                    <path d={hexPath(hex)} />
+                  </clipPath>
+                ) : null
+              )}
             </defs>
 
             {/* Paper background — hidden when overlay is on */}
@@ -549,21 +570,60 @@ export function TerrainView() {
             )}
 
             {/* Terrain fills */}
-            <g clipPath="url(#paper-clip)" filter={terrainDisplacement > 0 ? 'url(#terrain-organic)' : undefined}>
-              {generatedHexes.map((hex) => {
-                const d = hexPath(hex)
-                const fill = TERRAIN_COLORS[hex.terrain] ?? '#ede8d5'
-                return (
-                  <path
-                    key={`fill-${hex.q}-${hex.r}`}
-                    d={d}
-                    fill={fill}
-                    fillOpacity={terrainOpacity}
-                    stroke="none"
-                  />
-                )
-              })}
-            </g>
+            {illustratedStyle ? (
+              <g clipPath="url(#paper-clip)">
+                {generatedHexes.map((hex) => {
+                  const tileUrl = TILE_MAP[hex.terrain]
+                  const d = hexPath(hex)
+                  if (!tileUrl) {
+                    return (
+                      <path
+                        key={`fill-${hex.q}-${hex.r}`}
+                        d={d}
+                        fill={TERRAIN_COLORS[hex.terrain] ?? '#ede8d5'}
+                        fillOpacity={terrainOpacity}
+                        stroke="none"
+                      />
+                    )
+                  }
+                  const svgVerts = hex.vertices.map(([lon, lat]) => toSVG(lon as number, lat as number))
+                  const xs = svgVerts.map(([x]) => x)
+                  const ys = svgVerts.map(([, y]) => y)
+                  const minX = Math.min(...xs), maxX = Math.max(...xs)
+                  const minY = Math.min(...ys), maxY = Math.max(...ys)
+                  const size = Math.max(maxX - minX, maxY - minY)
+                  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+                  return (
+                    <image
+                      key={`tile-${hex.q}-${hex.r}`}
+                      href={tileUrl}
+                      x={cx - size / 2}
+                      y={cy - size / 2}
+                      width={size}
+                      height={size}
+                      clipPath={`url(#hex-clip-${hex.q}-${hex.r})`}
+                      preserveAspectRatio="xMidYMid meet"
+                    />
+                  )
+                })}
+              </g>
+            ) : (
+              <g clipPath="url(#paper-clip)" filter={terrainDisplacement > 0 ? 'url(#terrain-organic)' : undefined}>
+                {generatedHexes.map((hex) => {
+                  const d = hexPath(hex)
+                  const fill = TERRAIN_COLORS[hex.terrain] ?? '#ede8d5'
+                  return (
+                    <path
+                      key={`fill-${hex.q}-${hex.r}`}
+                      d={d}
+                      fill={fill}
+                      fillOpacity={terrainOpacity}
+                      stroke="none"
+                    />
+                  )
+                })}
+              </g>
+            )}
 
             {/* Elevation heatmap — absolute elevation */}
             {showElevHeatmap && elevationStatus === 'done' && (() => {
@@ -725,8 +785,8 @@ export function TerrainView() {
                     key={`outline-${hex.q}-${hex.r}`}
                     d={d}
                     fill={anyPaintMode || settlementEditMode ? 'transparent' : 'none'}
-                    stroke={isSelected ? '#e04020' : 'rgba(60,50,40,0.35)'}
-                    strokeWidth={isSelected ? 2 : 0.7}
+                    stroke={isSelected ? '#e04020' : illustratedStyle ? 'none' : 'rgba(60,50,40,0.35)'}
+                    strokeWidth={isSelected ? 2 : illustratedStyle ? 0 : 0.7}
                     style={{ cursor: riverEditMode ? 'default' : anyPaintMode ? 'crosshair' : settlementEditMode ? 'cell' : 'pointer' }}
                     onClick={() => {
                       if (riverEditMode || anyPaintMode) return
