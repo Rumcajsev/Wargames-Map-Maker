@@ -214,6 +214,83 @@ def _simplify_ways(
     return result
 
 
+async def _fetch_rail_ways(
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    rail_types: list[str],
+) -> list[tuple[str, list[tuple[float, float]]]]:
+    type_pattern = "|".join(rail_types)
+    bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
+    query = (
+        f'[out:json][timeout:45][maxsize:52428800];\n'
+        f'way["railway"~"^({type_pattern})$"]({bbox});\n'
+        f'out tags geom;\n'
+    )
+    payload = urlencode({"data": query}).encode()
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+        "User-Agent": "IG2HexMap/1.0",
+    }
+
+    last_error: Exception | None = None
+    data: dict = {}
+
+    async with httpx.AsyncClient(timeout=55.0) as client:
+        for attempt, endpoint in enumerate(OVERPASS_ENDPOINTS):
+            try:
+                resp = await client.post(endpoint, content=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt < len(OVERPASS_ENDPOINTS) - 1:
+                    await asyncio.sleep(1.5)
+        else:
+            raise RuntimeError(f"All Overpass mirrors failed. Last error: {last_error}")
+
+    ways = []
+    for el in data.get("elements", []):
+        if el.get("type") != "way":
+            continue
+        geom = el.get("geometry", [])
+        if len(geom) < 2:
+            continue
+        rail_type = el.get("tags", {}).get("railway", "rail")
+        ways.append((rail_type, [(p["lon"], p["lat"]) for p in geom]))
+    return ways
+
+
+async def generate_rail_hexes(config) -> dict:
+    R_m = config.R_m
+    cos_lat = math.cos(math.radians(config.center_lat))
+
+    β = math.radians(config.bearing)
+    cos_β, sin_β = math.cos(β), math.sin(β)
+    hw = config.width_m / 2 * 1.05
+    hh = config.height_m / 2 * 1.05
+    lons, lats = [], []
+    for px, py in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]:
+        E_m = px * cos_β + py * sin_β
+        N_m = -px * sin_β + py * cos_β
+        lats.append(config.center_lat + N_m / METERS_PER_DEGREE)
+        lons.append(config.center_lon + E_m / (cos_lat * METERS_PER_DEGREE))
+
+    typed_ways = await _fetch_rail_ways(
+        min(lats), min(lons), max(lats), max(lons),
+        config.rail_types,
+    )
+
+    tolerance = (R_m * 1.5) / METERS_PER_DEGREE
+    typed_ways = _simplify_ways(typed_ways, tolerance)
+
+    lonlat_to_hex = _make_lonlat_to_hex(config, R_m)
+    return _build_road_data(typed_ways, lonlat_to_hex, R_m, cos_lat)
+
+
 async def generate_road_hexes(config) -> dict:
     R_m = config.R_m
     cos_lat = math.cos(math.radians(config.center_lat))
