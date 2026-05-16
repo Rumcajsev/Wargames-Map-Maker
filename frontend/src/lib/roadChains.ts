@@ -295,12 +295,17 @@ export function buildRoadChains(
   // Junction dots at each unique side terminal, plus draggable control points
   const emittedJuncCps = new Set<string>()
   for (const [k, spinePair] of spineNeighbors) {
+    const h = hexIdx.get(k)
     let minTier: 0 | 1 | 2 = 2
     for (const nk of globalAdj.get(k) ?? []) {
       const ek = k < nk ? `${k}|${nk}` : `${nk}|${k}`
       const t = edgeMinTier.get(ek)
       if (t !== undefined && t < minTier) minTier = t
     }
+    // Always emit the ja| handle so the merged circle remains draggable.
+    // This goes into controlPoints only — not junctionMap — so it doesn't
+    // produce an extra rendered dot in the road layer.
+    if (h) controlPoints.push({ key: juncCpKey(k), pos: junctionPositions.get(k) ?? h.center })
     for (const spineNk of spinePair) {
       const term = sideTerminals.get(`${k}|${spineNk}`)
       if (!term) continue
