@@ -279,7 +279,7 @@ export function drawAllBuildings(bCtx: Ctx, params: DrawBuildingsParams) {
     if (!s.included || s.hex_q === null) continue
     const tier = (s.tier ?? (s.type === 'city' ? 1 : s.type === 'town' ? 3 : 4)) as SettlementTier
     const ts = settlementTierStyles[tier]
-    if (ts.displayMode !== 'buildings') continue
+    if (ts.displayMode !== 'buildings' || ts.buildingAlgorithm === 'v2') continue
     drawHexBuildings(bCtx, s.hex_q, s.hex_r, ts, hexes, roadChains, roadTierStyles, hexBuildingGeoCache, project)
   }
 }

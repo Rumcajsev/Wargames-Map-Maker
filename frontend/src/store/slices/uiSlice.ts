@@ -189,7 +189,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 9,
+      version: 10,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         hexSizeMm: s.hexSizeMm, hexOrientation: s.hexOrientation,
@@ -280,6 +280,43 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 9) {
     if (s.riverDetail === undefined) s.riverDetail = 0
+  }
+  if (fromVersion < 10) {
+    const tiers = s.settlementTierStyles as Record<string, Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const ts of Object.values(tiers)) {
+        if (ts.buildingAlgorithm === undefined) ts.buildingAlgorithm = 'v2'
+        if (ts.buildingV2Size === undefined) ts.buildingV2Size = 2
+        if (ts.buildingV2Spacing === undefined) ts.buildingV2Spacing = 1
+        if (ts.buildingV2MergeChance === undefined) ts.buildingV2MergeChance = 0.3
+      }
+    }
+  }
+  if (fromVersion < 11) {
+    const tiers = s.settlementTierStyles as Record<string, Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const ts of Object.values(tiers)) {
+        if (ts.buildingV2DepthVariation === undefined) ts.buildingV2DepthVariation = 0.5
+      }
+    }
+  }
+  if (fromVersion < 12) {
+    const tiers = s.settlementTierStyles as Record<string, Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const ts of Object.values(tiers)) {
+        if (ts.buildingV2LengthVariation === undefined) ts.buildingV2LengthVariation = 0.5
+      }
+    }
+  }
+  if (fromVersion < 13) {
+    const tiers = s.settlementTierStyles as Record<string, Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const ts of Object.values(tiers)) {
+        if (ts.buildingV2Rows === undefined) ts.buildingV2Rows = 2
+        if (ts.buildingV2RowGap === undefined) ts.buildingV2RowGap = 1
+        if (ts.buildingV2DensityFalloff === undefined) ts.buildingV2DensityFalloff = 0.5
+      }
+    }
   }
   return s
 }

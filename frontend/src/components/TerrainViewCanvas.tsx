@@ -14,6 +14,7 @@ import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
 import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
 import { drawSettlements as _drawSettlements } from '../lib/drawSettlements'
 import { drawAllBuildings as _drawAllBuildings, type BuildingCmd } from '../lib/drawBuildings'
+import { drawAllBuildingsV2 as _drawAllBuildingsV2 } from '../lib/drawBuildingsV2'
 import { drawHexBorders as _drawHexBorders } from '../lib/drawHexBorders'
 import { drawTerrain as _drawTerrain } from '../lib/drawTerrain'
 
@@ -1094,6 +1095,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
           oCtx.clip()
           _drawAllBuildings(oCtx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, hexBuildingGeoCache: hexBuildingGeoCacheRef.current, project })
+          _drawAllBuildingsV2(oCtx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, project })
           oCtx.restore()
           buildingsLayerRef.current = offscreen
           buildingsDirtyRef.current = false
@@ -1104,6 +1106,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
       if (isExport) {
         _drawAllBuildings(ctx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, hexBuildingGeoCache: hexBuildingGeoCacheRef.current, project })
+        _drawAllBuildingsV2(ctx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, project })
       }
     }
 
@@ -1307,6 +1310,25 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     ro.observe(el)
     return () => ro.disconnect()
   }, [meta])
+
+  // Set zoom so 1 CSS pixel = 1/96 inch → physical hex size matches screen
+  const zoomToPhysical = useCallback(() => {
+    const meta = generatedMetadata
+    if (!meta) return
+    const { w: cssW, h: cssH } = frameDimsRef.current
+    const { pw } = computePaper(cssW, cssH, meta)
+    const targetZoom = Math.max(0.2, Math.min(6, meta.paper_mm[0] * 96 / (pw * 25.4)))
+    zoomRef.current = targetZoom
+    panRef.current = { x: 0, y: 0 }
+    terrainDirtyRef.current = true
+    hexBorderDirtyRef.current = true
+    joinedHighlightsDirtyRef.current = true
+    riversDirtyRef.current = true
+    buildingsDirtyRef.current = true
+    roadsDirtyRef.current = true
+    settlementsDirtyRef.current = true
+    draw()
+  }, [generatedMetadata, draw])
 
   // Wheel zoom — cursor-centred, clamped [0.2, 6]
   useEffect(() => {
@@ -2297,6 +2319,24 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           overflow: 'hidden',
         }}
       />
+      {/* 1:1 physical-size zoom */}
+      {generatedMetadata && (
+        <button
+          title="Zoom to 1:1 physical size (hex matches real mm on screen)"
+          onClick={zoomToPhysical}
+          style={{
+            position: 'absolute', bottom: 14, right: 104, zIndex: 20,
+            background: 'rgba(14,15,24,0.88)',
+            border: '1px solid rgba(80,90,140,0.5)',
+            borderRadius: 6, padding: '5px 11px', cursor: 'pointer',
+            color: '#8a8fb0', fontSize: 12,
+            fontFamily: 'ui-monospace, monospace', userSelect: 'none',
+            letterSpacing: '0.03em',
+          }}
+        >
+          1:1
+        </button>
+      )}
       {/* Peek button — hold to reveal real-world map */}
       <button
         title="Hold to preview real-world map (or hold Space)"

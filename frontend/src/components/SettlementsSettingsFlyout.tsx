@@ -153,74 +153,140 @@ export function SettlementsSettingsFlyout({ tier, anchorY, onClose }: Props) {
       {/* Buildings controls */}
       {style.displayMode === 'buildings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          {/* Algorithm toggle */}
           <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Count</span>
-              <span style={valueStyle}>{style.buildingCount}</span>
-            </div>
-            <input type="range" min={1} max={40} step={1} value={style.buildingCount}
-              onChange={e => setSettlementTierStyle(tier, { buildingCount: parseInt(e.target.value) })}
-              style={{ width: '100%' }} />
-          </div>
-          <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Road setback</span>
-              <span style={valueStyle}>{style.roadSetback}px</span>
-            </div>
-            <input type="range" min={0} max={20} step={0.5} value={style.roadSetback}
-              onChange={e => setSettlementTierStyle(tier, { roadSetback: parseFloat(e.target.value) })}
-              style={{ width: '100%' }} />
-          </div>
-          <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Slot spacing</span>
-              <span style={valueStyle}>{style.slotSpacing.toFixed(1)}×</span>
-            </div>
-            <input type="range" min={0.5} max={3} step={0.1} value={style.slotSpacing}
-              onChange={e => setSettlementTierStyle(tier, { slotSpacing: parseFloat(e.target.value) })}
-              style={{ width: '100%' }} />
-          </div>
-          <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Back row gap</span>
-              <span style={valueStyle}>{style.backRowGap}px</span>
-            </div>
-            <input type="range" min={2} max={40} step={1} value={style.backRowGap}
-              onChange={e => setSettlementTierStyle(tier, { backRowGap: parseInt(e.target.value) })}
-              style={{ width: '100%' }} />
-          </div>
-          <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Back row prob</span>
-              <span style={valueStyle}>{Math.round(style.backRowProbability * 100)}%</span>
-            </div>
-            <input type="range" min={0} max={1} step={0.05} value={style.backRowProbability}
-              onChange={e => setSettlementTierStyle(tier, { backRowProbability: parseFloat(e.target.value) })}
-              style={{ width: '100%' }} />
-          </div>
-          <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Angle jitter</span>
-              <span style={valueStyle}>{style.angleJitter.toFixed(2)} rad</span>
-            </div>
-            <input type="range" min={0} max={1.57} step={0.01} value={style.angleJitter}
-              onChange={e => setSettlementTierStyle(tier, { angleJitter: parseFloat(e.target.value) })}
-              style={{ width: '100%' }} />
-          </div>
-          <div>
-            <div style={{ ...rowStyle }}>
-              <span style={labelStyle}>Size</span>
-              <span style={valueStyle}>{style.buildingSizeMin}–{style.buildingSizeMax}px</span>
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input type="range" min={1} max={20} step={0.5} value={style.buildingSizeMin}
-                onChange={e => setSettlementTierStyle(tier, { buildingSizeMin: parseFloat(e.target.value) })}
-                style={{ flex: 1 }} />
-              <input type="range" min={1} max={20} step={0.5} value={style.buildingSizeMax}
-                onChange={e => setSettlementTierStyle(tier, { buildingSizeMax: parseFloat(e.target.value) })}
-                style={{ flex: 1 }} />
+            <div style={{ ...labelStyle, marginBottom: 4 }}>Algorithm</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['v1', 'v2'] as const).map(alg => (
+                <button
+                  key={alg}
+                  onClick={() => setSettlementTierStyle(tier, { buildingAlgorithm: alg })}
+                  style={{
+                    flex: 1, padding: '3px 0', fontSize: 10,
+                    background: style.buildingAlgorithm === alg ? '#1e2a3a' : 'none',
+                    border: `1px solid ${style.buildingAlgorithm === alg ? '#4a7aaa' : '#2a2a4a'}`,
+                    color: style.buildingAlgorithm === alg ? '#a0c0e0' : '#5a5a7a',
+                    borderRadius: 3, cursor: 'pointer',
+                  }}
+                >{alg}</button>
+              ))}
             </div>
           </div>
+
+          {/* V2 controls */}
+          {style.buildingAlgorithm === 'v2' && (<>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Size</span>
+                <span style={valueStyle}>{style.buildingV2Size}px</span>
+              </div>
+              <input type="range" min={0.5} max={20} step={0.5} value={style.buildingV2Size}
+                onChange={e => setSettlementTierStyle(tier, { buildingV2Size: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Count</span>
+                <span style={valueStyle}>{style.buildingCount}</span>
+              </div>
+              <input type="range" min={1} max={80} step={1} value={style.buildingCount}
+                onChange={e => setSettlementTierStyle(tier, { buildingCount: parseInt(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Spacing</span>
+                <span style={valueStyle}>{style.buildingV2Spacing}px</span>
+              </div>
+              <input type="range" min={0} max={20} step={0.5} value={style.buildingV2Spacing}
+                onChange={e => setSettlementTierStyle(tier, { buildingV2Spacing: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Merge chance</span>
+                <span style={valueStyle}>{Math.round(style.buildingV2MergeChance * 100)}%</span>
+              </div>
+              <input type="range" min={0} max={1} step={0.05} value={style.buildingV2MergeChance}
+                onChange={e => setSettlementTierStyle(tier, { buildingV2MergeChance: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+          </>)}
+
+          {/* V1 controls */}
+          {style.buildingAlgorithm === 'v1' && (<>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Count</span>
+                <span style={valueStyle}>{style.buildingCount}</span>
+              </div>
+              <input type="range" min={1} max={40} step={1} value={style.buildingCount}
+                onChange={e => setSettlementTierStyle(tier, { buildingCount: parseInt(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Road setback</span>
+                <span style={valueStyle}>{style.roadSetback}px</span>
+              </div>
+              <input type="range" min={0} max={20} step={0.5} value={style.roadSetback}
+                onChange={e => setSettlementTierStyle(tier, { roadSetback: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Slot spacing</span>
+                <span style={valueStyle}>{style.slotSpacing.toFixed(1)}×</span>
+              </div>
+              <input type="range" min={0.5} max={3} step={0.1} value={style.slotSpacing}
+                onChange={e => setSettlementTierStyle(tier, { slotSpacing: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Back row gap</span>
+                <span style={valueStyle}>{style.backRowGap}px</span>
+              </div>
+              <input type="range" min={2} max={40} step={1} value={style.backRowGap}
+                onChange={e => setSettlementTierStyle(tier, { backRowGap: parseInt(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Back row prob</span>
+                <span style={valueStyle}>{Math.round(style.backRowProbability * 100)}%</span>
+              </div>
+              <input type="range" min={0} max={1} step={0.05} value={style.backRowProbability}
+                onChange={e => setSettlementTierStyle(tier, { backRowProbability: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Angle jitter</span>
+                <span style={valueStyle}>{style.angleJitter.toFixed(2)} rad</span>
+              </div>
+              <input type="range" min={0} max={1.57} step={0.01} value={style.angleJitter}
+                onChange={e => setSettlementTierStyle(tier, { angleJitter: parseFloat(e.target.value) })}
+                style={{ width: '100%' }} />
+            </div>
+            <div>
+              <div style={{ ...rowStyle }}>
+                <span style={labelStyle}>Size</span>
+                <span style={valueStyle}>{style.buildingSizeMin}–{style.buildingSizeMax}px</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="range" min={1} max={20} step={0.5} value={style.buildingSizeMin}
+                  onChange={e => setSettlementTierStyle(tier, { buildingSizeMin: parseFloat(e.target.value) })}
+                  style={{ flex: 1 }} />
+                <input type="range" min={1} max={20} step={0.5} value={style.buildingSizeMax}
+                  onChange={e => setSettlementTierStyle(tier, { buildingSizeMax: parseFloat(e.target.value) })}
+                  style={{ flex: 1 }} />
+              </div>
+            </div>
+          </>)}
+
+          {/* Shared color controls */}
           <div>
             <div style={{ ...labelStyle, marginBottom: 5 }}>Fill</div>
             <ColorSwatch value={style.buildingColor} onChange={v => setSettlementTierStyle(tier, { buildingColor: v })} palette={PALETTE_BUILDINGS} />
