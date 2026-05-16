@@ -181,6 +181,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const hexRoadBendinessRef = useRef(hexRoadBendiness)
   const setHexRoadBendinessRef = useRef(setHexRoadBendiness)
   const deleteHexRoadBendinessRef = useRef(deleteHexRoadBendiness)
+  const roadBendinessRef = useRef(roadBendiness)
+  const dragLiveOverrideRef = useRef<Record<string, [number, number]>>({})
+  const dragRafRef = useRef<number | null>(null)
   const riverEdgesRef = useRef(riverEdges)
   const canalEdgesRef = useRef(canalEdges)
   const riverEditModeRef = useRef(riverEditMode)
@@ -330,6 +333,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   hexRoadBendinessRef.current = hexRoadBendiness
   setHexRoadBendinessRef.current = setHexRoadBendiness
   deleteHexRoadBendinessRef.current = deleteHexRoadBendiness
+  roadBendinessRef.current = roadBendiness
   riverEdgesRef.current = riverEdges
   canalEdgesRef.current = canalEdges
   riverEditModeRef.current = riverEditMode
@@ -1113,33 +1117,55 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    // During a CP drag, compute road geometry with the live position directly — no store update,
+    // no React re-render cycle, no useMemo. On drop, the store is updated once for the full rebuild.
+    const isDraggingCP = Object.keys(dragLiveOverrideRef.current).length > 0
+    const liveRoadData = isDraggingCP
+      ? buildRoadChains(
+          roadEdgesRef.current,
+          hexIdxRef.current as Map<string, { center: [number, number] }>,
+          { ...roadControlOverridesRef.current, ...dragLiveOverrideRef.current },
+          roadBendinessRef.current,
+          hexRoadBendinessRef.current,
+        )
+      : smoothedRoadDataRef.current
+
     // Road chains + Rail chains — offscreen cached together
     {
-      const { chains: roadChains, junctions } = smoothedRoadDataRef.current
+      const { chains: roadChains, junctions } = liveRoadData
       const tierStyles = roadTierStylesRef.current
 
-
       if (!isExport) {
-        const papW = Math.ceil(pw), papH = Math.ceil(ph)
-        if (roadsDirtyRef.current || !roadsLayerRef.current ||
-            roadsLayerPapWRef.current !== papW || roadsLayerPapHRef.current !== papH) {
-          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
-          const offscreen = new OffscreenCanvas(offW, offH)
-          const oCtx = offscreen.getContext('2d')!
-          oCtx.scale(dpr * offZoom, dpr * offZoom)
-          oCtx.translate(-px, -py)
-          oCtx.save()
-          oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
-          oCtx.clip()
-          _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: smoothedRailChainsRef.current, tierStyles, railStyle: railStyleRef.current, project })
-          oCtx.restore()
-          roadsLayerRef.current = offscreen
-          roadsDirtyRef.current = false
-          roadsLayerPapWRef.current = papW
-          roadsLayerPapHRef.current = papH
+        if (isDraggingCP) {
+          // Bypass offscreen cache during drag — draw directly so the road bends live
+          ctx.save()
+          ctx.beginPath()
+          ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          ctx.clip()
+          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: smoothedRailChainsRef.current, tierStyles, railStyle: railStyleRef.current, project })
+          ctx.restore()
+        } else {
+          const papW = Math.ceil(pw), papH = Math.ceil(ph)
+          if (roadsDirtyRef.current || !roadsLayerRef.current ||
+              roadsLayerPapWRef.current !== papW || roadsLayerPapHRef.current !== papH) {
+            const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
+            const offscreen = new OffscreenCanvas(offW, offH)
+            const oCtx = offscreen.getContext('2d')!
+            oCtx.scale(dpr * offZoom, dpr * offZoom)
+            oCtx.translate(-px, -py)
+            oCtx.save()
+            oCtx.beginPath()
+            oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+            oCtx.clip()
+            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: smoothedRailChainsRef.current, tierStyles, railStyle: railStyleRef.current, project })
+            oCtx.restore()
+            roadsLayerRef.current = offscreen
+            roadsDirtyRef.current = false
+            roadsLayerPapWRef.current = papW
+            roadsLayerPapHRef.current = papH
+          }
+          ctx.drawImage(roadsLayerRef.current, px, py, pw, ph)
         }
-        ctx.drawImage(roadsLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
         _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: smoothedRailChainsRef.current, tierStyles, railStyle: railStyleRef.current, project })
@@ -1148,7 +1174,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     // Control point handles (visible when Roads panel active and no paint mode) — always inline
     if (roadNodeEditModeRef.current) {
-      const { controlPoints } = smoothedRoadDataRef.current
+      const { controlPoints } = liveRoadData
       const overrides = roadControlOverridesRef.current
 
       // Determine merged/split state per junction hex.
@@ -1695,17 +1721,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     const SNAP_SCREEN_PX = 10 // screen pixels within which diamonds will merge on release
 
-    const checkSnap = (dragKey: string, meta: ReturnType<typeof metaRef.current>, pw: number, ph: number, px: number, py: number): string | null => {
+    const checkSnap = (dragKey: string, livePos: [number, number], meta: ReturnType<typeof metaRef.current>, pw: number, ph: number, px: number, py: number): string | null => {
       if (!dragKey.startsWith('jt|')) return null
       const parts = dragKey.split('|')
       if (parts.length !== 3) return null
       const hexKey = parts[1]
       const { controlPoints } = smoothedRoadDataRef.current
       const siblings = controlPoints.filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey && cp.key !== dragKey)
-      const dragged = controlPoints.find(cp => cp.key === dragKey)
-      if (!dragged || !meta) return null
+      if (!meta) return null
       const snapThresh = SNAP_SCREEN_PX / (zoomRef.current ?? 1)
-      const [dx, dy] = projectToCanvas(dragged.pos[0], dragged.pos[1], meta, pw, ph, px, py)
+      const [dx, dy] = projectToCanvas(livePos[0], livePos[1], meta, pw, ph, px, py)
       for (const sib of siblings) {
         const [sx, sy] = projectToCanvas(sib.pos[0], sib.pos[1], meta, pw, ph, px, py)
         if (Math.hypot(dx - sx, dy - sy) <= snapThresh) return sib.key
@@ -1722,20 +1747,33 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!logical) return
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
       const lonLat = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
-      setRoadControlOverrideRef.current(draggingCpKeyRef.current, lonLat)
-      // Update snap preview — triggers redraw via store update above
-      snapPreviewKeyRef.current = checkSnap(draggingCpKeyRef.current, meta, pw, ph, px, py)
+      // Store live position in ref — no store update, no React re-render, no buildRoadChains via useMemo
+      dragLiveOverrideRef.current = { ...dragLiveOverrideRef.current, [draggingCpKeyRef.current]: lonLat }
+      snapPreviewKeyRef.current = checkSnap(draggingCpKeyRef.current, lonLat, meta, pw, ph, px, py)
+      // Throttle redraws to one per animation frame
+      if (dragRafRef.current === null) {
+        dragRafRef.current = requestAnimationFrame(() => {
+          dragRafRef.current = null
+          draw()
+        })
+      }
     }
 
     const onUp = (e: MouseEvent) => {
       const dragKey = draggingCpKeyRef.current
       const snapTarget = snapPreviewKeyRef.current
+      const finalPos = dragKey ? dragLiveOverrideRef.current[dragKey] : null
       draggingCpKeyRef.current = null
       snapPreviewKeyRef.current = null
+      if (dragRafRef.current !== null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null }
+      dragLiveOverrideRef.current = {}
       if (dragKey && snapTarget) {
         // Merge: clear both jt| overrides so they collapse to junction center
         deleteRoadControlOverrideRef.current(dragKey)
         deleteRoadControlOverrideRef.current(snapTarget)
+      } else if (dragKey && finalPos) {
+        // Commit final position to store — triggers one full buildRoadChains rebuild
+        setRoadControlOverrideRef.current(dragKey, finalPos)
       }
     }
 

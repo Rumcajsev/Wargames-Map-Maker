@@ -86,7 +86,10 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanBuildingCount: 8,
   urbanBuildingSize: 0.12,
 
-  setActivePanel: (panel) => set({ activePanel: panel }),
+  setActivePanel: (panel) => {
+    get().setActiveTool({ type: 'none' })
+    set({ activePanel: panel, settlementEditMode: false })
+  },
 
   setActiveTool: (tool) => {
     const updates: Partial<MapStore> = { activeTool: tool }
