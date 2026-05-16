@@ -12,6 +12,11 @@ export function juncCpKey(k: string): string {
   return `ja|${k}`
 }
 
+/** Key for a branch arm's terminal point override: the point where branch neighbor `nk` meets junction hex `k`. */
+export function branchCpKey(k: string, nk: string): string {
+  return `jb|${k}|${nk}`
+}
+
 export function buildRoadChains(
   roadEdges: { q1: number; r1: number; q2: number; r2: number; tier: 0 | 1 | 2 }[],
   hexIdx: Map<string, { center: [number, number] }>,
@@ -73,6 +78,63 @@ export function buildRoadChains(
     if (ok.startsWith('ja|')) junctionPositions.set(ok.slice(3), pos)
   }
 
+  // --- Staggered spine model ---
+  // For each junction hex, find the two most collinear neighbors (the "spine").
+  // All other neighbors are "branches" that get slightly offset terminal points
+  // along the spine, creating staggered junctions instead of a single star-burst.
+
+  const spineNeighbors = new Map<string, [string, string]>() // hexKey → [spineA, spineB]
+  // armTerminals: "hexKey|neighborKey" → terminal lon/lat position for that arm
+  const armTerminals = new Map<string, [number, number]>()
+
+  for (const [k] of globalAdj) {
+    const neighbors = [...(globalAdj.get(k) ?? [])]
+    if (neighbors.length <= 2) continue
+    const h = hexIdx.get(k); if (!h) continue
+    const jc = junctionPositions.get(k) ?? h.center
+
+    // Find the most collinear pair of neighbors (dot product closest to -1)
+    let bestPair: [string, string] | null = null
+    let bestDot = 1
+    for (let i = 0; i < neighbors.length; i++) {
+      for (let j = i + 1; j < neighbors.length; j++) {
+        const ni = hexIdx.get(neighbors[i]), nj = hexIdx.get(neighbors[j])
+        if (!ni || !nj) continue
+        const dx1 = ni.center[0] - h.center[0], dy1 = ni.center[1] - h.center[1]
+        const dx2 = nj.center[0] - h.center[0], dy2 = nj.center[1] - h.center[1]
+        const len1 = Math.hypot(dx1, dy1), len2 = Math.hypot(dx2, dy2)
+        if (len1 < 1e-6 || len2 < 1e-6) continue
+        const dot = (dx1 * dx2 + dy1 * dy2) / (len1 * len2)
+        if (dot < bestDot) { bestDot = dot; bestPair = [neighbors[i], neighbors[j]] }
+      }
+    }
+    if (!bestPair) continue
+    spineNeighbors.set(k, bestPair)
+
+    // Spine arms: terminal at junction center (unchanged behaviour)
+    armTerminals.set(`${k}|${bestPair[0]}`, jc)
+    armTerminals.set(`${k}|${bestPair[1]}`, jc)
+
+    // Branch arms: offset from junction center toward the branch neighbor direction
+    const branchOffset = interHexDist * 0.10
+    for (const bn of neighbors) {
+      if (bn === bestPair[0] || bn === bestPair[1]) continue
+      const hn = hexIdx.get(bn)
+      if (!hn) { armTerminals.set(`${k}|${bn}`, jc); continue }
+      const dx = hn.center[0] - h.center[0], dy = hn.center[1] - h.center[1]
+      const len = Math.hypot(dx, dy)
+      if (len < 1e-6) { armTerminals.set(`${k}|${bn}`, jc); continue }
+      armTerminals.set(`${k}|${bn}`, [jc[0] + (dx / len) * branchOffset, jc[1] + (dy / len) * branchOffset])
+    }
+  }
+
+  // Apply jb| overrides to individual branch arm terminals
+  for (const [ok, pos] of Object.entries(overrides)) {
+    if (!ok.startsWith('jb|')) continue
+    const parts = ok.split('|') // ["jb", hexKey, neighborKey]
+    if (parts.length === 3) armTerminals.set(`${parts[1]}|${parts[2]}`, pos)
+  }
+
   const chains: { tier: 0 | 1 | 2; chain: [number, number][] }[] = []
   const junctionMap = new Map<string, { pos: [number, number]; tier: 0 | 1 | 2 }>()
   const controlPoints: { key: string; pos: [number, number] }[] = []
@@ -108,13 +170,23 @@ export function buildRoadChains(
       }
     }
 
+    // Returns the terminal position for a road entering junction hex `k` from neighbor `fromNbr`.
+    // Uses the per-arm staggered position for branch arms, junction center for spine arms.
+    const jPos = (k: string, h: { center: [number, number] }, fromNbr?: string): [number, number] => {
+      if (fromNbr) {
+        const arm = armTerminals.get(`${k}|${fromNbr}`)
+        if (arm) return arm
+      }
+      return junctionPositions.get(k) ?? h.center
+    }
+
     const walk = (startKey: string): [number, number][] => {
       const h0 = hexIdx.get(startKey)
       if (!h0) return []
       const startDeg = (adj.get(startKey) ?? []).length
       const pts: [number, number][] = []
-      const jPos = (k: string, h: { center: [number, number] }) => junctionPositions.get(k) ?? h.center
-      if (startDeg !== 2 || isJunction(startKey)) pts.push(jPos(startKey, h0))
+      let firstStep = true
+      let prevKey = startKey
       let cur = startKey
       for (;;) {
         const next = (adj.get(cur) ?? []).find(nk => {
@@ -122,6 +194,11 @@ export function buildRoadChains(
           return !visitedPairs.has(ep)
         })
         if (!next) break
+        // Defer pushing the start junction point until we know the outgoing direction
+        if (firstStep) {
+          firstStep = false
+          if (startDeg !== 2 || isJunction(startKey)) pts.push(jPos(startKey, h0, next))
+        }
         const ep = cur < next ? `${cur}|${next}` : `${next}|${cur}`
         visitedPairs.add(ep)
         const h1 = hexIdx.get(cur), h2 = hexIdx.get(next)
@@ -144,10 +221,11 @@ export function buildRoadChains(
           pts.push(mid)
           if (!seenEdges.has(ek)) { seenEdges.add(ek); controlPoints.push({ key: ek, pos: mid }) }
         }
+        prevKey = cur
         cur = next
         const curDeg = (adj.get(cur) ?? []).length
         if (curDeg === 1) { const he = hexIdx.get(cur); if (he) pts.push(he.center); break }
-        if (isJunction(cur)) { const hj = hexIdx.get(cur); if (hj) pts.push(jPos(cur, hj)); break }
+        if (isJunction(cur)) { const hj = hexIdx.get(cur); if (hj) pts.push(jPos(cur, hj, prevKey)); break }
       }
       return pts
     }
@@ -169,8 +247,41 @@ export function buildRoadChains(
     }
   }
 
+  // Add stub chains connecting each branch arm terminal back to the spine junction center.
+  // These short segments visually close the gap between a staggered branch and the spine.
+  for (const [k, spinePair] of spineNeighbors) {
+    const h = hexIdx.get(k); if (!h) continue
+    const jc = junctionPositions.get(k) ?? h.center
+    for (const bn of globalAdj.get(k) ?? []) {
+      if (bn === spinePair[0] || bn === spinePair[1]) continue
+      const bt = armTerminals.get(`${k}|${bn}`)
+      if (!bt) continue
+      // Skip if the branch terminal is already at the junction center (no gap to close)
+      if (Math.hypot(bt[0] - jc[0], bt[1] - jc[1]) < 1e-9) continue
+      const ek = k < bn ? `${k}|${bn}` : `${bn}|${k}`
+      const stubTier = edgeMinTier.get(ek) ?? 2
+      chains.push({ tier: stubTier, chain: [bt, jc] })
+    }
+  }
+
+  // Add branch arm terminals as extra junction dots and draggable control points
+  for (const [k, spinePair] of spineNeighbors) {
+    const h = hexIdx.get(k); if (!h) continue
+    const jc = junctionPositions.get(k) ?? h.center
+    for (const bn of globalAdj.get(k) ?? []) {
+      if (bn === spinePair[0] || bn === spinePair[1]) continue
+      const bt = armTerminals.get(`${k}|${bn}`)
+      if (!bt || Math.hypot(bt[0] - jc[0], bt[1] - jc[1]) < 1e-9) continue
+      const ek = k < bn ? `${k}|${bn}` : `${bn}|${k}`
+      const branchTier = edgeMinTier.get(ek) ?? 2
+      junctionMap.set(`${k}|br|${bn}`, { pos: bt, tier: branchTier })
+      controlPoints.push({ key: branchCpKey(k, bn), pos: bt })
+    }
+  }
+
   for (const [k, entry] of junctionMap) {
-    controlPoints.push({ key: juncCpKey(k), pos: entry.pos })
+    // Only emit the control point for real junction hexes (not branch-arm entries)
+    if (!k.includes('|br|')) controlPoints.push({ key: juncCpKey(k), pos: entry.pos })
   }
 
   return { chains, junctions: Array.from(junctionMap.values()), controlPoints }

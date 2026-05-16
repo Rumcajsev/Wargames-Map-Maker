@@ -1150,12 +1150,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       for (const { key, pos } of controlPoints) {
         const [x, y] = project(pos[0], pos[1])
         const isJunc = key.startsWith('ja|')
+        const isBranch = key.startsWith('jb|')
         const overridden = !!roadControlOverridesRef.current[key]
         ctx.beginPath()
-        ctx.arc(x, y, isJunc ? 5 : 4, 0, Math.PI * 2)
+        if (isBranch) {
+          // Diamond shape for branch arm terminals
+          const r = overridden ? 5 : 4
+          ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
+        } else {
+          ctx.arc(x, y, isJunc ? 5 : 4, 0, Math.PI * 2)
+        }
         ctx.fillStyle = overridden ? '#ffcc44' : 'rgba(255,255,255,0.6)'
         ctx.fill()
-        ctx.strokeStyle = isJunc ? '#cc8800' : '#888'
+        ctx.strokeStyle = isBranch ? '#4488cc' : isJunc ? '#cc8800' : '#888'
         ctx.lineWidth = 1
         ctx.stroke()
       }
@@ -1593,10 +1600,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!logical) return
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
       const { controlPoints } = smoothedRoadDataRef.current
-      // Check junction anchors first (larger hit radius, higher priority)
+      // Priority: junction centers > branch arm terminals > edge midpoints
       const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|'))
-      const edges = controlPoints.filter(cp => !cp.key.startsWith('ja|'))
-      for (const [cps, hitR] of [[junctions, 14], [edges, 10]] as const) {
+      const branches = controlPoints.filter(cp => cp.key.startsWith('jb|'))
+      const edges = controlPoints.filter(cp => !cp.key.startsWith('ja|') && !cp.key.startsWith('jb|'))
+      for (const [cps, hitR] of [[junctions, 14], [branches, 12], [edges, 10]] as const) {
         for (const cp of cps) {
           const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
           if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
@@ -1831,7 +1839,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const overrides = roadControlOverridesRef.current
         const allKeys = Object.keys(overrides)
         const touchingKeys = allKeys.filter(k =>
-          k === `ja|${hexKey}` || k.startsWith(`em|`) && (k.includes(`|${hexKey}|`) || k.endsWith(`|${hexKey}`))
+          k === `ja|${hexKey}` ||
+          (k.startsWith('jb|') && k.split('|')[1] === hexKey) ||
+          (k.startsWith(`em|`) && (k.includes(`|${hexKey}|`) || k.endsWith(`|${hexKey}`)))
         )
         const isJunction = touchingKeys.some(k => k.startsWith('ja|'))
         const hasOverrides = touchingKeys.length > 0
@@ -1972,6 +1982,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Click → select hex
   const draggedRef = useRef(false)
+  const edgeDragRef = useRef<{ mode: 'add' | 'remove'; painted: Set<string> } | null>(null)
   const isEdgePaintActive = useCallback((): 'highlight' | 'river' | 'canal' | false => {
     if (riverEditModeRef.current && !riverSelectModeRef.current) return 'river'
     if (canalEditModeRef.current && !canalSelectModeRef.current) return 'canal'
@@ -1982,6 +1993,118 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const hl = highlightsRef.current.find(h => h.id === hlId)
     return hl?.mode === 'edge' ? 'highlight' : false
   }, [])
+
+  // Shared edge paint logic used by both click and drag. forceMode keeps the
+  // whole drag stroke consistently adding or removing rather than toggling.
+  // Returns the effective action taken ('add'|'remove'), or null if no-op.
+  const paintEdge = useCallback((
+    hexQ: number, hexR: number, edgeI: number,
+    forceMode?: 'add' | 'remove',
+  ): 'add' | 'remove' | null => {
+    const edgePaintMode = isEdgePaintActive()
+    if (!edgePaintMode) return null
+    const hex = hexesRef.current.find(h => h.q === hexQ && h.r === hexR)
+    if (!hex) return null
+
+    const geoV0 = hex.vertices[edgeI] as [number, number]
+    const geoV1 = hex.vertices[(edgeI + 1) % 6] as [number, number]
+
+    const VKEY_EPS = 0.00015
+    const vk = (v: [number, number]) =>
+      `${Math.round(v[0] / (VKEY_EPS * 0.5))},${Math.round(v[1] / (VKEY_EPS * 0.5))}`
+    const vEq = (a: [number, number], b: [number, number]) => vk(a) === vk(b)
+
+    if (edgePaintMode === 'river' || edgePaintMode === 'canal') {
+      const EPS = 1e-5
+      const neighbor = hexesRef.current.find(h => {
+        if (h.q === hexQ && h.r === hexR) return false
+        const verts = h.vertices as [number, number][]
+        let hasV0 = false, hasV1 = false
+        for (const v of verts) {
+          if (Math.abs(v[0] - geoV0[0]) < EPS && Math.abs(v[1] - geoV0[1]) < EPS) hasV0 = true
+          if (Math.abs(v[0] - geoV1[0]) < EPS && Math.abs(v[1] - geoV1[1]) < EPS) hasV1 = true
+        }
+        return hasV0 && hasV1
+      })
+      if (!neighbor) return null
+
+      const ek = (q1: number, r1: number, q2: number, r2: number) => {
+        const s1 = `${q1},${r1}`, s2 = `${q2},${r2}`
+        return s1 < s2 ? `${s1}|${s2}` : `${s2}|${s1}`
+      }
+      const k = ek(hexQ, hexR, neighbor.q, neighbor.r)
+      const edges = edgePaintMode === 'river' ? riverEdgesRef.current : canalEdgesRef.current
+      const exists = edges.some(e => ek(e.q1, e.r1, e.q2, e.r2) === k)
+
+      if (forceMode === 'add' && exists) return 'add'
+      if (forceMode === 'remove' && !exists) return 'remove'
+
+      if (edgePaintMode === 'river')
+        toggleRiverEdgeRef.current(hexQ, hexR, neighbor.q, neighbor.r)
+      else
+        toggleCanalEdgeRef.current(hexQ, hexR, neighbor.q, neighbor.r)
+      riversDirtyRef.current = true
+      return exists ? 'remove' : 'add'
+    } else {
+      // Highlight edge paint
+      const hlId = activeHighlightIdRef.current!
+      const segments = highlightEdgePathsRef.current[hlId] ?? []
+      const ck0 = vk(geoV0), ck1 = vk(geoV1)
+      const edgeIdx = (seg: [number, number][]) => {
+        for (let i = 0; i < seg.length - 1; i++) {
+          if ((vk(seg[i]) === ck0 && vk(seg[i + 1]) === ck1) ||
+              (vk(seg[i]) === ck1 && vk(seg[i + 1]) === ck0)) return i
+        }
+        return -1
+      }
+      const segIdx = segments.findIndex(s => edgeIdx(s) !== -1)
+      const exists = segIdx !== -1
+
+      if (forceMode === 'add' && exists) return 'add'
+      if (forceMode === 'remove' && !exists) return 'remove'
+
+      let nextSegments: [number, number][][]
+      if (exists) {
+        nextSegments = []
+        for (let si = 0; si < segments.length; si++) {
+          if (si !== segIdx) { nextSegments.push(segments[si]); continue }
+          const seg = segments[si]
+          const ei = edgeIdx(seg)
+          const before = seg.slice(0, ei + 1) as [number, number][]
+          const after = seg.slice(ei + 1) as [number, number][]
+          if (before.length >= 2) nextSegments.push(before)
+          if (after.length >= 2) nextSegments.push(after)
+        }
+      } else {
+        const lastSeg = segments.length > 0 ? segments[segments.length - 1] : []
+        let newLastSeg: [number, number][] | null = null
+        let appendNew = false
+        if (lastSeg.length === 0) {
+          newLastSeg = [geoV0, geoV1]
+        } else if (vEq(lastSeg[lastSeg.length - 1], geoV0)) {
+          newLastSeg = [...lastSeg, geoV1]
+        } else if (vEq(lastSeg[lastSeg.length - 1], geoV1)) {
+          newLastSeg = [...lastSeg, geoV0]
+        } else if (vEq(lastSeg[0], geoV0)) {
+          newLastSeg = [geoV1, ...lastSeg]
+        } else if (vEq(lastSeg[0], geoV1)) {
+          newLastSeg = [geoV0, ...lastSeg]
+        } else {
+          appendNew = true
+        }
+        if (appendNew) {
+          nextSegments = [...segments, [geoV0, geoV1]]
+        } else if (newLastSeg!.length <= 1) {
+          nextSegments = segments.slice(0, -1)
+        } else {
+          nextSegments = [...segments.slice(0, -1), newLastSeg!]
+        }
+      }
+      setHighlightEdgePathRef.current(hlId, nextSegments)
+      joinedHighlightsDirtyRef.current = true
+      return exists ? 'remove' : 'add'
+    }
+  }, [isEdgePaintActive])
 
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isEdgePaintActive()) {
@@ -2012,8 +2135,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (hoverRafRef.current === null) {
         hoverRafRef.current = requestAnimationFrame(() => { hoverRafRef.current = null; draw() })
       }
+
+      // Apply drag paint to each new edge entered during a drag stroke
+      if (best && edgeDragRef.current) {
+        const paintKey = `${best.hexQ},${best.hexR},${best.edgeI}`
+        if (!edgeDragRef.current.painted.has(paintKey)) {
+          edgeDragRef.current.painted.add(paintKey)
+          paintEdge(best.hexQ, best.hexR, best.edgeI, edgeDragRef.current.mode)
+        }
+      }
     }
-  }, [isEdgePaintActive, draw, clientToLogical])
+  }, [isEdgePaintActive, paintEdge, draw, clientToLogical])
 
   const onMouseLeave = useCallback(() => {
     if (hoveredEdgeRef.current !== null) {
@@ -2087,108 +2219,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     // Edge-paint click: use the snapped hovered edge, not the hex under cursor
-    const edgePaintMode = isEdgePaintActive()
-    if (edgePaintMode && hoveredEdgeRef.current) {
+    if (isEdgePaintActive() && hoveredEdgeRef.current) {
       const { hexQ, hexR, edgeI } = hoveredEdgeRef.current
-      const hex = hexesRef.current.find(h => h.q === hexQ && h.r === hexR)
-      if (hex) {
-        const geoV0 = hex.vertices[edgeI] as [number, number]
-        const geoV1 = hex.vertices[(edgeI + 1) % 6] as [number, number]
-
-        // Use the same vKey snapping as the A* river builder so that vertices
-        // from different hexes that represent the same grid point always match.
-        const VKEY_EPS = 0.00015
-        const vk = (v: [number,number]) =>
-          `${Math.round(v[0] / (VKEY_EPS * 0.5))},${Math.round(v[1] / (VKEY_EPS * 0.5))}`
-        const vEq = (a: [number,number], b: [number,number]) => vk(a) === vk(b)
-
-        if (edgePaintMode === 'river' || edgePaintMode === 'canal') {
-          // Find the neighbor hex that shares this edge
-          const hexes = hexesRef.current
-          const EPS = 1e-5
-          const sharesEdge = (h: GeneratedHex) => {
-            if (h.q === hexQ && h.r === hexR) return false
-            const verts = h.vertices as [number,number][]
-            let hasV0 = false, hasV1 = false
-            for (const v of verts) {
-              if (Math.abs(v[0]-geoV0[0]) < EPS && Math.abs(v[1]-geoV0[1]) < EPS) hasV0 = true
-              if (Math.abs(v[0]-geoV1[0]) < EPS && Math.abs(v[1]-geoV1[1]) < EPS) hasV1 = true
-            }
-            return hasV0 && hasV1
-          }
-          const neighbor = hexes.find(sharesEdge)
-          if (neighbor) {
-            if (edgePaintMode === 'river')
-              toggleRiverEdgeRef.current(hexQ, hexR, neighbor.q, neighbor.r)
-            else
-              toggleCanalEdgeRef.current(hexQ, hexR, neighbor.q, neighbor.r)
-          }
-          riversDirtyRef.current = true
-        } else {
-          // Highlight edge paint: click toggles an edge.
-          // If the edge exists anywhere, remove it (splitting the segment if mid-chain).
-          // If not found, extend the last segment or start a new one.
-          const hlId = activeHighlightIdRef.current!
-          const segments = highlightEdgePathsRef.current[hlId] ?? []
-
-          const ck0 = vk(geoV0), ck1 = vk(geoV1)
-          const edgeIdx = (seg: [number,number][]) => {
-            for (let i = 0; i < seg.length - 1; i++) {
-              if ((vk(seg[i]) === ck0 && vk(seg[i+1]) === ck1) ||
-                  (vk(seg[i]) === ck1 && vk(seg[i+1]) === ck0)) return i
-            }
-            return -1
-          }
-
-          let nextSegments: [number,number][][]
-
-          // Check if edge already exists anywhere
-          const segIdx = segments.findIndex(s => edgeIdx(s) !== -1)
-          if (segIdx !== -1) {
-            // Remove it, splitting if mid-chain
-            nextSegments = []
-            for (let si = 0; si < segments.length; si++) {
-              if (si !== segIdx) { nextSegments.push(segments[si]); continue }
-              const seg = segments[si]
-              const ei = edgeIdx(seg)
-              const before = seg.slice(0, ei + 1) as [number,number][]
-              const after = seg.slice(ei + 1) as [number,number][]
-              if (before.length >= 2) nextSegments.push(before)
-              if (after.length >= 2) nextSegments.push(after)
-            }
-          } else {
-            // Extend last segment or start new one
-            const lastSeg = segments.length > 0 ? segments[segments.length - 1] : []
-            let newLastSeg: [number,number][] | null = null
-            let appendNew = false
-
-            if (lastSeg.length === 0) {
-              newLastSeg = [geoV0, geoV1]
-            } else if (vEq(lastSeg[lastSeg.length - 1], geoV0)) {
-              newLastSeg = [...lastSeg, geoV1]
-            } else if (vEq(lastSeg[lastSeg.length - 1], geoV1)) {
-              newLastSeg = [...lastSeg, geoV0]
-            } else if (vEq(lastSeg[0], geoV0)) {
-              newLastSeg = [geoV1, ...lastSeg]
-            } else if (vEq(lastSeg[0], geoV1)) {
-              newLastSeg = [geoV0, ...lastSeg]
-            } else {
-              appendNew = true
-            }
-
-            if (appendNew) {
-              nextSegments = [...segments, [geoV0, geoV1]]
-            } else if (newLastSeg!.length <= 1) {
-              nextSegments = segments.slice(0, -1)
-            } else {
-              nextSegments = [...segments.slice(0, -1), newLastSeg!]
-            }
-          }
-
-          setHighlightEdgePathRef.current(hlId, nextSegments)
-          joinedHighlightsDirtyRef.current = true
-        }
-      }
+      paintEdge(hexQ, hexR, edgeI)
       return
     }
 
@@ -2245,6 +2278,24 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return
     draggedRef.current = false
+
+    // Start an edge drag stroke if we're in edge-paint mode with a hovered edge
+    if (isEdgePaintActive() && hoveredEdgeRef.current) {
+      const { hexQ, hexR, edgeI } = hoveredEdgeRef.current
+      const paintKey = `${hexQ},${hexR},${edgeI}`
+      const firstAction = paintEdge(hexQ, hexR, edgeI)
+      if (firstAction) {
+        edgeDragRef.current = { mode: firstAction, painted: new Set([paintKey]) }
+        draggedRef.current = true  // suppress the subsequent onClick
+      }
+      const onUp = () => {
+        edgeDragRef.current = null
+        window.removeEventListener('mouseup', onUp)
+      }
+      window.addEventListener('mouseup', onUp)
+      return
+    }
+
     const startX = e.clientX, startY = e.clientY
     const onMove = (ev: MouseEvent) => {
       if (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4) {
@@ -2257,7 +2308,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
-  }, [])
+  }, [isEdgePaintActive, paintEdge])
 
   if (!meta) {
     return (
