@@ -1,13 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useMapStore } from './store/mapStore'
 import { SetupPanel } from './components/SetupPanel'
 import { MapView } from './components/MapView'
 import { TopBar } from './components/TopBar'
 import { TerrainSidebar } from './components/TerrainSidebar'
-import { TerrainView } from './components/TerrainView'
+import { RoadsSidebar } from './components/RoadsSidebar'
+import { RiversSidebar } from './components/RiversSidebar'
+import { DisplaySidebar } from './components/DisplaySidebar'
+import { SettlementsSidebar } from './components/SettlementsSidebar'
+import { HighlightsSidebar } from './components/HighlightsSidebar'
+import { TerrainViewCanvas, type TerrainViewCanvasHandle } from './components/TerrainViewCanvas'
 
 function App() {
-  const { step, undo, redo } = useMapStore()
+  const { step, activePanel, undo, redo, generateStatus, generateProgress } = useMapStore()
+  const canvasHandleRef = useRef<TerrainViewCanvasHandle>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -18,6 +24,31 @@ function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo])
+
+  const handleExportPDF = useCallback(async () => {
+    const result = await canvasHandleRef.current?.exportBlob()
+    if (!result) return
+    const { blob, paperMm } = result
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const b64 = (reader.result as string).split(',')[1]
+      const res = await fetch('/api/export/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_b64: b64, paper_mm: paperMm }),
+      })
+      if (!res.ok) return
+      const pdfBlob = await res.blob()
+      const url = URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'map.pdf'
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    reader.readAsDataURL(blob)
+  }, [])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       {step === 'setup' ? (
@@ -27,10 +58,15 @@ function App() {
         </div>
       ) : (
         <>
-          <TopBar />
+          <TopBar onExportPDF={handleExportPDF} />
+          {generateStatus === 'loading' && generateProgress && (
+            <div style={{ height: 3, background: '#1a2a22', flexShrink: 0 }}>
+              <div style={{ height: '100%', width: `${generateProgress.progress}%`, background: '#4a9a6a', transition: 'width 0.25s ease' }} />
+            </div>
+          )}
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-            <TerrainSidebar />
-            <TerrainView />
+            {activePanel === 'display' ? <DisplaySidebar /> : activePanel === 'roads' ? <RoadsSidebar /> : activePanel === 'rivers' ? <RiversSidebar /> : activePanel === 'settlements' ? <SettlementsSidebar /> : activePanel === 'highlights' ? <HighlightsSidebar /> : <TerrainSidebar />}
+            <TerrainViewCanvas ref={canvasHandleRef} />
           </div>
         </>
       )}

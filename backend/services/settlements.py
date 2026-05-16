@@ -1,8 +1,15 @@
 """Fetch OSM place nodes (settlements) via Overpass API."""
-import httpx
-from urllib.parse import urlencode
+from services.overpass import post_overpass as _post_overpass
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+def _parse_population(raw) -> int | None:
+    """Return integer population or None if unparseable / missing."""
+    if raw is None:
+        return None
+    try:
+        return int(str(raw).replace(",", "").replace(" ", "").split(".")[0])
+    except (ValueError, TypeError):
+        return None
 
 
 async def fetch_settlements(
@@ -10,35 +17,28 @@ async def fetch_settlements(
     min_lon: float,
     max_lat: float,
     max_lon: float,
-    limit: int = 30,
+    limit: int = 50,
     types: list[str] | None = None,
 ) -> list[dict]:
     """Fetch OSM place nodes within the given bounding box.
 
-    Returns a list of dicts sorted descending by population, up to `limit` entries.
+    Returns a list of dicts sorted descending by population (nodes without a
+    population tag are included but ranked last), up to `limit` entries.
     Each dict has: name, type, population, lon, lat.
     """
     if types is None:
         types = ["city", "town", "village"]
 
+    type_re = "|".join(types)
+
+    # Query without requiring population tag so we get results everywhere.
     query = (
         f'[out:json][timeout:30][bbox:{min_lat},{min_lon},{max_lat},{max_lon}];\n'
-        f'node["place"~"city|town|village"]["population"];\n'
+        f'node["place"~"{type_re}"]["name"];\n'
         f'out body;\n'
     )
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            OVERPASS_URL,
-            content=urlencode({"data": query}).encode(),
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json",
-                "User-Agent": "IG2HexMap/1.0",
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    data = await _post_overpass(query)
 
     settlements: list[dict] = []
     for element in data.get("elements", []):
@@ -51,24 +51,22 @@ async def fetch_settlements(
         if place_type not in types:
             continue
 
-        pop_raw = tags.get("population")
-        if pop_raw is None:
-            continue
-        try:
-            # population may have commas or spaces in some locales
-            population = int(str(pop_raw).replace(",", "").replace(" ", "").split(".")[0])
-        except (ValueError, TypeError):
-            continue
+        population = _parse_population(tags.get("population"))
 
         settlements.append({
             "name": name,
             "type": place_type,
-            "population": population,
+            "population": population if population is not None else 0,
             "lon": element.get("lon"),
             "lat": element.get("lat"),
+            "_has_pop": population is not None,
         })
 
-    settlements.sort(key=lambda s: s["population"], reverse=True)
+    # Sort: nodes with known population first (desc), then unknown (alphabetical)
+    settlements.sort(key=lambda s: (not s["_has_pop"], -s["population"], s["name"]))
+    for s in settlements:
+        del s["_has_pop"]
+
     return settlements[:limit]
 
 
@@ -103,22 +101,11 @@ async def fetch_settlements_in_hex(
     query = (
         f'[out:json][timeout:20]'
         f'[bbox:{min_lat - pad},{min_lon - pad},{max_lat + pad},{max_lon + pad}];\n'
-        f'node["place"~"{type_re}"];\n'
+        f'node["place"~"{type_re}"]["name"];\n'
         f'out body;\n'
     )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            OVERPASS_URL,
-            content=urlencode({"data": query}).encode(),
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json",
-                "User-Agent": "IG2HexMap/1.0",
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    data = await _post_overpass(query, timeout=30.0)
 
     results: list[dict] = []
     for element in data.get("elements", []):
@@ -135,12 +122,8 @@ async def fetch_settlements_in_hex(
         place_type = tags.get("place")
         if place_type not in types:
             continue
-        pop_raw = tags.get("population")
-        try:
-            population = int(str(pop_raw).replace(",", "").replace(" ", "").split(".")[0]) if pop_raw else 0
-        except (ValueError, TypeError):
-            population = 0
+        population = _parse_population(tags.get("population")) or 0
         results.append({"name": name, "type": place_type, "population": population, "lon": lon, "lat": lat})
 
-    results.sort(key=lambda s: s["population"], reverse=True)
+    results.sort(key=lambda s: -s["population"])
     return results

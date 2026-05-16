@@ -1,12 +1,14 @@
 """Terrain classification for hex grid cells using OSM landcover data."""
+import json
 import math
+from typing import AsyncGenerator
+
 from shapely.geometry import Polygon
 
 from models import GridConfig
-from services.hex_grid import generate_hex_grid, PAPER_SIZES_MM
+from services.hex_grid import generate_hex_grid
 from services.osm import fetch_landcover, TERRAIN_PRIORITY
-
-METERS_PER_DEGREE = 111_319.0
+from services.geometry import METERS_PER_DEGREE, compute_bbox
 
 
 def compute_geo_bbox(config: GridConfig) -> tuple[float, float, float, float]:
@@ -14,45 +16,13 @@ def compute_geo_bbox(config: GridConfig) -> tuple[float, float, float, float]:
 
     Returns (min_lat, min_lon, max_lat, max_lon).
     """
-    pw_mm, ph_mm = PAPER_SIZES_MM[config.paper_size]
-    if config.orientation == "landscape":
-        pw_mm, ph_mm = max(pw_mm, ph_mm), min(pw_mm, ph_mm)
-    else:
-        pw_mm, ph_mm = min(pw_mm, ph_mm), max(pw_mm, ph_mm)
-
-    scale = config.width_m / pw_mm  # metres per mm
-    hw = config.width_m / 2
-    hh = config.height_m / 2
-
-    β = math.radians(config.bearing)
-    cos_β, sin_β = math.cos(β), math.sin(β)
-    cos_lat = math.cos(math.radians(config.center_lat))
-
-    def paper_m_to_lonlat(px: float, py: float) -> tuple[float, float]:
-        E_m = px * cos_β + py * sin_β
-        N_m = -px * sin_β + py * cos_β
-        lat = config.center_lat + N_m / METERS_PER_DEGREE
-        lon = config.center_lon + E_m / (cos_lat * METERS_PER_DEGREE)
-        return lon, lat
-
-    # Four corners of the paper in paper-space, then convert to geo
-    corners_paper = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
-    lons, lats = [], []
-    for px, py in corners_paper:
-        lon, lat = paper_m_to_lonlat(px, py)
-        lons.append(lon)
-        lats.append(lat)
-
-    min_lon, max_lon = min(lons), max(lons)
-    min_lat, max_lat = min(lats), max(lats)
-
-    # Add 10% buffer
-    dlon = (max_lon - min_lon) * 0.10
-    dlat = (max_lat - min_lat) * 0.10
-    return min_lat - dlat, min_lon - dlon, max_lat + dlat, max_lon + dlon
+    return compute_bbox(
+        config.center_lon, config.center_lat, config.bearing,
+        config.width_m, config.height_m, buffer=0.10,
+    )
 
 
-PRIORITY = ["sea", "lake", "marsh", "urban", "woods", "rough", "clear"]
+PRIORITY = ["sea", "marsh", "woods", "light_woods", "rough", "clear"]
 
 
 def _compute_coverage(
@@ -82,10 +52,13 @@ def _compute_coverage(
 def classify_hex(coverage: dict[str, float], threshold: float) -> str:
     """Classify terrain: first type in priority order that meets the coverage threshold wins.
     threshold is a fraction 0.0–1.0 (e.g. 0.25 = must cover 25% of hex).
+    light_woods piggybacks on woods coverage at half the threshold.
     Clear is always the fallback.
     """
     for terrain in PRIORITY[:-1]:
-        if coverage.get(terrain, 0) >= threshold:
+        coverage_key = "woods" if terrain == "light_woods" else terrain
+        thr = threshold * 0.5 if terrain == "light_woods" else threshold
+        if coverage.get(coverage_key, 0) >= thr:
             return terrain
     return "clear"
 
@@ -129,3 +102,140 @@ async def generate_terrain(config: GridConfig, slider: float = 0.4) -> dict:
         hex_data["terrain"] = classify_hex(coverage, slider)
 
     return grid
+
+
+async def terrain_stream_generator(config: GridConfig) -> AsyncGenerator[str, None]:
+    """Async generator that yields SSE-formatted strings for the terrain-stream endpoint."""
+    import asyncio
+    from shapely.ops import unary_union
+    from services.worldcover import get_tile_extents, load_tile_window, compute_hex_coverage, extract_land_polygon
+
+    slider = config.slider
+
+    try:
+        # Step 1: hex grid — emit positions immediately so frontend can show placeholder hexes
+        grid = generate_hex_grid(config)
+        hexes = grid["hexes"]
+        meta = grid["metadata"]
+        n_hexes = len(hexes)
+        yield f"data: {json.dumps({'step': 'grid', 'message': 'Loading WorldCover raster…', 'progress': 10, 'hexes': hexes, 'metadata': meta})}\n\n"
+
+        # Steps 2+3: load tiles one at a time and classify hexes immediately after each tile.
+        min_lat, min_lon, max_lat, max_lon = compute_geo_bbox(config)
+        tile_extents = get_tile_extents(min_lat, min_lon, max_lat, max_lon)
+
+        # Pre-assign each hex to the tile that contains its center (lon/lat order).
+        tile_hex_indices: dict[str, list[int]] = {}
+        for i, hd in enumerate(hexes):
+            cx, cy = hd["center"]  # [lon, lat]
+            t_lat = math.floor(cy / 3) * 3
+            t_lon = math.floor(cx / 3) * 3
+            ns = "N" if t_lat >= 0 else "S"
+            ew = "E" if t_lon >= 0 else "W"
+            tid = f"{ns}{abs(t_lat):02d}{ew}{abs(t_lon):03d}"
+            tile_hex_indices.setdefault(tid, []).append(i)
+
+        active_tiles = [(tid, tl, tlo, tla, tloa) for tid, tl, tlo, tla, tloa in tile_extents if tid in tile_hex_indices]
+        n_active = max(len(active_tiles), 1)
+
+        hex_polys: dict[int, Polygon] = {}
+        classified_count = 0
+        tile_land_polys = []
+
+        for tile_num, (tile_id, t_min_lat, t_min_lon, t_max_lat, t_max_lon) in enumerate(active_tiles):
+            clip_min_lat = max(t_min_lat, min_lat)
+            clip_max_lat = min(t_max_lat, max_lat)
+            clip_min_lon = max(t_min_lon, min_lon)
+            clip_max_lon = min(t_max_lon, max_lon)
+
+            pct_loading = 15 + int(65 * tile_num / n_active)
+            yield f"data: {json.dumps({'step': 'raster', 'message': f'Loading tile {tile_num + 1}/{n_active}…', 'progress': pct_loading})}\n\n"
+
+            tile_result = await asyncio.to_thread(
+                load_tile_window, tile_id, clip_min_lat, clip_min_lon, clip_max_lat, clip_max_lon
+            )
+
+            hex_indices = tile_hex_indices[tile_id]
+            batch: list[dict] = []
+
+            if tile_result is None:
+                for i in hex_indices:
+                    hd = hexes[i]
+                    hd["coverage"] = {"sea": 1.0}
+                    hd["is_lake"] = False
+                    hd["terrain"] = "sea"
+                    batch.append(hd)
+            else:
+                data_tile, transform_tile = tile_result
+                tile_land_polys.append((data_tile, transform_tile))
+
+                for i in hex_indices:
+                    hd = hexes[i]
+                    pts = [(v[0], v[1]) for v in hd["vertices"]]
+                    try:
+                        hex_poly = Polygon(pts)
+                        if not hex_poly.is_valid:
+                            hex_poly = hex_poly.buffer(0)
+                    except Exception:
+                        hd["terrain"] = "clear"
+                        hd["coverage"] = {}
+                        batch.append(hd)
+                        continue
+                    coverage = compute_hex_coverage(hex_poly, data_tile, transform_tile)
+                    hd["coverage"] = coverage
+                    hd["is_lake"] = coverage.get("lake", 0) >= slider
+                    hd["terrain"] = classify_hex(coverage, slider)
+                    hex_polys[i] = hex_poly
+                    batch.append(hd)
+
+            classified_count += len(batch)
+            pct_done = 15 + int(65 * (tile_num + 1) / n_active)
+            yield f"data: {json.dumps({'step': 'classify', 'message': f'Classified {classified_count}/{n_hexes} hexes…', 'progress': pct_done, 'hexes': batch})}\n\n"
+
+        # Step 4: coastline clips
+        yield f"data: {json.dumps({'step': 'coastline', 'message': 'Computing coastline clips…', 'progress': 82})}\n\n"
+
+        def _build_land_poly():
+            polys = []
+            for d, t in tile_land_polys:
+                lp = extract_land_polygon(d, t)
+                if lp:
+                    polys.append(lp)
+            return unary_union(polys) if polys else None
+
+        land_poly = await asyncio.to_thread(_build_land_poly)
+
+        def _rings(geom) -> list[list[list[float]]]:
+            if geom.geom_type == "Polygon":
+                return [[[round(c[0], 6), round(c[1], 6)] for c in geom.exterior.coords]]
+            if geom.geom_type == "MultiPolygon":
+                return [[[round(c[0], 6), round(c[1], 6)] for c in p.exterior.coords] for p in geom.geoms]
+            return []
+
+        for i, hex_data in enumerate(hexes):
+            if land_poly is None:
+                hex_data["coastline_clip"] = None
+                continue
+            hex_poly = hex_polys.get(i)
+            if hex_poly is None:
+                hex_data["coastline_clip"] = None
+                continue
+            try:
+                inter = hex_poly.intersection(land_poly)
+            except Exception:
+                hex_data["coastline_clip"] = None
+                continue
+            if inter.is_empty:
+                hex_data["coastline_clip"] = None
+                continue
+            area_ratio = inter.area / hex_poly.area if hex_poly.area > 0 else 0
+            if area_ratio > 0.99 or area_ratio < 0.01:
+                hex_data["coastline_clip"] = None
+                continue
+            rings = _rings(inter)
+            hex_data["coastline_clip"] = rings if rings else None
+
+        yield f"data: {json.dumps({'step': 'done', 'message': 'Done', 'progress': 100, 'hexes': hexes, 'metadata': meta})}\n\n"
+
+    except Exception as e:
+        yield f"data: {json.dumps({'step': 'error', 'message': str(e), 'progress': 0})}\n\n"

@@ -1,16 +1,8 @@
-import asyncio
 import math
-import httpx
-from urllib.parse import urlencode
 from shapely.geometry import LineString
 
-OVERPASS_ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://lz4.overpass-api.de/api/interpreter",
-]
-
-METERS_PER_DEGREE = 111_319.0
+from services.geometry import METERS_PER_DEGREE, make_lonlat_to_hex, polyline_to_hex_sequence, smooth_hex_path, compute_bbox
+from services.overpass import post_overpass
 
 # Lower index = higher priority (motorway beats trunk beats primary …)
 HIGHWAY_PRIORITY: list[str] = ["motorway", "trunk", "primary", "secondary", "tertiary"]
@@ -21,81 +13,6 @@ def _hw_rank(hw: str) -> int:
         return HIGHWAY_PRIORITY.index(hw)
     except ValueError:
         return len(HIGHWAY_PRIORITY)
-
-
-def _round_hex(q_f: float, r_f: float) -> tuple[int, int]:
-    x, z = q_f, r_f
-    y = -x - z
-    rx, ry, rz = round(x), round(y), round(z)
-    dx, dy, dz = abs(rx - x), abs(ry - y), abs(rz - z)
-    if dx > dy and dx > dz:
-        rx = -ry - rz
-    elif dy > dz:
-        pass
-    else:
-        rz = -rx - ry
-    return rx, rz
-
-
-def _make_lonlat_to_hex(config, R_m: float):
-    β = math.radians(config.bearing)
-    cos_β, sin_β = math.cos(β), math.sin(β)
-    cos_lat = math.cos(math.radians(config.center_lat))
-    flat_top = config.hex_orientation == "flat"
-
-    def lonlat_to_hex(lon: float, lat: float) -> tuple[int, int]:
-        E_m = (lon - config.center_lon) * cos_lat * METERS_PER_DEGREE
-        N_m = (lat - config.center_lat) * METERS_PER_DEGREE
-        px = cos_β * E_m - sin_β * N_m
-        py = sin_β * E_m + cos_β * N_m
-        if flat_top:
-            q_f = 2 * px / (3 * R_m)
-            r_f = py / (R_m * math.sqrt(3)) - px / (3 * R_m)
-        else:
-            r_f = 2 * py / (3 * R_m)
-            q_f = px / (R_m * math.sqrt(3)) - py / (3 * R_m)
-        return _round_hex(q_f, r_f)
-
-    return lonlat_to_hex
-
-
-def _polyline_to_hex_sequence(
-    coords: list[tuple[float, float]],
-    lonlat_to_hex,
-    R_m: float,
-    cos_lat: float,
-) -> list[tuple[int, int]]:
-    result: list[tuple[int, int]] = []
-    for i in range(len(coords) - 1):
-        lon1, lat1 = coords[i]
-        lon2, lat2 = coords[i + 1]
-        dE = (lon2 - lon1) * cos_lat * METERS_PER_DEGREE
-        dN = (lat2 - lat1) * METERS_PER_DEGREE
-        dist = math.hypot(dE, dN)
-        n_samples = max(2, int(dist / (R_m / 3)) + 1)
-        for j in range(n_samples):
-            t = j / (n_samples - 1)
-            h = lonlat_to_hex(lon1 + t * (lon2 - lon1), lat1 + t * (lat2 - lat1))
-            if not result or result[-1] != h:
-                result.append(h)
-    return result
-
-
-def _smooth_hex_path(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    changed = True
-    while changed:
-        changed = False
-        new_path: list[tuple[int, int]] = [path[0]]
-        i = 1
-        while i < len(path):
-            if i + 1 < len(path) and path[i + 1] == new_path[-1]:
-                i += 2
-                changed = True
-            else:
-                new_path.append(path[i])
-                i += 1
-        path = new_path
-    return path
 
 
 def _build_road_data(
@@ -113,10 +30,10 @@ def _build_road_data(
     for hw_type, coords in typed_ways:
         raw_ways.append({"highway": hw_type, "coords": [[lon, lat] for lon, lat in coords]})
 
-        path = _polyline_to_hex_sequence(coords, lonlat_to_hex, R_m, cos_lat)
+        path = polyline_to_hex_sequence(coords, lonlat_to_hex, R_m, cos_lat)
         if len(path) < 2:
             continue
-        path = _smooth_hex_path(path)
+        path = smooth_hex_path(path)
         if len(path) < 2:
             continue
         hex_paths.append({"highway": hw_type, "hexes": [[q, r] for q, r in path]})
@@ -165,30 +82,7 @@ async def _fetch_ways(
         f'way["highway"~"^({type_pattern})$"]({bbox});\n'
         f'out tags geom;\n'
     )
-    payload = urlencode({"data": query}).encode()
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-        "User-Agent": "IG2HexMap/1.0",
-    }
-
-    last_error: Exception | None = None
-    data: dict = {}
-
-    async with httpx.AsyncClient(timeout=55.0) as client:
-        for attempt, endpoint in enumerate(OVERPASS_ENDPOINTS):
-            try:
-                resp = await client.post(endpoint, content=payload, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                break
-            except Exception as exc:
-                last_error = exc
-                if attempt < len(OVERPASS_ENDPOINTS) - 1:
-                    await asyncio.sleep(1.5)
-        else:
-            raise RuntimeError(f"All Overpass mirrors failed. Last error: {last_error}")
-
+    data = await post_overpass(query, timeout=55.0)
     ways = []
     for el in data.get("elements", []):
         if el.get("type") != "way":
@@ -214,105 +108,190 @@ def _simplify_ways(
     return result
 
 
-async def _fetch_rail_ways(
-    min_lat: float,
-    min_lon: float,
-    max_lat: float,
-    max_lon: float,
-    rail_types: list[str],
-) -> list[tuple[str, list[tuple[float, float]]]]:
-    type_pattern = "|".join(rail_types)
-    bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
-    query = (
-        f'[out:json][timeout:45][maxsize:52428800];\n'
-        f'way["railway"~"^({type_pattern})$"]({bbox});\n'
-        f'out tags geom;\n'
-    )
-    payload = urlencode({"data": query}).encode()
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-        "User-Agent": "IG2HexMap/1.0",
-    }
+async def generate_settlement_roads(config) -> dict:
+    """Connect settlements via MST + Dijkstra, returning original OSM way geometries."""
+    import heapq
 
-    last_error: Exception | None = None
-    data: dict = {}
+    settlements = config.settlements
+    if len(settlements) < 2:
+        return {"raw_ways": [], "hex_paths": [], "road_hexes": []}
 
-    async with httpx.AsyncClient(timeout=55.0) as client:
-        for attempt, endpoint in enumerate(OVERPASS_ENDPOINTS):
-            try:
-                resp = await client.post(endpoint, content=payload, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                break
-            except Exception as exc:
-                last_error = exc
-                if attempt < len(OVERPASS_ENDPOINTS) - 1:
-                    await asyncio.sleep(1.5)
-        else:
-            raise RuntimeError(f"All Overpass mirrors failed. Last error: {last_error}")
-
-    ways = []
-    for el in data.get("elements", []):
-        if el.get("type") != "way":
-            continue
-        geom = el.get("geometry", [])
-        if len(geom) < 2:
-            continue
-        rail_type = el.get("tags", {}).get("railway", "rail")
-        ways.append((rail_type, [(p["lon"], p["lat"]) for p in geom]))
-    return ways
-
-
-async def generate_rail_hexes(config) -> dict:
     R_m = config.R_m
     cos_lat = math.cos(math.radians(config.center_lat))
 
-    β = math.radians(config.bearing)
-    cos_β, sin_β = math.cos(β), math.sin(β)
-    hw = config.width_m / 2 * 1.05
-    hh = config.height_m / 2 * 1.05
-    lons, lats = [], []
-    for px, py in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]:
-        E_m = px * cos_β + py * sin_β
-        N_m = -px * sin_β + py * cos_β
-        lats.append(config.center_lat + N_m / METERS_PER_DEGREE)
-        lons.append(config.center_lon + E_m / (cos_lat * METERS_PER_DEGREE))
-
-    typed_ways = await _fetch_rail_ways(
-        min(lats), min(lons), max(lats), max(lons),
-        config.rail_types,
+    min_lat, min_lon, max_lat, max_lon = compute_bbox(
+        config.center_lon, config.center_lat, config.bearing,
+        config.width_m, config.height_m,
     )
 
+    typed_ways = await _fetch_ways(min_lat, min_lon, max_lat, max_lon, config.highway_types)
+    if not typed_ways:
+        return {"raw_ways": [], "hex_paths": [], "road_hexes": []}
+
+    # Simplify upfront for graph performance; we index back into these for output.
     tolerance = (R_m * 1.5) / METERS_PER_DEGREE
     typed_ways = _simplify_ways(typed_ways, tolerance)
 
-    lonlat_to_hex = _make_lonlat_to_hex(config, R_m)
-    return _build_road_data(typed_ways, lonlat_to_hex, R_m, cos_lat)
+    # Tier cost multipliers: make lower-priority roads artificially expensive so
+    # Dijkstra strongly prefers motorways/trunks over back roads.
+    _TIER_COST: dict[str, float] = {
+        'motorway': 1.0, 'trunk': 1.0,
+        'primary': 2.0, 'secondary': 2.0,
+        'tertiary': 10.0,
+    }
+
+    # Build graph: node=(lon,lat) → [(neighbour, cost, hw_type, way_idx), ...]
+    # way_idx lets us recover the original OSM way geometry after routing.
+    adj: dict[tuple, list] = {}
+    for way_idx, (hw_type, coords) in enumerate(typed_ways):
+        multiplier = _TIER_COST.get(hw_type, 10.0)
+        for i in range(len(coords) - 1):
+            a: tuple = coords[i]
+            b: tuple = coords[i + 1]
+            dE = (b[0] - a[0]) * cos_lat * METERS_PER_DEGREE
+            dN = (b[1] - a[1]) * METERS_PER_DEGREE
+            dist = math.hypot(dE, dN)
+            if dist == 0:
+                continue
+            cost = dist * multiplier
+            if a not in adj:
+                adj[a] = []
+            if b not in adj:
+                adj[b] = []
+            adj[a].append((b, cost, hw_type, way_idx))
+            adj[b].append((a, cost, hw_type, way_idx))
+
+    if not adj:
+        return {"raw_ways": [], "hex_paths": [], "road_hexes": []}
+
+    all_nodes = list(adj.keys())
+
+    def snap(lon: float, lat: float) -> tuple:
+        best, best_d = all_nodes[0], float('inf')
+        for node in all_nodes:
+            dE = (node[0] - lon) * cos_lat * METERS_PER_DEGREE
+            dN = (node[1] - lat) * METERS_PER_DEGREE
+            d = dE * dE + dN * dN
+            if d < best_d:
+                best_d = d
+                best = node
+        return best
+
+    INF = float('inf')
+
+    def dijkstra(start: tuple) -> tuple[dict, dict]:
+        dist: dict = {start: 0.0}
+        # prev[v] = (parent_node, hw_type, way_idx)
+        prev: dict = {start: (None, None, None)}
+        pq: list = [(0.0, start)]
+        while pq:
+            d, u = heapq.heappop(pq)
+            if d > dist.get(u, INF):
+                continue
+            for v, w, ht, wi in adj.get(u, []):
+                nd = d + w
+                if nd < dist.get(v, INF):
+                    dist[v] = nd
+                    prev[v] = (u, ht, wi)
+                    heapq.heappush(pq, (nd, v))
+        return dist, prev
+
+    snap_nodes = [snap(s['lon'], s['lat']) for s in settlements]
+    n = len(settlements)
+
+    all_dists: list[dict] = []
+    all_prevs: list[dict] = []
+    for sn in snap_nodes:
+        d, p = dijkstra(sn)
+        all_dists.append(d)
+        all_prevs.append(p)
+
+    # Settlement distance matrix
+    dist_matrix = [[INF] * n for _ in range(n)]
+    for i in range(n):
+        dist_matrix[i][i] = 0.0
+        for j in range(i + 1, n):
+            d = all_dists[i].get(snap_nodes[j], INF)
+            dist_matrix[i][j] = dist_matrix[j][i] = d
+
+    # Kruskal MST
+    mst_parent = list(range(n))
+
+    def find(x: int) -> int:
+        while mst_parent[x] != x:
+            mst_parent[x] = mst_parent[mst_parent[x]]
+            x = mst_parent[x]
+        return x
+
+    def union(x: int, y: int) -> bool:
+        px, py = find(x), find(y)
+        if px == py:
+            return False
+        mst_parent[px] = py
+        return True
+
+    candidate_edges = sorted(
+        [(dist_matrix[i][j], i, j)
+         for i in range(n) for j in range(i + 1, n)
+         if dist_matrix[i][j] < INF]
+    )
+    connection_pairs: list[tuple[int, int]] = []
+    for _, i, j in candidate_edges:
+        if union(i, j):
+            connection_pairs.append((i, j))
+        if len(connection_pairs) == n - 1:
+            break
+
+    # Nearest-neighbour pass: for each settlement, also ensure its single closest
+    # reachable neighbour has a direct connection even if MST routes it via a hub.
+    connected_set: set[tuple[int, int]] = {
+        (min(i, j), max(i, j)) for i, j in connection_pairs
+    }
+    for i in range(n):
+        best_j, best_d = -1, INF
+        for j in range(n):
+            if i != j and dist_matrix[i][j] < best_d:
+                best_d = dist_matrix[i][j]
+                best_j = j
+        if best_j >= 0:
+            key = (min(i, best_j), max(i, best_j))
+            if key not in connected_set:
+                connection_pairs.append((i, best_j))
+                connected_set.add(key)
+
+    # Walk each Dijkstra path and collect the OSM way indices that were traversed.
+    # Returning original way geometries produces real road corridors rather than
+    # synthetic polylines stitched from individual graph hops.
+    used_way_indices: set[int] = set()
+    for i, j in connection_pairs:
+        node = snap_nodes[j]
+        while node is not None:
+            parent_node, _, wi = all_prevs[i].get(node, (None, None, None))
+            if wi is not None:
+                used_way_indices.add(wi)
+            node = parent_node
+
+    if not used_way_indices:
+        return {"raw_ways": [], "hex_paths": [], "road_hexes": []}
+
+    selected_ways = [typed_ways[idx] for idx in sorted(used_way_indices)]
+    lonlat_to_hex = make_lonlat_to_hex(config, R_m)
+    return _build_road_data(selected_ways, lonlat_to_hex, R_m, cos_lat)
 
 
 async def generate_road_hexes(config) -> dict:
     R_m = config.R_m
     cos_lat = math.cos(math.radians(config.center_lat))
 
-    β = math.radians(config.bearing)
-    cos_β, sin_β = math.cos(β), math.sin(β)
-    hw = config.width_m / 2 * 1.05
-    hh = config.height_m / 2 * 1.05
-    lons, lats = [], []
-    for px, py in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]:
-        E_m = px * cos_β + py * sin_β
-        N_m = -px * sin_β + py * cos_β
-        lats.append(config.center_lat + N_m / METERS_PER_DEGREE)
-        lons.append(config.center_lon + E_m / (cos_lat * METERS_PER_DEGREE))
-
-    typed_ways = await _fetch_ways(
-        min(lats), min(lons), max(lats), max(lons),
-        config.highway_types,
+    min_lat, min_lon, max_lat, max_lon = compute_bbox(
+        config.center_lon, config.center_lat, config.bearing,
+        config.width_m, config.height_m,
     )
+
+    typed_ways = await _fetch_ways(min_lat, min_lon, max_lat, max_lon, config.highway_types)
 
     tolerance = (R_m * 1.5) / METERS_PER_DEGREE
     typed_ways = _simplify_ways(typed_ways, tolerance)
 
-    lonlat_to_hex = _make_lonlat_to_hex(config, R_m)
+    lonlat_to_hex = make_lonlat_to_hex(config, R_m)
     return _build_road_data(typed_ways, lonlat_to_hex, R_m, cos_lat)

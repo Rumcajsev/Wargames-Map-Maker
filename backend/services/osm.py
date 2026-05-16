@@ -24,10 +24,10 @@ OSM_TERRAIN_MAP: dict[str, str] = {
     "allotments": "clear",
     "beach": "clear",
     "coastline": "sea",
-    "residential": "urban",
-    "commercial": "urban",
-    "industrial": "urban",
-    "retail": "urban",
+    "residential": "clear",
+    "commercial": "clear",
+    "industrial": "clear",
+    "retail": "clear",
     "grass": "clear",
     "mud": "rough",
     "sand": "clear",
@@ -36,7 +36,7 @@ OSM_TERRAIN_MAP: dict[str, str] = {
     "floodplain": "marsh",
 }
 
-TERRAIN_PRIORITY = ["sea", "lake", "marsh", "urban", "woods", "rough", "clear"]
+TERRAIN_PRIORITY = ["sea", "lake", "marsh", "woods", "rough", "clear"]
 
 
 def _osm_tag_to_terrain(tags: dict) -> str | None:

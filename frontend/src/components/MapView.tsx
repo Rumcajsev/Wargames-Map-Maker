@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, paperDimsMm, type HexEdgeMode } from '../store/mapStore'
+import { useMapStore, paperDimsMm, combinedDimsMm, FRAME_MARGIN, type HexEdgeMode } from '../store/mapStore'
 
 const OSM_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -33,79 +33,39 @@ function computeHexLayout(
   const base = flat ? 0 : 30
   const iW = frameW - 2 * marginPx
   const iH = frameH - 2 * marginPx
+  const hw = iW / 2
+  const hh = iH / 2
+  // Paper centre in screen space — q=0,r=0 is placed here, matching the backend
+  const cx0 = marginPx + hw
+  const cy0 = marginPx + hh
 
-  const hexHW = flat ? R : (sq3 / 2) * R
-  const hexHH = flat ? (sq3 / 2) * R : R
+  // Axial hex centre offset from the paper centre (identical to backend hex_grid.py)
+  const axDx = (q: number, r: number) =>
+    flat ? 1.5 * R * q : sq3 * R * q + (sq3 / 2) * R * r
+  const axDy = (q: number, r: number) =>
+    flat ? (sq3 / 2) * R * q + sq3 * R * r : 1.5 * R * r
 
-  // Offset coordinates — columns and rows are independent axes so the grid
-  // fills a rectangle (axial coords would shear the whole grid diagonally).
-  // Flat-top  even-col offset: odd columns shift down by sq3/2·R
-  // Pointy-top even-row offset: odd rows shift right by sq3/2·R
-  // Math.abs() keeps negative col/row indices correct (JS % can be negative).
-  const posX = (col: number, row: number) =>
-    flat
-      ? 1.5 * R * col
-      : sq3 * R * col + (Math.abs(row) % 2 === 1 ? (sq3 / 2) * R : 0)
-  const posY = (col: number, row: number) =>
-    flat
-      ? sq3 * R * row + (Math.abs(col) % 2 === 1 ? (sq3 / 2) * R : 0)
-      : 1.5 * R * row
-
-  // ── Step 1: how many complete hexes fit in the inner area ──────────────
-  let cols: number, rows: number
-  if (flat) {
-    cols = Math.max(1, Math.floor((iW - 0.5 * R) / (1.5 * R)))
-    rows = Math.max(1, cols > 1
-      ? Math.floor((iH - (sq3 / 2) * R) / (sq3 * R))
-      : Math.floor(iH / (sq3 * R)))
-  } else {
-    rows = Math.max(1, Math.floor((iH - 0.5 * R) / (1.5 * R)))
-    cols = Math.max(1, rows > 1
-      ? Math.floor((iW - (sq3 / 2) * R) / (sq3 * R))
-      : Math.floor(iW / (sq3 * R)))
-  }
-
-  // ── Step 2: bounding box of col=0..cols-1, row=0..rows-1 ──────────────
-  // Using offset coords, the box edges are analytical:
-  //   flat-top:   gridR = R·(1.5·cols − 0.5),  gridB = sq3·R·(rows + 0.5·(cols>1))
-  //   pointy-top: gridB = R·(1.5·rows − 0.5),  gridR = sq3·R·(cols + 0.5·(rows>1))
-  const gridL = -hexHW
-  const gridT = -hexHH
-  const gridR = flat
-    ? 1.5 * R * (cols - 1) + hexHW
-    : sq3 * R * (cols - 1) + (rows > 1 ? (sq3 / 2) * R : 0) + hexHW
-  const gridB = flat
-    ? sq3 * R * (rows - 1) + (cols > 1 ? (sq3 / 2) * R : 0) + hexHH
-    : 1.5 * R * (rows - 1) + hexHH
-
-  // ── Step 3: centre that bounding box within the margin area ────────────
-  const originX = marginPx + (iW - (gridR - gridL)) / 2 - gridL
-  const originY = marginPx + (iH - (gridB - gridT)) / 2 - gridT
-
-  // ── Step 4: generate hexes ─────────────────────────────────────────────
-  // 'whole': exactly the complete rectangle — no clipping needed
-  // 'half':  two extra rings in every direction, clipped at margin boundary
-  const ext = mode === 'half' ? 2 : 0
-  const colMin = -ext, colMax = cols - 1 + ext
-  const rowMin = -ext, rowMax = rows - 1 + ext
-
-  const clipL = marginPx, clipR = marginPx + iW
-  const clipT = marginPx, clipB = marginPx + iH
+  const sweep = Math.ceil((Math.max(iW, iH) / 2 + R) / R) + 1
 
   const hexPoints: string[] = []
-  for (let col = colMin; col <= colMax; col++) {
-    for (let row = rowMin; row <= rowMax; row++) {
-      const cx = posX(col, row) + originX
-      const cy = posY(col, row) + originY
+  for (let q = -sweep; q <= sweep; q++) {
+    for (let r = -sweep; r <= sweep; r++) {
+      const dx = axDx(q, r)
+      const dy = axDy(q, r)
 
-      if (cx + hexHW < clipL || cx - hexHW > clipR) continue
-      if (cy + hexHH < clipT || cy - hexHH > clipB) continue
+      // Quick cull: centre must be reachable from the inner area
+      if (Math.abs(dx) > hw + R || Math.abs(dy) > hh + R) continue
 
-      const pts = Array.from({ length: 6 }, (_, i) => {
+      // Vertex offsets relative to the paper centre
+      const verts = Array.from({ length: 6 }, (_, i) => {
         const a = ((base + 60 * i) * Math.PI) / 180
-        return `${cx + R * Math.cos(a)},${cy + R * Math.sin(a)}`
-      }).join(' ')
+        return [dx + R * Math.cos(a), dy + R * Math.sin(a)] as [number, number]
+      })
 
+      const isPartial = verts.some(([vx, vy]) => Math.abs(vx) > hw || Math.abs(vy) > hh)
+      if (mode === 'whole' && isPartial) continue
+
+      const pts = verts.map(([vx, vy]) => `${cx0 + vx},${cy0 + vy}`).join(' ')
       hexPoints.push(pts)
     }
   }
@@ -154,7 +114,7 @@ function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation
       </defs>
 
       {/* Hex grid clipped at margin boundary */}
-      <g clipPath="url(#margin-clip)">
+      <g clipPath="url(#margin-clip)" opacity={0.75}>
         {hexPoints.map((pts, i) => (
           <polygon
             key={i}
@@ -191,8 +151,9 @@ export function MapView() {
 
   const [frameDims, setFrameDims] = useState({ w: 0, h: 0 })
 
-  const { paperSize, orientation, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth } = useMapStore()
+  const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth } = useMapStore()
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
+  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
 
   // Recompute frame pixel size when viewport or paper settings change
   useEffect(() => {
@@ -202,8 +163,8 @@ export function MapView() {
     const compute = () => {
       const vw = el.clientWidth
       const vh = el.clientHeight
-      const aspect = pwMm / phMm
-      const margin = 0.86
+      const aspect = cwMm / chMm
+      const margin = FRAME_MARGIN
 
       let fw = vw * margin
       let fh = fw / aspect
@@ -227,7 +188,34 @@ export function MapView() {
     const ro = new ResizeObserver(compute)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [pwMm, phMm, setFramePixelWidth])
+  }, [cwMm, chMm, setFramePixelWidth])
+
+  // Adjust zoom when combined dims change to preserve km/hex scale
+  const prevCombinedRef = useRef<[number, number] | null>(null)
+  useEffect(() => {
+    const prev = prevCombinedRef.current
+    prevCombinedRef.current = [cwMm, chMm]
+    if (!prev || !mapRef.current || !containerRef.current) return
+    const [prevCw, prevCh] = prev
+    if (prevCw === cwMm && prevCh === chMm) return
+
+    const el = containerRef.current
+    const vw = el.clientWidth
+    const vh = el.clientHeight
+    const calcFw = (cw: number, ch: number) => {
+      let fw = vw * FRAME_MARGIN
+      let fh = fw / (cw / ch)
+      if (fh > vh * FRAME_MARGIN) { fh = vh * FRAME_MARGIN; fw = fh * (cw / ch) }
+      return Math.round(fw)
+    }
+
+    const oldFw = calcFw(prevCw, prevCh)
+    const newFw = calcFw(cwMm, chMm)
+    if (oldFw === 0 || newFw === 0) return
+
+    const newZoom = mapRef.current.getZoom() + Math.log2((newFw * prevCw) / (oldFw * cwMm))
+    mapRef.current.setZoom(newZoom)
+  }, [cwMm, chMm])
 
   // Init MapLibre once
   useEffect(() => {
@@ -278,12 +266,27 @@ export function MapView() {
         <HexPreviewSVG
           frameW={frameDims.w}
           frameH={frameDims.h}
-          paperWidthMm={pwMm}
+          paperWidthMm={cwMm}
           hexSizeMm={hexSizeMm}
           hexOrientation={hexOrientation}
           marginMm={marginMm}
           hexEdgeMode={hexEdgeMode}
         />
+        {mapMode === 'diptych' && (() => {
+          const seamVertical = cwMm === 2 * pwMm
+          return (
+            <div style={{
+              position: 'absolute',
+              left: seamVertical ? '50%' : 0,
+              top: seamVertical ? 0 : '50%',
+              width: seamVertical ? 0 : '100%',
+              height: seamVertical ? '100%' : 0,
+              borderLeft: seamVertical ? '2px solid rgba(220, 60, 0, 0.9)' : 'none',
+              borderTop: seamVertical ? 'none' : '2px solid rgba(220, 60, 0, 0.9)',
+              pointerEvents: 'none',
+            }} />
+          )
+        })()}
       </div>
     </div>
   )

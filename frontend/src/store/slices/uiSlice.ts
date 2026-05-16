@@ -1,0 +1,301 @@
+import type { MapStore, ActiveTool, UrbanStyle, RoadEdge } from '../mapStore'
+import { DEFAULT_URBAN_STYLE } from '../mapStore'
+
+export type UiSlice = {
+  activePanel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'highlights'
+  activeTool: ActiveTool
+  urbanHexes: Array<{ q: number; r: number }>
+  urbanStyle: UrbanStyle
+  urbanPaintMode: 'paint' | 'erase' | null
+  hexBorderMode: 'full' | 'dots' | 'none'
+  terrainDisplacement: number
+  terrainNoiseFrequency: number
+  terrainNoiseSeed: number
+  terrainNoiseOctaves: number
+  illustratedStyle: boolean
+  showPaperTexture: boolean
+  paperTextureOpacity: number
+  showPaperVignette: boolean
+  woodsHexStyle: 'default' | 'blob'
+  blobSize: number
+  blobCount: number
+  showBridges: boolean
+  bridgeStyle: 'simple' | 'icon'
+  urbanDisplayMode: 'plain' | 'polygon' | 'buildings'
+  urbanScale: number
+  urbanVertexRatio: number
+  urbanNoise: number
+  urbanBuildingCount: number
+  urbanBuildingSize: number
+  setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style') => void
+  setActiveTool: (tool: ActiveTool) => void
+  toggleUrbanHex: (q: number, r: number) => void
+  setUrbanStyle: (style: Partial<UrbanStyle>) => void
+  setUrbanPaintMode: (mode: 'paint' | 'erase' | null) => void
+  setHexBorderMode: (v: 'full' | 'dots' | 'none') => void
+  setTerrainDisplacement: (v: number) => void
+  setTerrainNoiseFrequency: (v: number) => void
+  setTerrainNoiseSeed: (v: number) => void
+  setTerrainNoiseOctaves: (v: number) => void
+  setIllustratedStyle: (v: boolean) => void
+  setShowPaperTexture: (v: boolean) => void
+  setPaperTextureOpacity: (v: number) => void
+  setShowPaperVignette: (v: boolean) => void
+  setWoodsHexStyle: (style: 'default' | 'blob') => void
+  setBlobSize: (v: number) => void
+  setBlobCount: (v: number) => void
+  setShowBridges: (v: boolean) => void
+  setBridgeStyle: (v: 'simple' | 'icon') => void
+  setUrbanDisplayMode: (mode: 'plain' | 'polygon' | 'buildings') => void
+  setUrbanScale: (v: number) => void
+  setUrbanVertexRatio: (v: number) => void
+  setUrbanNoise: (v: number) => void
+  setUrbanBuildingCount: (v: number) => void
+  setUrbanBuildingSize: (v: number) => void
+  applyMapPreset: (preset: 'default') => void
+  saveProject: () => void
+  restoreProject: (data: unknown) => void
+}
+
+type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
+
+export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
+  activePanel: 'terrain',
+  activeTool: { type: 'none' },
+  urbanHexes: [],
+  urbanStyle: { ...DEFAULT_URBAN_STYLE },
+  urbanPaintMode: null,
+  hexBorderMode: 'full',
+  terrainDisplacement: 18,
+  terrainNoiseFrequency: 6,
+  terrainNoiseSeed: 2,
+  terrainNoiseOctaves: 3,
+  illustratedStyle: false,
+  showPaperTexture: false,
+  paperTextureOpacity: 0.35,
+  showPaperVignette: false,
+  woodsHexStyle: 'default',
+  blobSize: 0.18,
+  blobCount: 7,
+  showBridges: false,
+  bridgeStyle: 'simple',
+  urbanDisplayMode: 'polygon',
+  urbanScale: 0.72,
+  urbanVertexRatio: 0.75,
+  urbanNoise: 0.12,
+  urbanBuildingCount: 8,
+  urbanBuildingSize: 0.12,
+
+  setActivePanel: (panel) => set({ activePanel: panel }),
+
+  setActiveTool: (tool) => {
+    const updates: Partial<MapStore> = { activeTool: tool }
+
+    updates.terrainPaintMode = tool.type === 'terrain'
+    if (tool.type === 'terrain') updates.terrainPaintBrush = tool.brush
+
+    updates.elevationPaintMode = tool.type === 'elevation'
+    if (tool.type === 'elevation') updates.elevationPaintBrush = tool.brush
+
+    updates.lakePaintMode = tool.type === 'lake'
+
+    updates.roadPaintMode = tool.type === 'road'
+    if (tool.type === 'road') {
+      updates.roadPaintBrush = tool.tier
+      updates.roadPaintEraser = tool.erasing
+      updates.roadsDisplayMode = 'per_hex'
+    } else {
+      updates.roadPaintEraser = false
+    }
+
+    updates.railPaintMode = tool.type === 'rail'
+    if (tool.type === 'rail') {
+      updates.railPaintEraser = tool.erasing
+      updates.railsDisplayMode = 'per_hex'
+    } else {
+      updates.railPaintEraser = false
+    }
+
+    updates.roadNodeEditMode = tool.type === 'node-edit'
+
+    updates.riverEditMode = tool.type === 'river-paint' || tool.type === 'river-select'
+    updates.riverSelectMode = tool.type === 'river-select'
+
+    updates.canalEditMode = tool.type === 'canal-paint' || tool.type === 'canal-select'
+    updates.canalSelectMode = tool.type === 'canal-select'
+
+    updates.highlightPaintMode = tool.type === 'highlight-paint'
+    updates.highlightLineEraser = tool.type === 'highlight-erase'
+    if (tool.type === 'highlight-paint' || tool.type === 'highlight-erase') {
+      updates.activeHighlightId = tool.id
+    }
+
+    updates.urbanPaintMode = tool.type === 'urban' ? tool.mode : null
+
+    if (tool.type === 'terrain' || tool.type === 'elevation' || tool.type === 'lake') {
+      updates.selectedHex = null
+    }
+
+    set(updates as Partial<MapStore>)
+  },
+
+  toggleUrbanHex: (q, r) => {
+    const { urbanHexes, urbanPaintMode } = get()
+    if (urbanPaintMode === 'erase') {
+      set({ urbanHexes: urbanHexes.filter(h => !(h.q === q && h.r === r)) })
+    } else {
+      if (urbanHexes.some(h => h.q === q && h.r === r)) return
+      set({ urbanHexes: [...urbanHexes, { q, r }] })
+    }
+  },
+  setUrbanStyle: (style) => set(s => ({ urbanStyle: { ...s.urbanStyle, ...style } })),
+  setUrbanPaintMode: (mode) => set({ urbanPaintMode: mode }),
+
+  setHexBorderMode: (v) => set({ hexBorderMode: v }),
+  setTerrainDisplacement: (v) => set({ terrainDisplacement: v }),
+  setTerrainNoiseFrequency: (v) => set({ terrainNoiseFrequency: v }),
+  setTerrainNoiseSeed: (v) => set({ terrainNoiseSeed: v }),
+  setTerrainNoiseOctaves: (v) => set({ terrainNoiseOctaves: v }),
+  setIllustratedStyle: (v) => set({ illustratedStyle: v }),
+  setShowPaperTexture: (v) => set({ showPaperTexture: v }),
+  setPaperTextureOpacity: (v) => set({ paperTextureOpacity: v }),
+  setShowPaperVignette: (v) => set({ showPaperVignette: v }),
+  setWoodsHexStyle: (style) => set({ woodsHexStyle: style }),
+  setBlobSize: (v) => set({ blobSize: v }),
+  setBlobCount: (v) => set({ blobCount: v }),
+  setShowBridges: (v) => set({ showBridges: v }),
+  setBridgeStyle: (v) => set({ bridgeStyle: v }),
+  setUrbanDisplayMode: (mode) => set({ urbanDisplayMode: mode }),
+  setUrbanScale: (v) => set({ urbanScale: v }),
+  setUrbanVertexRatio: (v) => set({ urbanVertexRatio: v }),
+  setUrbanNoise: (v) => set({ urbanNoise: v }),
+  setUrbanBuildingCount: (v) => set({ urbanBuildingCount: v }),
+  setUrbanBuildingSize: (v) => set({ urbanBuildingSize: v }),
+
+  applyMapPreset: (preset) => {
+    const presets = {
+      default: {
+        woodsHexStyle: 'default' as const,
+        terrainDisplacement: 18,
+        terrainNoiseFrequency: 6,
+        terrainNoiseOctaves: 3,
+        terrainNoiseSeed: 2,
+        riverWidthScale: 1.0,
+      },
+    }
+    set(presets[preset])
+  },
+
+  saveProject: () => {
+    const s = get()
+    const snapshot = {
+      version: 9,
+      state: {
+        step: s.step, paperSize: s.paperSize, orientation: s.orientation,
+        hexSizeMm: s.hexSizeMm, hexOrientation: s.hexOrientation,
+        marginMm: s.marginMm, hexEdgeMode: s.hexEdgeMode,
+        generatedHexes: s.generatedHexes, generatedMetadata: s.generatedMetadata,
+        thresholds: s.thresholds, disabledTerrains: Array.from(s.disabledTerrains),
+        settlements: s.settlements, settlementsStatus: s.settlementsStatus,
+        settlementsLimit: s.settlementsLimit, settlementsTypes: s.settlementsTypes,
+        settlementTierThresholds: s.settlementTierThresholds, settlementsAutoPlace: s.settlementsAutoPlace,
+        roadEdges: s.roadEdges, roadsDisplayMode: s.roadsDisplayMode,
+        roadsFetchTiers: s.roadsFetchTiers, roadsVisibleTiers: s.roadsVisibleTiers, roadsStatus: s.roadsStatus,
+        railEdges: s.railEdges, railsDisplayMode: s.railsDisplayMode,
+        railsFetchTypes: s.railsFetchTypes, railsStatus: s.railsStatus,
+        riverEdges: s.riverEdges, canalEdges: s.canalEdges,
+        riverSegmentProps: s.riverSegmentProps, canalSegmentProps: s.canalSegmentProps,
+        riverStyle: s.riverStyle, canalStyle: s.canalStyle,
+        elevationStatus: s.elevationStatus,
+        showReliefHeatmap: s.showReliefHeatmap, showElevHeatmap: s.showElevHeatmap,
+        activePanel: s.activePanel, elevationStyle: s.elevationStyle,
+        contourInterval: s.contourInterval, hexBorderMode: s.hexBorderMode,
+        terrainDisplacement: s.terrainDisplacement, terrainNoiseFrequency: s.terrainNoiseFrequency,
+        terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
+        illustratedStyle: s.illustratedStyle,
+        riverWidthScale: s.riverWidthScale, canalWidthScale: s.canalWidthScale,
+        riverCurveSteps: s.riverCurveSteps, riverWobble: s.riverWobble, riverDetail: s.riverDetail,
+        roadTierStyles: s.roadTierStyles, railStyle: s.railStyle,
+        woodsHexStyle: s.woodsHexStyle, blobSize: s.blobSize, blobCount: s.blobCount,
+        showBridges: s.showBridges, bridgeStyle: s.bridgeStyle,
+        urbanDisplayMode: s.urbanDisplayMode, urbanScale: s.urbanScale,
+        urbanVertexRatio: s.urbanVertexRatio, urbanNoise: s.urbanNoise,
+        urbanBuildingCount: s.urbanBuildingCount, urbanBuildingSize: s.urbanBuildingSize,
+        terrainBlobOverrides: s.terrainBlobOverrides, lakeOverrides: s.lakeOverrides,
+        highlights: s.highlights, highlightedHexes: s.highlightedHexes,
+        highlightLines: s.highlightLines, highlightEdgePaths: s.highlightEdgePaths,
+      },
+    }
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'map.ig2'
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  restoreProject: (data: unknown) => {
+    try {
+      const parsed = data as { state?: Record<string, unknown>; version?: number }
+      const fromVersion = typeof parsed.version === 'number' ? parsed.version : 0
+      const raw = { ...(parsed.state ?? (parsed as Record<string, unknown>)) }
+      const migrated = migratePersisted(raw, fromVersion) as unknown as MapStore
+      rehydrateState(migrated)
+      set({ ...(migrated as Partial<MapStore>), undoStack: [], redoStack: [] })
+    } catch (e) {
+      console.error('Failed to restore project:', e)
+    }
+  },
+})
+
+// These are imported by mapStore.ts too — kept here so uiSlice owns persist logic
+export function migratePersisted(persisted: unknown, fromVersion: number): Record<string, unknown> {
+  const s = persisted as Record<string, unknown>
+  if (fromVersion < 2) {
+    delete s.riverChains; delete s.riversDisplayMode; delete s.riversStatus
+    delete s.riverFeatures; delete s.namedRivers
+    if (!s.riverEdges) s.riverEdges = []
+  }
+  if (fromVersion < 3) {
+    delete s.selectedSegmentKey
+    s.selectedSegmentKeys = []
+  }
+  if (fromVersion < 4) {
+    if (!s.canalEdges) s.canalEdges = []
+    if (!s.canalSegmentProps) s.canalSegmentProps = {}
+    if (!s.riverStyle) s.riverStyle = { color: '#5888b0', strokeEnabled: false, strokeColor: '#2a4a6a', strokeWidth: 0.4 }
+    if (!s.canalStyle) s.canalStyle = { color: '#6a9a8a', strokeEnabled: true, strokeColor: '#3a5a4a', strokeWidth: 0.5 }
+  }
+  if (fromVersion < 5) {
+    if (s.riverFlowStyle === undefined) s.riverFlowStyle = 1
+  }
+  if (fromVersion < 7) {
+    delete s.riverMeander; delete s.riverMeanderSeed
+    delete s.riverStraighten; delete s.riverPathStraighten; delete s.riverWiggleScale
+    if (s.riverCurveSteps === undefined) s.riverCurveSteps = 3
+  }
+  if (fromVersion < 8) {
+    if (s.riverWobble === undefined) s.riverWobble = 0
+  }
+  if (fromVersion < 9) {
+    if (s.riverDetail === undefined) s.riverDetail = 0
+  }
+  return s
+}
+
+export function rehydrateState(state: MapStore): MapStore {
+  const dt = state.disabledTerrains
+  state.disabledTerrains = dt instanceof Set ? dt : new Set(dt as unknown as string[])
+  if (state.generateStatus === 'loading') state.generateStatus = 'idle'
+  if (state.elevationStatus === 'loading') state.elevationStatus = 'idle'
+  if (state.settlementsStatus === 'loading') state.settlementsStatus = 'idle'
+  if (state.roadsStatus === 'loading') state.roadsStatus = 'idle'
+  if (state.railsStatus === 'loading') state.railsStatus = 'idle'
+  if (Array.isArray(state.roadEdges)) {
+    state.roadEdges = (state.roadEdges as RoadEdge[]).filter(
+      (e) => e.tier === 0 || e.tier === 1 || e.tier === 2
+    )
+  }
+  return state
+}

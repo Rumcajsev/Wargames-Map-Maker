@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMapStore, paperDimsMm, mapResolutionMpx } from '../store/mapStore'
-import type { PaperSize, Orientation, HexOrientation, HexEdgeMode } from '../store/mapStore'
+import { useMapStore, paperDimsMm, combinedDimsMm, mapResolutionMpx } from '../store/mapStore'
+import type { PaperSize, Orientation, HexOrientation, HexEdgeMode, MapMode, DiptychJoin } from '../store/mapStore'
 
 const PAPER_SIZES: PaperSize[] = ['A4', 'A3', 'A2', 'A1']
 
 export function SetupPanel() {
   const {
-    paperSize, orientation, hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
+    paperSize, orientation, mapMode, diptychJoin,
+    hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     center, zoom, framePixelWidth, bearing,
     generateStatus, generateError, generateProgress,
-    setPaperSize, setOrientation, setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
+    setPaperSize, setOrientation, setMapMode, setDiptychJoin,
+    setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     generateMap,
   } = useMapStore()
 
@@ -36,17 +38,29 @@ export function SetupPanel() {
   }, [generateProgress])
 
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
+  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
   const res = mapResolutionMpx(center[1], zoom)
   const widthM = framePixelWidth * res
-  const scaleMpMm = framePixelWidth > 0 ? widthM / pwMm : 0
+  const scaleMpMm = framePixelWidth > 0 ? widthM / cwMm : 0
   const hexSizeKm = scaleMpMm > 0 ? (hexSizeMm * scaleMpMm / 1000).toFixed(2) : '—'
 
-  const R_m = (hexSizeMm / 2) * scaleMpMm * 2 / Math.sqrt(3)
-  const spacingH = hexOrientation === 'flat' ? R_m * 1.5 : R_m * Math.sqrt(3)
-  const spacingV = hexOrientation === 'flat' ? R_m * Math.sqrt(3) : R_m * 1.5
-  const heightM = widthM * (phMm / pwMm)
-  const cols = scaleMpMm > 0 ? Math.round(widthM / spacingH) : 0
-  const rows = scaleMpMm > 0 ? Math.round(heightM / spacingV) : 0
+  // Hex count per sheet (single-sheet dims), same logic as backend + preview
+  const sq3 = Math.sqrt(3)
+  const R_mm = hexSizeMm / sq3
+  const iWMm = pwMm - 2 * marginMm
+  const iHMm = phMm - 2 * marginMm
+  let cols: number, rows: number
+  if (hexOrientation === 'flat') {
+    const maxQ = Math.max(0, Math.floor((iWMm / 2 - R_mm) / (1.5 * R_mm)))
+    const maxR = Math.max(0, Math.floor((iHMm / 2 - (sq3 / 2) * R_mm) / (sq3 * R_mm)))
+    cols = 2 * maxQ + 1
+    rows = 2 * maxR + 1
+  } else {
+    const maxR = Math.max(0, Math.floor((iHMm / 2 - R_mm) / (1.5 * R_mm)))
+    const maxQ = Math.max(0, Math.floor((iWMm / 2 - (sq3 / 2) * R_mm) / (sq3 * R_mm)))
+    cols = 2 * maxQ + 1
+    rows = 2 * maxR + 1
+  }
 
   const bearingDisplay = Math.round(((bearing % 360) + 360) % 360)
 
@@ -84,6 +98,26 @@ export function SetupPanel() {
           onChange={(v) => setOrientation(v as Orientation)}
         />
       </Field>
+
+      <Field label="Mode">
+        <ToggleGroup
+          options={['single', 'diptych'] as MapMode[]}
+          labels={['Single', 'Diptych']}
+          value={mapMode}
+          onChange={(v) => setMapMode(v as MapMode)}
+        />
+      </Field>
+
+      {mapMode === 'diptych' && (
+        <Field label="Seam along" hint="Which edge the two sheets share. Long edge joins sheets side-by-side; short edge stacks them.">
+          <ToggleGroup
+            options={['long', 'short'] as DiptychJoin[]}
+            labels={['Long edge', 'Short edge']}
+            value={diptychJoin}
+            onChange={(v) => setDiptychJoin(v as DiptychJoin)}
+          />
+        </Field>
+      )}
 
       <Field label={`Hex size — ${hexSizeMm} mm`}>
         <input
@@ -129,11 +163,16 @@ export function SetupPanel() {
 
       <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ color: '#7a9e8a', fontSize: 13 }}>
-          {cols} × {rows} hexes
+          {cols} × {rows} hexes{mapMode === 'diptych' ? ' / sheet' : ''}
         </div>
         <div style={{ color: '#7a9e8a', fontSize: 13 }}>
           {hexSizeKm} km / hex
         </div>
+        {mapMode === 'diptych' && (
+          <div style={{ color: '#7a7a90', fontSize: 11 }}>
+            combined {Math.round(cwMm)} × {Math.round(chMm)} mm
+          </div>
+        )}
         {bearingDisplay !== 0 && (
           <div style={{ color: '#7a7a90', fontSize: 11 }}>
             {bearingDisplay}° bearing

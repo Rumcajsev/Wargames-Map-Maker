@@ -12,12 +12,15 @@ PAPER_SIZES_MM: dict[str, tuple[float, float]] = {
 
 
 def generate_hex_grid(config: GridConfig) -> dict:
-    # Paper dims in mm
-    pw_mm, ph_mm = PAPER_SIZES_MM[config.paper_size]
-    if config.orientation == "landscape":
-        pw_mm, ph_mm = max(pw_mm, ph_mm), min(pw_mm, ph_mm)
+    # Paper dims in mm — use explicit override if provided (e.g. diptych combined dims)
+    if config.paper_width_mm is not None and config.paper_height_mm is not None:
+        pw_mm, ph_mm = config.paper_width_mm, config.paper_height_mm
     else:
-        pw_mm, ph_mm = min(pw_mm, ph_mm), max(pw_mm, ph_mm)
+        pw_mm, ph_mm = PAPER_SIZES_MM[config.paper_size]
+        if config.orientation == "landscape":
+            pw_mm, ph_mm = max(pw_mm, ph_mm), min(pw_mm, ph_mm)
+        else:
+            pw_mm, ph_mm = min(pw_mm, ph_mm), max(pw_mm, ph_mm)
 
     # Scale: frontend tells us geographic width of the paper frame in metres
     width_m: float = config.width_m

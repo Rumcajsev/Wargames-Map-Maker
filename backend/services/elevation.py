@@ -1,5 +1,7 @@
+import asyncio
+import json
 import math
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import httpx
 
@@ -123,3 +125,41 @@ async def generate_elevation(
         )
 
     return hexes
+
+
+async def elevation_stream_generator(
+    hexes: list[dict],
+    thresholds: dict,
+) -> AsyncGenerator[str, None]:
+    """Async generator that yields SSE-formatted strings for the elevation-stream endpoint."""
+    try:
+        yield f"data: {json.dumps({'step': 'progress', 'message': 'Starting elevation fetch…', 'progress': 2})}\n\n"
+
+        progress_queue: asyncio.Queue = asyncio.Queue()
+
+        async def cb(message: str, pct: int) -> None:
+            await progress_queue.put((message, pct))
+
+        async def run() -> None:
+            try:
+                result = await generate_elevation(hexes, thresholds, progress_cb=cb)
+                await progress_queue.put(("__done__", result))
+            except Exception as exc:
+                await progress_queue.put(("__error__", str(exc)))
+
+        asyncio.create_task(run())
+
+        updated_hexes = None
+        while True:
+            kind, payload = await progress_queue.get()
+            if kind == "__done__":
+                updated_hexes = payload
+                break
+            if kind == "__error__":
+                raise RuntimeError(payload)
+            yield f"data: {json.dumps({'step': 'progress', 'message': kind, 'progress': payload})}\n\n"
+
+        yield f"data: {json.dumps({'step': 'done', 'message': 'Done', 'progress': 100, 'hexes': updated_hexes})}\n\n"
+
+    except Exception as e:
+        yield f"data: {json.dumps({'step': 'error', 'message': str(e), 'progress': 0})}\n\n"

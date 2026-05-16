@@ -1,22 +1,37 @@
+import { useState, useRef } from 'react'
 import { useMapStore } from '../store/mapStore'
 
 const TABS = [
-  { id: 'terrain',     label: 'Terrain'     },
-  { id: 'roads',       label: 'Roads'       },
-  { id: 'settlements', label: 'Places'      },
-  { id: 'rivers',      label: 'Rivers'      },
-  { id: 'style',       label: 'Style'       },
+  { id: 'terrain', label: 'Terrain' },
+  { id: 'roads', label: 'Roads' },
+  { id: 'rivers', label: 'Rivers' },
+  { id: 'settlements', label: 'Settlements' },
+  { id: 'highlights', label: 'Highlights' },
+  { id: 'display', label: 'Display' },
 ] as const
 
-export function TopBar() {
-  const { activePanel, setActivePanel, resetToSetup, elevationStatus, settlements, roadEdges, railEdges, riverFeatures, terrainDisplacement } = useMapStore()
+export function TopBar({ onExportPDF }: { onExportPDF: () => Promise<void> }) {
+  const { resetToSetup, activePanel, setActivePanel, saveProject, restoreProject } = useMapStore()
+  const [exporting, setExporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const tabDot: Record<string, string | null> = {
-    terrain: elevationStatus === 'done' ? '#6ab0e0' : null,
-    settlements: settlements.length > 0 ? '#d0b060' : null,
-    roads: (roadEdges.length > 0 || railEdges.length > 0) ? '#e08040' : null,
-    rivers: riverFeatures.some(r => r.included) ? '#4a88c0' : null,
-    style: terrainDisplacement > 0 ? '#c09060' : null,
+  const handleExport = async () => {
+    setExporting(true)
+    try { await onExportPDF() } finally { setExporting(false) }
+  }
+
+  const handleLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string)
+        restoreProject(data)
+      } catch { /* ignore malformed file */ }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
   }
 
   return (
@@ -25,14 +40,12 @@ export function TopBar() {
       flexShrink: 0,
       display: 'flex',
       alignItems: 'center',
-      gap: 0,
       background: '#0e0f18',
       borderBottom: '1px solid #1e1f2e',
       fontFamily: 'ui-monospace, monospace',
       fontSize: 12,
       userSelect: 'none',
     }}>
-      {/* Brand */}
       <div style={{
         padding: '0 16px',
         color: '#ffffff',
@@ -48,7 +61,6 @@ export function TopBar() {
         IG2
       </div>
 
-      {/* Back */}
       <button
         onClick={resetToSetup}
         style={{
@@ -63,57 +75,118 @@ export function TopBar() {
           fontSize: 12,
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          flexShrink: 0,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = '#a0a0c0')}
-        onMouseLeave={(e) => (e.currentTarget.style.color = '#6a6a8a')}
+        onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#6a6a8a')}
       >
         ← Setup
       </button>
 
-      {/* Divider */}
-      <div style={{ width: 12 }} />
-
-      {/* Panel tabs */}
-      {TABS.map(({ id, label }) => {
-        const active = activePanel === id
+      {TABS.map(tab => {
+        const active = activePanel === tab.id
         return (
           <button
-            key={id}
-            onClick={() => setActivePanel(id as typeof activePanel)}
+            key={tab.id}
+            onClick={() => setActivePanel(tab.id as typeof activePanel)}
             style={{
               height: '100%',
               padding: '0 16px',
-              background: active ? '#1a2a3a' : 'none',
-              color: active ? '#7de0a0' : '#5a5a7a',
+              background: 'none',
+              color: active ? '#d0ecd8' : '#6a6a8a',
               border: 'none',
-              borderBottom: active ? '2px solid #4a9a6a' : '2px solid transparent',
+              borderRight: '1px solid #1e1f2e',
+              borderBottom: active ? '2px solid #5a9e6f' : '2px solid transparent',
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontSize: 12,
-              fontWeight: active ? 700 : 400,
-              letterSpacing: 0.4,
-              transition: 'color 0.1s',
               display: 'flex',
               alignItems: 'center',
-              gap: 5,
             }}
-            onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#9a9ab8' }}
-            onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#5a5a7a' }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.color = '#a0a0c0' }}
+            onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#6a6a8a' }}
           >
-            {label}
-            {tabDot[id] && (
-              <span style={{
-                width: 5, height: 5, borderRadius: '50%',
-                background: tabDot[id]!,
-                flexShrink: 0,
-                opacity: active ? 0.7 : 1,
-              }} />
-            )}
+            {tab.label}
           </button>
         )
       })}
+
+      <div style={{ flex: 1 }} />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".ig2,.json"
+        style={{ display: 'none' }}
+        onChange={handleLoad}
+      />
+
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          height: '100%',
+          padding: '0 14px',
+          background: 'none',
+          color: '#6a6a8a',
+          border: 'none',
+          borderLeft: '1px solid #1e1f2e',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#6a6a8a')}
+      >
+        Load
+      </button>
+
+      <button
+        onClick={saveProject}
+        style={{
+          height: '100%',
+          padding: '0 14px',
+          background: 'none',
+          color: '#6a6a8a',
+          border: 'none',
+          borderLeft: '1px solid #1e1f2e',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#6a6a8a')}
+      >
+        Save
+      </button>
+
+      <button
+        onClick={handleExport}
+        disabled={exporting}
+        style={{
+          height: '100%',
+          padding: '0 16px',
+          background: 'none',
+          color: exporting ? '#4a4a6a' : '#8ab4a0',
+          border: 'none',
+          borderLeft: '1px solid #1e1f2e',
+          cursor: exporting ? 'default' : 'pointer',
+          fontFamily: 'inherit',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => { if (!exporting) e.currentTarget.style.color = '#c0dcd0' }}
+        onMouseLeave={e => { if (!exporting) e.currentTarget.style.color = '#8ab4a0' }}
+      >
+        {exporting ? 'Exporting…' : 'Export PDF'}
+      </button>
     </div>
   )
 }

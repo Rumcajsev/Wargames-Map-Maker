@@ -1,14 +1,8 @@
-import asyncio
 import math
-import httpx
-from urllib.parse import urlencode
 
-# Tried in order — first healthy server wins
-OVERPASS_ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://lz4.overpass-api.de/api/interpreter",
-]
+from models import RiversConfig
+from services.geometry import compute_bbox
+from services.overpass import post_overpass
 
 
 def _extract_ways(members: list[dict]) -> list[list[tuple[float, float]]]:
@@ -65,14 +59,7 @@ def _chain_ways(ways: list[list[tuple[float, float]]]) -> list[tuple[float, floa
     return chain
 
 
-async def fetch_rivers(
-    min_lat: float,
-    min_lon: float,
-    max_lat: float,
-    max_lon: float,
-    types: list[str],
-    hex_size_km: float = 10.0,
-) -> list[dict]:
+async def fetch_rivers(config: RiversConfig) -> list[dict]:
     """Fetch named river *relations* from OSM Overpass and return ordered polylines.
 
     Using relations (not raw ways) gives us pre-grouped, ordered geometry for
@@ -83,6 +70,13 @@ async def fetch_rivers(
       8–20 km  →  all rivers
       < 8 km   →  rivers + canals (if requested)
     """
+    min_lat, min_lon, max_lat, max_lon = compute_bbox(
+        config.center_lon, config.center_lat, config.bearing,
+        config.width_m, config.height_m,
+    )
+    types = config.types
+    hex_size_km = config.hex_size_km
+
     if not types:
         return []
 
@@ -104,31 +98,7 @@ async def fetch_rivers(
         f'out geom;\n'
     )
 
-    payload = urlencode({"data": query}).encode()
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-        "User-Agent": "IG2HexMap/1.0",
-    }
-
-    last_error: Exception | None = None
-    data: dict = {}
-
-    async with httpx.AsyncClient(timeout=55.0) as client:
-        for attempt, endpoint in enumerate(OVERPASS_ENDPOINTS):
-            try:
-                resp = await client.post(endpoint, content=payload, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                break  # success
-            except Exception as exc:
-                last_error = exc
-                if attempt < len(OVERPASS_ENDPOINTS) - 1:
-                    await asyncio.sleep(1.5)  # brief pause before trying next mirror
-        else:
-            raise RuntimeError(
-                f"All Overpass mirrors failed. Last error: {last_error}"
-            )
+    data = await post_overpass(query, timeout=55.0)
 
     rivers = []
     for el in data.get("elements", []):

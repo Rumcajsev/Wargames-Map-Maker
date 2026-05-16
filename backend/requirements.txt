@@ -4,5 +4,6 @@ httpx==0.28.0
 geopandas==1.0.1
 shapely==2.0.6
 pydantic==2.10.3
+reportlab==4.5.0
 # cairosvg==2.7.1  -- added in Phase 8 (requires: brew install cairo)
 rasterio==1.5.0

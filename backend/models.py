@@ -2,6 +2,14 @@ from pydantic import BaseModel
 from typing import Optional
 
 
+class BaseRegionConfig(BaseModel):
+    center_lon: float
+    center_lat: float
+    bearing: float = 0.0
+    width_m: float
+    height_m: float
+
+
 class GridConfig(BaseModel):
     center_lon: float
     center_lat: float
@@ -14,6 +22,8 @@ class GridConfig(BaseModel):
     hex_orientation: str       # "flat" | "pointy"
     margin_mm: float = 0.0     # print margin in mm
     slider: float = 0.4        # terrain classification sensitivity (0.0–1.0)
+    paper_width_mm: Optional[float] = None   # combined paper width (overrides paper_size lookup)
+    paper_height_mm: Optional[float] = None  # combined paper height (overrides paper_size lookup)
 
 
 class ReclassifyRequest(BaseModel):
@@ -21,47 +31,27 @@ class ReclassifyRequest(BaseModel):
     slider: float = 0.4
 
 
-class SettlementsConfig(BaseModel):
-    center_lon: float
-    center_lat: float
-    bearing: float = 0.0
-    width_m: float
-    height_m: float
+class SettlementsConfig(BaseRegionConfig):
     paper_size: str
     orientation: str
     limit: int = 30
     types: list[str] = ["city", "town", "village"]
 
 
-class RiversConfig(BaseModel):
-    center_lon: float
-    center_lat: float
-    bearing: float = 0.0
-    width_m: float
-    height_m: float
+class RiversConfig(BaseRegionConfig):
     paper_size: str
     orientation: str
     types: list[str] = ["river"]
     hex_size_km: float = 10.0
 
 
-class RoadsConfig(BaseModel):
-    center_lon: float
-    center_lat: float
-    bearing: float = 0.0
-    width_m: float
-    height_m: float
+class RoadsConfig(BaseRegionConfig):
     hex_orientation: str       # "flat" | "pointy"
     R_m: float                 # hex outer radius in metres (outer_radius_m from metadata)
     highway_types: list[str] = ["motorway", "trunk", "primary"]
 
 
-class RailsConfig(BaseModel):
-    center_lon: float
-    center_lat: float
-    bearing: float = 0.0
-    width_m: float
-    height_m: float
+class RailsConfig(BaseRegionConfig):
     hex_orientation: str       # "flat" | "pointy"
     R_m: float
     rail_types: list[str] = ["rail"]
@@ -78,3 +68,10 @@ class ElevationConfig(BaseModel):
 class HexLookupConfig(BaseModel):
     vertices: list[list[float]]   # [[lon, lat], ...] hex polygon
     types: Optional[list[str]] = None
+
+
+class SettlementRoadsConfig(BaseRegionConfig):
+    hex_orientation: str        # "flat" | "pointy"
+    R_m: float                  # hex outer radius in metres
+    settlements: list[dict]     # each: {lat, lon, name}
+    highway_types: list[str] = ["motorway", "trunk", "primary", "secondary"]
