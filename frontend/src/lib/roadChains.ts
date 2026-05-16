@@ -192,7 +192,8 @@ export function buildRoadChains(
     const isJunction = (k: string) => (globalAdj.get(k)?.size ?? 0) > 2
 
     for (const [k] of adj) {
-      if (isJunction(k)) {
+      if (isJunction(k) && !spineNeighbors.has(k)) {
+        // Hexes with a spine pair get their junction dots from side terminals instead
         const h = hexIdx.get(k)
         if (h) {
           const pos = junctionPositions.get(k) ?? h.center
