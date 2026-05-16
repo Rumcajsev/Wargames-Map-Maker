@@ -1150,19 +1150,18 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       for (const { key, pos } of controlPoints) {
         const [x, y] = project(pos[0], pos[1])
         const isJunc = key.startsWith('ja|')
-        const isBranch = key.startsWith('jb|')
+        const isSpineSide = key.startsWith('jt|')
         const overridden = !!roadControlOverridesRef.current[key]
         ctx.beginPath()
-        if (isBranch) {
-          // Diamond shape for branch arm terminals
+        if (isSpineSide) {
           const r = overridden ? 5 : 4
           ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
         } else {
-          ctx.arc(x, y, isJunc ? 5 : 4, 0, Math.PI * 2)
+          ctx.arc(x, y, isJunc ? 4 : 3, 0, Math.PI * 2)
         }
         ctx.fillStyle = overridden ? '#ffcc44' : 'rgba(255,255,255,0.6)'
         ctx.fill()
-        ctx.strokeStyle = isBranch ? '#4488cc' : isJunc ? '#cc8800' : '#888'
+        ctx.strokeStyle = isSpineSide ? '#4488cc' : isJunc ? '#cc8800' : '#888'
         ctx.lineWidth = 1
         ctx.stroke()
       }
@@ -1600,11 +1599,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!logical) return
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
       const { controlPoints } = smoothedRoadDataRef.current
-      // Priority: junction centers > branch arm terminals > edge midpoints
+      // Priority: spine-side terminals > junction centers > edge midpoints
       const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|'))
-      const branches = controlPoints.filter(cp => cp.key.startsWith('jb|'))
-      const edges = controlPoints.filter(cp => !cp.key.startsWith('ja|') && !cp.key.startsWith('jb|'))
-      for (const [cps, hitR] of [[junctions, 14], [branches, 12], [edges, 10]] as const) {
+      const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|'))
+      const edges = controlPoints.filter(cp => !cp.key.startsWith('ja|') && !cp.key.startsWith('jt|'))
+      for (const [cps, hitR] of [[spineSides, 10], [junctions, 8], [edges, 8]] as const) {
         for (const cp of cps) {
           const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
           if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
@@ -1840,7 +1839,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const allKeys = Object.keys(overrides)
         const touchingKeys = allKeys.filter(k =>
           k === `ja|${hexKey}` ||
-          (k.startsWith('jb|') && k.split('|')[1] === hexKey) ||
+          (k.startsWith('jt|') && k.split('|')[1] === hexKey) ||
           (k.startsWith(`em|`) && (k.includes(`|${hexKey}|`) || k.endsWith(`|${hexKey}`)))
         )
         const isJunction = touchingKeys.some(k => k.startsWith('ja|'))
