@@ -728,6 +728,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const isExport = !!exportTarget
     const dpr = isExport ? 1 : (window.devicePixelRatio || 1)
     const zoom = isExport ? 1 : zoomRef.current
+    // Offscreen canvases are capped at zoom=4 equivalent to avoid browser canvas size limits.
+    // The main canvas zoom transform handles magnification above that level.
+    const offZoom = Math.min(zoom, 4)
     const pan = isExport ? { x: 0, y: 0 } : panRef.current
     const selected = exportTarget ? null : selectedHexRef.current
     const borderMode = hexBorderModeRef.current
@@ -836,10 +839,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const papW = Math.ceil(pw), papH = Math.ceil(ph)
       if (terrainDirtyRef.current || !terrainLayerRef.current ||
           terrainLayerPapWRef.current !== papW || terrainLayerPapHRef.current !== papH) {
-        const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+        const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
         const offscreen = new OffscreenCanvas(offW, offH)
         const oCtx = offscreen.getContext('2d')!
-        oCtx.scale(dpr * zoom, dpr * zoom)
+        oCtx.scale(dpr * offZoom, dpr * offZoom)
         oCtx.translate(-px, -py)
         oCtx.save()
         oCtx.beginPath()
@@ -909,10 +912,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const papW = Math.ceil(pw), papH = Math.ceil(ph)
         if (hexBorderDirtyRef.current || !hexBorderLayerRef.current ||
             hexBorderLayerPapWRef.current !== papW || hexBorderLayerPapHRef.current !== papH) {
-          const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
           const offscreen = new OffscreenCanvas(offW, offH)
           const oCtx = offscreen.getContext('2d')!
-          oCtx.scale(dpr * zoom, dpr * zoom)
+          oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
@@ -954,10 +957,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const papW = Math.ceil(pw), papH = Math.ceil(ph)
         if (joinedHighlightsDirtyRef.current || !joinedHighlightsLayerRef.current ||
             joinedHighlightsLayerPapWRef.current !== papW || joinedHighlightsLayerPapHRef.current !== papH) {
-          const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
           const offscreen = new OffscreenCanvas(offW, offH)
           const oCtx = offscreen.getContext('2d')!
-          oCtx.scale(dpr * zoom, dpr * zoom)
+          oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
           _drawHighlights(oCtx, { highlights: highlightsRef.current, highlightedHexes: highlightedHexesRef.current, highlightLines: highlightLinesRef.current, highlightEdgePaths: highlightEdgePathsRef.current, projected, edgeMode, R, project, inMargin })
           joinedHighlightsLayerRef.current = offscreen
@@ -1032,10 +1035,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const papW = Math.ceil(pw), papH = Math.ceil(ph)
       if (riversDirtyRef.current || !riversLayerRef.current ||
           riversLayerPapWRef.current !== papW || riversLayerPapHRef.current !== papH) {
-        const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+        const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
         const offscreen = new OffscreenCanvas(offW, offH)
         const oCtx = offscreen.getContext('2d')!
-        oCtx.scale(dpr * zoom, dpr * zoom)
+        oCtx.scale(dpr * offZoom, dpr * offZoom)
         oCtx.translate(-px, -py)
         oCtx.save()
         oCtx.beginPath()
@@ -1085,10 +1088,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             buildingsLayerPapWRef.current !== papW || buildingsLayerPapHRef.current !== papH) {
           // Clear geometry cache so buildings are re-generated into the new offscreen context
           hexBuildingGeoCacheRef.current.clear()
-          const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
           const offscreen = new OffscreenCanvas(offW, offH)
           const oCtx = offscreen.getContext('2d')!
-          oCtx.scale(dpr * zoom, dpr * zoom)
+          oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
@@ -1120,10 +1123,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const papW = Math.ceil(pw), papH = Math.ceil(ph)
         if (roadsDirtyRef.current || !roadsLayerRef.current ||
             roadsLayerPapWRef.current !== papW || roadsLayerPapHRef.current !== papH) {
-          const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
           const offscreen = new OffscreenCanvas(offW, offH)
           const oCtx = offscreen.getContext('2d')!
-          oCtx.scale(dpr * zoom, dpr * zoom)
+          oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
@@ -1208,10 +1211,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const papW = Math.ceil(pw), papH = Math.ceil(ph)
         if (settlementsDirtyRef.current || !settlementsLayerRef.current ||
             settlementsLayerPapWRef.current !== papW || settlementsLayerPapHRef.current !== papH) {
-          const offW = Math.ceil(pw * dpr * zoom), offH = Math.ceil(ph * dpr * zoom)
+          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
           const offscreen = new OffscreenCanvas(offW, offH)
           const oCtx = offscreen.getContext('2d')!
-          oCtx.scale(dpr * zoom, dpr * zoom)
+          oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
