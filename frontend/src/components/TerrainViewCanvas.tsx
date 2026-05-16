@@ -1201,6 +1201,26 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.lineWidth = handleScale
         ctx.stroke()
       }
+
+      // Snap preview: highlight the target diamond and the dragged diamond when close enough to merge
+      const snapTarget = snapPreviewKeyRef.current
+      const dragKey = draggingCpKeyRef.current
+      if (snapTarget) {
+        for (const hlKey of [snapTarget, dragKey]) {
+          if (!hlKey) continue
+          const cp = controlPoints.find(c => c.key === hlKey)
+          if (!cp) continue
+          const [x, y] = project(cp.pos[0], cp.pos[1])
+          const r = diamondR * 1.8
+          ctx.beginPath()
+          ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
+          ctx.fillStyle = 'rgba(255, 220, 40, 0.35)'
+          ctx.fill()
+          ctx.strokeStyle = '#ffdd00'
+          ctx.lineWidth = handleScale * 2
+          ctx.stroke()
+        }
+      }
       ctx.restore()
     }
 
@@ -1619,6 +1639,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Control point drag
   const draggingCpKeyRef = useRef<string | null>(null)
+  // Key of the sibling jt| diamond that the dragged one would snap-merge into on release
+  const snapPreviewKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -1671,6 +1693,26 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    const SNAP_SCREEN_PX = 10 // screen pixels within which diamonds will merge on release
+
+    const checkSnap = (dragKey: string, meta: ReturnType<typeof metaRef.current>, pw: number, ph: number, px: number, py: number): string | null => {
+      if (!dragKey.startsWith('jt|')) return null
+      const parts = dragKey.split('|')
+      if (parts.length !== 3) return null
+      const hexKey = parts[1]
+      const { controlPoints } = smoothedRoadDataRef.current
+      const siblings = controlPoints.filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey && cp.key !== dragKey)
+      const dragged = controlPoints.find(cp => cp.key === dragKey)
+      if (!dragged || !meta) return null
+      const snapThresh = SNAP_SCREEN_PX / (zoomRef.current ?? 1)
+      const [dx, dy] = projectToCanvas(dragged.pos[0], dragged.pos[1], meta, pw, ph, px, py)
+      for (const sib of siblings) {
+        const [sx, sy] = projectToCanvas(sib.pos[0], sib.pos[1], meta, pw, ph, px, py)
+        if (Math.hypot(dx - sx, dy - sy) <= snapThresh) return sib.key
+      }
+      return null
+    }
+
     const onMove = (e: MouseEvent) => {
       if (!draggingCpKeyRef.current) return
       const meta = metaRef.current
@@ -1681,37 +1723,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
       const lonLat = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
       setRoadControlOverrideRef.current(draggingCpKeyRef.current, lonLat)
+      // Update snap preview — triggers redraw via store update above
+      snapPreviewKeyRef.current = checkSnap(draggingCpKeyRef.current, meta, pw, ph, px, py)
     }
 
     const onUp = (e: MouseEvent) => {
       const dragKey = draggingCpKeyRef.current
+      const snapTarget = snapPreviewKeyRef.current
       draggingCpKeyRef.current = null
-      // Snap-to-merge: if a jt| diamond is dropped near the other jt| diamond in the same hex, merge them
-      if (dragKey?.startsWith('jt|')) {
-        const parts = dragKey.split('|') // ["jt", hexKey, spineNk]
-        if (parts.length === 3) {
-          const hexKey = parts[1]
-          const meta = metaRef.current
-          const { w: cssW, h: cssH } = frameDimsRef.current
-          if (meta && cssW > 0) {
-            const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
-            const { controlPoints } = smoothedRoadDataRef.current
-            const siblings = controlPoints.filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey && cp.key !== dragKey)
-            const dragged = controlPoints.find(cp => cp.key === dragKey)
-            if (dragged) {
-              const [dx, dy] = projectToCanvas(dragged.pos[0], dragged.pos[1], meta, pw, ph, px, py)
-              for (const sib of siblings) {
-                const [sx, sy] = projectToCanvas(sib.pos[0], sib.pos[1], meta, pw, ph, px, py)
-                if (Math.hypot(dx - sx, dy - sy) < 16) {
-                  // Merge: clear both jt| overrides so they collapse to junction center
-                  deleteRoadControlOverrideRef.current(dragKey)
-                  deleteRoadControlOverrideRef.current(sib.key)
-                  return
-                }
-              }
-            }
-          }
-        }
+      snapPreviewKeyRef.current = null
+      if (dragKey && snapTarget) {
+        // Merge: clear both jt| overrides so they collapse to junction center
+        deleteRoadControlOverrideRef.current(dragKey)
+        deleteRoadControlOverrideRef.current(snapTarget)
       }
     }
 
