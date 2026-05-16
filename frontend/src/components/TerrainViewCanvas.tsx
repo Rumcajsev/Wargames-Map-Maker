@@ -1165,31 +1165,37 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         if (Math.hypot(ax - bx, ay - by) > 2) splitHexes.add(hexKey)
       }
 
+      // Scale handles inversely with zoom so they stay a fixed screen size
+      const handleScale = 1 / (zoomRef.current ?? 1)
+      const juncR = 4 * handleScale
+      const edgeR = 3 * handleScale
+      const diamondR = 4 * handleScale
+
       ctx.save()
       for (const { key, pos } of controlPoints) {
         const isJunc = key.startsWith('ja|')
         const isSpineSide = key.startsWith('jt|')
         if (isSpineSide) {
           const hexKey = key.split('|')[1]
-          if (!splitHexes.has(hexKey)) continue // merged — shown as circle via ja| instead
+          if (!splitHexes.has(hexKey)) continue
         }
         if (isJunc) {
           const hexKey = key.slice(3)
-          if (splitHexes.has(hexKey)) continue // split — shown as diamonds via jt| instead
+          if (splitHexes.has(hexKey)) continue
         }
         const [x, y] = project(pos[0], pos[1])
         const overridden = !!overrides[key]
         ctx.beginPath()
         if (isSpineSide) {
-          const r = 5
+          const r = diamondR
           ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
         } else {
-          ctx.arc(x, y, isJunc ? 5 : 3, 0, Math.PI * 2)
+          ctx.arc(x, y, isJunc ? juncR : edgeR, 0, Math.PI * 2)
         }
         ctx.fillStyle = overridden ? '#ffcc44' : 'rgba(255,255,255,0.6)'
         ctx.fill()
         ctx.strokeStyle = isSpineSide ? '#4488cc' : isJunc ? '#cc8800' : '#888'
-        ctx.lineWidth = 1.5
+        ctx.lineWidth = handleScale
         ctx.stroke()
       }
       ctx.restore()
@@ -1363,7 +1369,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     draw()
   }, [generatedMetadata, draw])
 
-  // Wheel zoom — cursor-centred, clamped [0.2, 6]
+  // Wheel zoom — cursor-centred, clamped [0.2, 20]
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -1374,7 +1380,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const cy = e.clientY - rect.top - rect.height / 2
       const oldZoom = zoomRef.current
       const factor = e.deltaY < 0 ? 1.12 : 0.9
-      const newZoom = Math.max(0.2, Math.min(6, oldZoom * factor))
+      const newZoom = Math.max(0.2, Math.min(20, oldZoom * factor))
       const scale = newZoom / oldZoom
       const oldPan = panRef.current
       zoomRef.current = newZoom
@@ -1644,10 +1650,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
 
       // Diamonds (split jt|) > circles (merged ja|) > edge midpoints (em|)
+      // Hit radii are in screen pixels; divide by zoom to get logical-space radii.
+      const currentZoom = zoomRef.current ?? 1
       const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|') && splitHexesHit.has(cp.key.split('|')[1]))
       const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|') && !splitHexesHit.has(cp.key.slice(3)))
       const edges = controlPoints.filter(cp => cp.key.startsWith('em|'))
-      for (const [cps, hitR] of [[spineSides, 10], [junctions, 10], [edges, 8]] as const) {
+      for (const [cps, hitRScreen] of [[spineSides, 10], [junctions, 10], [edges, 8]] as const) {
+        const hitR = (hitRScreen as number) / currentZoom
         for (const cp of cps) {
           const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
           if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
