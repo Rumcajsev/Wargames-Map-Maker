@@ -144,9 +144,8 @@ export function buildRoadChains(
       else { (tieIdx++ % 2 === 0 ? sideA : sideB).add(bn) }
     }
 
-    // Only stagger when branches exist on BOTH sides — otherwise it's a classic T-junction
-    const doStagger = sideA.size > 0 && sideB.size > 0
-    const offset = doStagger ? interHexDist * 0.12 : 0
+    // Default is merged (offset 0). Stagger only happens via user overrides (jt| keys).
+    const offset = 0
 
     // Apply user position overrides for the two side terminals
     const defaultA: [number, number] = [jc[0] + snx * offset, jc[1] + sny * offset]
