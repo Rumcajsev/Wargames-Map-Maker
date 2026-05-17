@@ -109,8 +109,11 @@ def _ways_to_hex_graph(
     hex_paths: list[dict] = []
     hex_connections: dict[tuple[int, int], set[tuple[int, int]]] = {}
     hex_railway: dict[tuple[int, int], str] = {}
+    claimed_edges: set[tuple[tuple[int, int], tuple[int, int]]] = set()
 
-    for rt_type, coords in typed_ways:
+    sorted_ways = sorted(typed_ways, key=lambda x: _rt_rank(x[0]))
+
+    for rt_type, coords in sorted_ways:
         raw_ways.append({"railway": rt_type, "coords": [[lon, lat] for lon, lat in coords]})
 
         path = _way_to_hex_path(coords, lonlat_to_hex, R_m, cos_lat)
@@ -126,8 +129,11 @@ def _ways_to_hex_graph(
                 hex_railway[hx] = rt_type
             if i > 0:
                 prev = path[i - 1]
-                hex_connections[hx].add(prev)
-                hex_connections[prev].add(hx)
+                edge = (min(prev, hx), max(prev, hx))
+                if edge not in claimed_edges:
+                    claimed_edges.add(edge)
+                    hex_connections[hx].add(prev)
+                    hex_connections[prev].add(hx)
                 if prev not in hex_railway or _rt_rank(rt_type) < _rt_rank(hex_railway[prev]):
                     hex_railway[prev] = rt_type
 

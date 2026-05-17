@@ -110,8 +110,14 @@ def _ways_to_hex_graph(
     hex_paths: list[dict] = []
     hex_connections: dict[tuple[int, int], set[tuple[int, int]]] = {}
     hex_highway: dict[tuple[int, int], str] = {}
+    # Track which edges are already owned by a higher-priority way so lower-priority
+    # ways running the same corridor don't add redundant parallel edges.
+    claimed_edges: set[tuple[tuple[int, int], tuple[int, int]]] = set()
 
-    for hw_type, coords in typed_ways:
+    # Process highest-priority ways first so they get first claim on edges.
+    sorted_ways = sorted(typed_ways, key=lambda x: _hw_rank(x[0]))
+
+    for hw_type, coords in sorted_ways:
         raw_ways.append({"highway": hw_type, "coords": [[lon, lat] for lon, lat in coords]})
 
         path = _way_to_hex_path(coords, lonlat_to_hex, R_m, cos_lat)
@@ -127,8 +133,11 @@ def _ways_to_hex_graph(
                 hex_highway[hx] = hw_type
             if i > 0:
                 prev = path[i - 1]
-                hex_connections[hx].add(prev)
-                hex_connections[prev].add(hx)
+                edge = (min(prev, hx), max(prev, hx))
+                if edge not in claimed_edges:
+                    claimed_edges.add(edge)
+                    hex_connections[hx].add(prev)
+                    hex_connections[prev].add(hx)
                 if prev not in hex_highway or _hw_rank(hw_type) < _hw_rank(hex_highway[prev]):
                     hex_highway[prev] = hw_type
 
