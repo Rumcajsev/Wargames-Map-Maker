@@ -44,8 +44,6 @@ export type RoadsSlice = {
   setRoadWiggleFreq: (v: number) => void
   setRoadSmoothing: (v: number) => void
   setRoadPathSmoothing: (v: number) => void
-  roadChaikinPasses: number
-  setRoadChaikinPasses: (v: number) => void
   setRoadChainOverride: (id: string, pts: [number, number][]) => void
   deleteRoadChainOverride: (id: string) => void
   clearRoadChainOverrides: () => void
@@ -86,7 +84,6 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadWiggleFreq: 2.5,
   roadSmoothing: 10,
   roadPathSmoothing: 0,
-  roadChaikinPasses: 1,
   roadChainOverrides: {},
   roadSnapBindings: {},
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
@@ -217,7 +214,6 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setRoadWiggleFreq: (v) => set({ roadWiggleFreq: v }),
   setRoadSmoothing: (v) => set({ roadSmoothing: v }),
   setRoadPathSmoothing: (v) => set({ roadPathSmoothing: v }),
-  setRoadChaikinPasses: (v) => set({ roadChaikinPasses: v }),
   setRoadChainOverride: (id, pts) => set(s => ({ roadChainOverrides: { ...s.roadChainOverrides, [id]: pts } })),
   deleteRoadChainOverride: (id) => set(s => { const { [id]: _, ...rest } = s.roadChainOverrides; return { roadChainOverrides: rest } }),
   clearRoadChainOverrides: () => set({ roadChainOverrides: {} }),

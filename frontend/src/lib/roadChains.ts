@@ -38,7 +38,7 @@ export function buildRoadChains(
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   snapBindings: Record<string, string> = {},
-  chaikinPasses = 1,
+  chaikinPasses = 4,
 ): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string; chainIdx?: number }[] } {
   if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [] }
 
