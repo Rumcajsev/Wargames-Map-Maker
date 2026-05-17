@@ -403,6 +403,10 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 18) {
     if (s.roadDensityMinChain === undefined) s.roadDensityMinChain = 1
   }
+  if (fromVersion < 19) {
+    const tiers = s.roadsFetchTiers as [boolean, boolean, boolean] | undefined
+    if (tiers) tiers[2] = true
+  }
   return s
 }
 

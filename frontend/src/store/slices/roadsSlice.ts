@@ -72,7 +72,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadEdges: [],
   roadControlOverrides: {},
   roadsDisplayMode: 'per_hex',
-  roadsFetchTiers: [true, true, false],
+  roadsFetchTiers: [true, true, true],
   roadsVisibleTiers: [true, true, true],
   roadsStatus: 'idle',
   roadsError: null,
