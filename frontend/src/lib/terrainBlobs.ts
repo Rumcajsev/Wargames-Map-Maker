@@ -468,6 +468,13 @@ export function parseHexColor(hex: string): [number, number, number] {
   return [(c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff]
 }
 
+export type FieldTextureData = {
+  data: Uint8ClampedArray
+  w: number
+  h: number
+  scaleR: number
+}
+
 export function buildFieldCanvas(
   hexes: { q: number; r: number; center: [number, number]; terrain: string; isLake: boolean }[],
   meta: GridMetadata,
@@ -477,6 +484,7 @@ export function buildFieldCanvas(
   fieldWildness: Record<string, number>,
   terrainColors: Record<string, string>,
   fallbackColors: Record<string, string>,
+  textures?: Record<string, FieldTextureData>,
 ): OffscreenCanvas {
   const SCALE = dpr
   const fw = Math.max(1, Math.ceil(pw * SCALE))
@@ -553,7 +561,20 @@ export function buildFieldCanvas(
       }
 
       const displaced = findNearest(fx_ + dx, fy_ + dy) ?? undisplaced
-      const [r, g, b] = displaced.rgb
+      let [r, g, b] = displaced.rgb
+
+      const tex = textures?.[displaced.terrain]
+      if (tex) {
+        const texPx = R * tex.scaleR
+        const tx = Math.floor(((fx_ % texPx) / texPx) * tex.w)
+        const ty = Math.floor(((fy_ % texPx) / texPx) * tex.h)
+        const ti = (ty * tex.w + tx) * 4
+        const ta = tex.data[ti + 3] / 255
+        r = Math.round(r + (Math.min(r, tex.data[ti])     - r) * ta)
+        g = Math.round(g + (Math.min(g, tex.data[ti + 1]) - g) * ta)
+        b = Math.round(b + (Math.min(b, tex.data[ti + 2]) - b) * ta)
+      }
+
       const idx = (fy_ * fw + fx_) * 4
       data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255
     }

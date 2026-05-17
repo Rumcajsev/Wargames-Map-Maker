@@ -6,7 +6,7 @@ import { BlobOverrideFlyout } from './BlobOverrideFlyout'
 import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon } from '../lib/geometry'
 import { mulberry32, makePermutation } from '../lib/noise'
 import { projectToCanvas, unprojectFromCanvas, computePaper } from '../lib/projection'
-import { coastalBlobTerrains, getCoastlineRuns, buildSmoothedRing, bleedPolygon, buildTerrainBlobsV2, computeConnectedComponents, buildFieldCanvas } from '../lib/terrainBlobs'
+import { coastalBlobTerrains, getCoastlineRuns, buildSmoothedRing, bleedPolygon, buildTerrainBlobsV2, computeConnectedComponents, buildFieldCanvas, type FieldTextureData } from '../lib/terrainBlobs'
 import { riverChainCache, buildRiverChains, buildRiverChainsV2 } from '../lib/riverChains'
 
 const RIVER_V2 = true
@@ -289,6 +289,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const fieldPersistenceRef = useRef(fieldPersistence)
   const fieldWildnessRef = useRef(fieldWildness)
   const fieldCanvasRef = useRef<OffscreenCanvas | null>(null)
+  const [forestTextureVersion, setForestTextureVersion] = useState(0)
   const hexBuildingGeoCacheRef = useRef<Map<string, BuildingCmd[]>>(new Map())
   const lastBuildingCacheEpochRef = useRef<{ roadData: unknown; zoom: number; settlementStyles: unknown; urbanStyle: unknown } | null>(null)
   const settlementsRef = useRef(settlements)
@@ -1567,15 +1568,29 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const { w: cssW, h: cssH } = frameDimsRef.current
     if (!meta || hexes.length === 0 || cssW === 0) return
     const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    const fieldTextures: Record<string, FieldTextureData> = {}
+    const forestImg = forestTextureRef.current
+    if (forestImg && forestImg.complete && forestImg.naturalWidth > 0) {
+      const tmp = document.createElement('canvas')
+      tmp.width = forestImg.naturalWidth; tmp.height = forestImg.naturalHeight
+      const tmpCtx = tmp.getContext('2d')!
+      tmpCtx.drawImage(forestImg, 0, 0)
+      const id = tmpCtx.getImageData(0, 0, tmp.width, tmp.height)
+      const scaleR = terrainTextureScalesRef.current['woods'] ?? 3
+      fieldTextures['woods'] = { data: id.data, w: tmp.width, h: tmp.height, scaleR }
+      fieldTextures['light_woods'] = { data: id.data, w: tmp.width, h: tmp.height, scaleR }
+    }
+
     fieldCanvasRef.current = buildFieldCanvas(
       hexes, meta, pw, ph, px, py,
       window.devicePixelRatio || 1,
       fieldFreq, fieldAmp, fieldOctaves, fieldPersistence,
       fieldWildness, terrainColors, TERRAIN_COLORS,
+      Object.keys(fieldTextures).length > 0 ? fieldTextures : undefined,
     )
     terrainDirtyRef.current = true
     draw()
-  }, [generatedHexes, terrainRenderMode, fieldFreq, fieldAmp, fieldOctaves, fieldPersistence, fieldWildness, terrainColors, frameDims, draw])
+  }, [generatedHexes, terrainRenderMode, fieldFreq, fieldAmp, fieldOctaves, fieldPersistence, fieldWildness, terrainColors, terrainTextureScales, forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
   useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, beachStrip, beachColor, beachWidth])
@@ -1595,7 +1610,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => {
     const img = new Image()
     img.src = new URL('../../textures/forest.png', import.meta.url).href
-    img.onload = () => { forestTextureRef.current = img; terrainDirtyRef.current = true; draw() }
+    img.onload = () => { forestTextureRef.current = img; terrainDirtyRef.current = true; setForestTextureVersion(v => v + 1) }
   }, [draw])
 
   useEffect(() => {
