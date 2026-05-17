@@ -50,6 +50,8 @@ export type RoadsSlice = {
   setRoadTierStyle: (tier: 0 | 1 | 2, update: Partial<RoadTierStyle>) => void
   roadSegmentProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
   roadHopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  roadDensityMinChain: number
+  setRoadDensityMinChain: (v: number) => void
   roadSelectMode: boolean
   selectedRoadSegmentKeys: string[]
   selectedRoadHopKey: string | null
@@ -89,6 +91,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
   roadSegmentProps: {},
   roadHopProps: {},
+  roadDensityMinChain: 1,
   roadSelectMode: false,
   selectedRoadSegmentKeys: [],
   selectedRoadHopKey: null,
@@ -102,6 +105,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setRoadsDisplayMode: (mode) => set({ roadsDisplayMode: mode }),
   setRoadsFetchTiers: (tiers) => set({ roadsFetchTiers: tiers }),
   setRoadsVisibleTiers: (tiers) => set({ roadsVisibleTiers: tiers }),
+  setRoadDensityMinChain: (v) => set({ roadDensityMinChain: v }),
 
   fetchRoads: async () => {
     const { generatedMetadata, hexOrientation, roadsFetchTiers } = get()

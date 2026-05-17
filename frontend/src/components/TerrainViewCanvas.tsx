@@ -116,7 +116,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadSnapBindings, setRoadSnapBinding, deleteRoadSnapBinding,
     roadNodeEditMode,
-    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing,
+    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadDensityMinChain,
     roadChainOverrides, setRoadChainOverride,
     riverEdges, canalEdges,
     riverEditMode, canalEditMode, toggleRiverEdge, toggleCanalEdge,
@@ -522,8 +522,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
 
   const smoothedRoadData = useMemo(
-    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings),
-    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings],
+    () => {
+      const data = buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings)
+      if (roadDensityMinChain <= 1) return data
+      const chains = data.chains.filter(c => {
+        if (c.id.startsWith('stub|')) return true
+        const hops = c.hopKeys?.length ?? Math.max(1, (c.baseChain?.length ?? c.chain.length) - 1)
+        return hops >= roadDensityMinChain
+      })
+      return { ...data, chains }
+    },
+    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings, roadDensityMinChain],
   )
   const smoothedRoadDataRef = useRef(smoothedRoadData)
   smoothedRoadDataRef.current = smoothedRoadData

@@ -151,6 +151,7 @@ export function RoadsSidebar() {
     railsStatus, railsError,
     fetchRoads, fetchRails,
     clearRoads, clearRails,
+    roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
     selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
     selectedRoadHopKey, setSelectedRoadHopKey,
@@ -383,6 +384,18 @@ export function RoadsSidebar() {
         <div style={sectionStyle}>
           <div style={labelStyle}>From OSM</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Min chain length</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadDensityMinChain === 1 ? 'all' : `${roadDensityMinChain} hops`}</span>
+              </div>
+              <input
+                type="range" min={1} max={15} step={1}
+                value={roadDensityMinChain}
+                onChange={e => setRoadDensityMinChain(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#5a8a5a', cursor: 'pointer', marginBottom: 8 }}
+              />
+            </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

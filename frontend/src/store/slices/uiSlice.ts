@@ -400,6 +400,9 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (s.hexNumberColor === undefined) s.hexNumberColor = '#8a8a8a'
     if (s.hexNumberFontScale === undefined) s.hexNumberFontScale = 1.0
   }
+  if (fromVersion < 18) {
+    if (s.roadDensityMinChain === undefined) s.roadDensityMinChain = 1
+  }
   return s
 }
 
