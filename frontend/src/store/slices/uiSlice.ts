@@ -8,6 +8,10 @@ export type UiSlice = {
   urbanStyle: UrbanStyle
   urbanPaintMode: 'paint' | 'erase' | null
   hexBorderMode: 'full' | 'dots' | 'none'
+  hexNumbersEnabled: boolean
+  hexNumberStartCorner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  hexNumberEdge: number
+  hexNumberColor: string
   terrainDisplacement: number
   terrainNoiseFrequency: number
   terrainNoiseSeed: number
@@ -33,6 +37,10 @@ export type UiSlice = {
   setUrbanStyle: (style: Partial<UrbanStyle>) => void
   setUrbanPaintMode: (mode: 'paint' | 'erase' | null) => void
   setHexBorderMode: (v: 'full' | 'dots' | 'none') => void
+  setHexNumbersEnabled: (v: boolean) => void
+  setHexNumberStartCorner: (v: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right') => void
+  setHexNumberEdge: (v: number) => void
+  setHexNumberColor: (v: string) => void
   setTerrainDisplacement: (v: number) => void
   setTerrainNoiseFrequency: (v: number) => void
   setTerrainNoiseSeed: (v: number) => void
@@ -66,6 +74,10 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanStyle: { ...DEFAULT_URBAN_STYLE },
   urbanPaintMode: null,
   hexBorderMode: 'full',
+  hexNumbersEnabled: false,
+  hexNumberStartCorner: 'top-left',
+  hexNumberEdge: 4,
+  hexNumberColor: '#8a8a8a',
   terrainDisplacement: 18,
   terrainNoiseFrequency: 6,
   terrainNoiseSeed: 2,
@@ -164,6 +176,10 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   setUrbanPaintMode: (mode) => set({ urbanPaintMode: mode }),
 
   setHexBorderMode: (v) => set({ hexBorderMode: v }),
+  setHexNumbersEnabled: (v) => set({ hexNumbersEnabled: v }),
+  setHexNumberStartCorner: (v) => set({ hexNumberStartCorner: v }),
+  setHexNumberEdge: (v) => set({ hexNumberEdge: v }),
+  setHexNumberColor: (v) => set({ hexNumberColor: v }),
   setTerrainDisplacement: (v) => set({ terrainDisplacement: v }),
   setTerrainNoiseFrequency: (v) => set({ terrainNoiseFrequency: v }),
   setTerrainNoiseSeed: (v) => set({ terrainNoiseSeed: v }),
@@ -372,6 +388,12 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 16) {
     if (s.blankMap === undefined) s.blankMap = false
+  }
+  if (fromVersion < 17) {
+    if (s.hexNumbersEnabled === undefined) s.hexNumbersEnabled = false
+    if (s.hexNumberStartCorner === undefined) s.hexNumberStartCorner = 'top-left'
+    if (s.hexNumberEdge === undefined) s.hexNumberEdge = 4
+    if (s.hexNumberColor === undefined) s.hexNumberColor = '#8a8a8a'
   }
   return s
 }

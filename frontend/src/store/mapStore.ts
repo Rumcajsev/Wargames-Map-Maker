@@ -576,7 +576,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 16,
+  version: 17,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

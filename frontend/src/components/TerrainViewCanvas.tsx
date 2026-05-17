@@ -19,6 +19,7 @@ import { drawAllBuildings as _drawAllBuildings, type BuildingCmd } from '../lib/
 import { drawAllBuildingsV2 as _drawAllBuildingsV2 } from '../lib/drawBuildingsV2'
 import { drawHexBorders as _drawHexBorders } from '../lib/drawHexBorders'
 import { drawTerrain as _drawTerrain } from '../lib/drawTerrain'
+import { drawHexNumbers as _drawHexNumbers, buildHexNumberMap } from '../lib/drawHexNumbers'
 
 const OSM_OVERLAY_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -155,6 +156,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     elevationPaintMode,
     setActiveTool,
     mapMode, diptychJoin, paperSize, orientation,
+    hexOrientation,
+    hexNumbersEnabled, hexNumberStartCorner, hexNumberEdge, hexNumberColor,
   } = useMapStore()
   const mapModeRef = useRef(mapMode)
   const diptychJoinRef = useRef(diptychJoin)
@@ -560,6 +563,22 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [paperDims, generatedMetadata])
   const hexRadiusRef = useRef(hexRadius)
   hexRadiusRef.current = hexRadius
+
+  const hexNumbersEnabledRef = useRef(hexNumbersEnabled)
+  hexNumbersEnabledRef.current = hexNumbersEnabled
+  const hexNumberEdgeRef = useRef(hexNumberEdge)
+  hexNumberEdgeRef.current = hexNumberEdge
+  const hexNumberColorRef = useRef(hexNumberColor)
+  hexNumberColorRef.current = hexNumberColor
+
+  const hexNumberMap = useMemo(
+    () => hexNumbersEnabled && generatedHexes.length > 0
+      ? buildHexNumberMap(generatedHexes, hexOrientation, hexNumberStartCorner)
+      : new Map<string, string>(),
+    [hexNumbersEnabled, generatedHexes, hexOrientation, hexNumberStartCorner],
+  )
+  const hexNumberMapRef = useRef(hexNumberMap)
+  hexNumberMapRef.current = hexNumberMap
 
   const projectedHexes = useMemo(() => {
     if (!generatedMetadata || !paperDims || generatedHexes.length === 0) return []
@@ -1036,6 +1055,20 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isExport) {
         _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin)
       }
+    }
+
+    // Hex numbers
+    if (hexNumbersEnabledRef.current && hexNumberMapRef.current.size > 0) {
+      _drawHexNumbers({
+        ctx,
+        projected,
+        numberMap: hexNumberMapRef.current,
+        edgeIndex: hexNumberEdgeRef.current,
+        color: hexNumberColorRef.current,
+        R,
+        edgeMode,
+        inMargin,
+      })
     }
 
     // Selected hex highlight
@@ -1615,7 +1648,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailChains])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, smoothedRoadData, smoothedRailChains, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
+  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailChains, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
 
   // Load terrain textures
   useEffect(() => {
