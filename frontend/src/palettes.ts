@@ -25,6 +25,8 @@ export const PALETTE_ROAD_SURFACE = [
   '#ffe8a8', '#ffe0a0', '#ffd080', '#f5d878',
   // Warm neutral surfaces
   '#f0e0b8', '#d8d8c0', '#d0cca8',
+  // Red / crimson surfaces
+  '#c83030', '#a02020', '#802020', '#d85050',
 ] as const
 
 export const PALETTE_ROAD_CASING = [
@@ -36,6 +38,8 @@ export const PALETTE_ROAD_CASING = [
   '#786040', '#a09070',
   // Neutral grey
   '#606060', '#808060',
+  // Dark red casings
+  '#5a1010', '#781818', '#380808',
 ] as const
 
 export const PALETTE_RAIL_LIGHT = [
