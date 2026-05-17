@@ -115,7 +115,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadSnapBindings, setRoadSnapBinding, deleteRoadSnapBinding,
     roadNodeEditMode,
-    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing,
+    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChaikinPasses,
     roadChainOverrides, setRoadChainOverride,
     riverEdges, canalEdges,
     riverEditMode, canalEditMode, toggleRiverEdge, toggleCanalEdge,
@@ -196,6 +196,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const roadWiggleFreqRef = useRef(roadWiggleFreq)
   const roadSmoothingRef = useRef(roadSmoothing)
   const roadPathSmoothingRef = useRef(roadPathSmoothing)
+  const roadChaikinPassesRef = useRef(roadChaikinPasses)
   const roadChainOverridesRef = useRef(roadChainOverrides)
   const setRoadChainOverrideRef = useRef(setRoadChainOverride)
   const { deleteRoadChainOverride } = useMapStore()
@@ -383,6 +384,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   roadWiggleFreqRef.current = roadWiggleFreq
   roadSmoothingRef.current = roadSmoothing
   roadPathSmoothingRef.current = roadPathSmoothing
+  roadChaikinPassesRef.current = roadChaikinPasses
   roadChainOverridesRef.current = roadChainOverrides
   setRoadChainOverrideRef.current = setRoadChainOverride
   deleteRoadChainOverrideRef.current = deleteRoadChainOverride
@@ -518,8 +520,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
 
   const smoothedRoadData = useMemo(
-    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings),
-    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings],
+    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings, roadChaikinPasses),
+    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings, roadChaikinPasses],
   )
   const smoothedRoadDataRef = useRef(smoothedRoadData)
   smoothedRoadDataRef.current = smoothedRoadData
@@ -1271,6 +1273,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           roadChainOverridesRef.current,
           roadSegmentPropsRef.current,
           roadHopPropsRef.current,
+          undefined,
+          roadChaikinPassesRef.current,
         )
       : isDraggingDense
         ? buildRoadChains(
@@ -1284,6 +1288,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             liveChainOverrides,
             roadSegmentPropsRef.current,
             roadHopPropsRef.current,
+            undefined,
+            roadChaikinPassesRef.current,
           )
         : smoothedRoadDataRef.current
 

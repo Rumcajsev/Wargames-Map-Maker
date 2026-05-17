@@ -147,6 +147,7 @@ export function RoadsSidebar() {
     roadWiggleFreq, setRoadWiggleFreq,
     roadSmoothing, setRoadSmoothing,
     roadPathSmoothing, setRoadPathSmoothing,
+    roadChaikinPasses, setRoadChaikinPasses,
     roadsStatus, roadsError,
     railsStatus, railsError,
     fetchRoads, fetchRails,
@@ -365,6 +366,16 @@ export function RoadsSidebar() {
             type="range" min={0} max={50} step={1}
             value={roadPathSmoothing}
             onChange={e => setRoadPathSmoothing(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Post-wiggle smoothing</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadChaikinPasses}</span>
+          </div>
+          <input
+            type="range" min={0} max={4} step={1}
+            value={roadChaikinPasses}
+            onChange={e => setRoadChaikinPasses(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>

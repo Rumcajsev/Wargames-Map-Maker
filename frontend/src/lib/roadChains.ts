@@ -38,6 +38,7 @@ export function buildRoadChains(
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   snapBindings: Record<string, string> = {},
+  chaikinPasses = 1,
 ): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string; chainIdx?: number }[] } {
   if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [] }
 
@@ -370,7 +371,7 @@ export function buildRoadChains(
             return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
           }))
         : wiggleAmplitude
-      if (effectiveAmp > 0) chain = chaikin(chain, 1, false)
+      if (effectiveAmp > 0 && chaikinPasses > 0) chain = chaikin(chain, chaikinPasses, false)
       chains.push({ tier, chain, baseChain, id, hopKeys: hopKeysList, hopRanges })
     }
 
