@@ -1,7 +1,7 @@
 /** Road and rail chain building utilities.
  *  Converts hex-edge graphs into smooth polyline chains for rendering. */
 
-import { catmullRom } from './geometry'
+import { catmullRom, chaikin } from './geometry'
 import { seededRandom, wiggleChain } from './noise'
 
 export function edgeCpKey(k1: string, k2: string): string {
@@ -364,6 +364,13 @@ export function buildRoadChains(
         }
         chain = dense
       }
+      const effectiveAmp = hasAnyOverride
+        ? Math.max(...hopKeysList.map((k, h) => {
+            const hp = hopProps[k]; const sp2 = segProps[id]
+            return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+          }))
+        : wiggleAmplitude
+      if (effectiveAmp > 0) chain = chaikin(chain, 1, false)
       chains.push({ tier, chain, baseChain, id, hopKeys: hopKeysList, hopRanges })
     }
 
