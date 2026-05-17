@@ -189,7 +189,7 @@ export function DisplaySidebar() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <div style={{ fontSize: 10, color: '#5a5a7a', width: 28, flexShrink: 0 }}>Size</div>
               <input
-                type="range" min={0.3} max={2.5} step={0.05}
+                type="range" min={0.1} max={3.0} step={0.05}
                 value={hexNumberFontScale}
                 onChange={e => setHexNumberFontScale(Number(e.target.value))}
                 style={{ flex: 1 }}

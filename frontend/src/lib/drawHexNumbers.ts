@@ -100,7 +100,7 @@ function edgeTransform(
 export function drawHexNumbers(params: HexNumberParams) {
   const { ctx, projected, numberMap, edgeIndex, color, fontScale, R, edgeMode, inMargin } = params
 
-  const fontSize = Math.max(4, R * 0.16 * fontScale)
+  const fontSize = Math.max(1, R * 0.12 * fontScale)
   ctx.save()
   ctx.font = `${fontSize}px Georgia, serif`
   ctx.fillStyle = color
