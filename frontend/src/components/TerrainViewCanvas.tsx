@@ -1366,19 +1366,32 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.stroke()
       }
 
-      // Snap preview: highlight the target diamond and the dragged diamond when close enough to merge
-      const snapTarget = snapPreviewKeyRef.current
+      // Snap preview
+      const snap = snapPreviewRef.current
       const dragKey = draggingCpKeyRef.current
-      if (snapTarget) {
-        for (const hlKey of [snapTarget, dragKey]) {
-          if (!hlKey) continue
-          const cp = controlPoints.find(c => c.key === hlKey)
-          if (!cp) continue
-          const [x, y] = project(cp.pos[0], cp.pos[1])
-          const r = diamondR * 1.8
+      if (snap) {
+        if (snap.kind === 'sibling') {
+          // Highlight both the dragged dot and the target sibling with a diamond glow
+          for (const hlKey of [snap.key, dragKey]) {
+            if (!hlKey) continue
+            const cp = controlPoints.find(c => c.key === hlKey)
+            if (!cp) continue
+            const [x, y] = project(cp.pos[0], cp.pos[1])
+            const r = diamondR * 1.8
+            ctx.beginPath()
+            ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
+            ctx.fillStyle = 'rgba(255, 220, 40, 0.35)'
+            ctx.fill()
+            ctx.strokeStyle = '#ffdd00'
+            ctx.lineWidth = handleScale * 2
+            ctx.stroke()
+          }
+        } else {
+          // Road snap: draw a glowing circle at the snap point on the road
+          const [x, y] = project(snap.pos[0], snap.pos[1])
           ctx.beginPath()
-          ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
-          ctx.fillStyle = 'rgba(255, 220, 40, 0.35)'
+          ctx.arc(x, y, juncR * 1.4, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(255, 220, 40, 0.4)'
           ctx.fill()
           ctx.strokeStyle = '#ffdd00'
           ctx.lineWidth = handleScale * 2
@@ -1841,8 +1854,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Control point drag
   const draggingCpKeyRef = useRef<string | null>(null)
-  // Key of the sibling jt| diamond that the dragged one would snap-merge into on release
-  const snapPreviewKeyRef = useRef<string | null>(null)
+  type SnapTarget = { kind: 'sibling'; key: string; pos: [number, number] } | { kind: 'road'; pos: [number, number] }
+  const snapPreviewRef = useRef<SnapTarget | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -1906,22 +1919,47 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
-    const SNAP_SCREEN_PX = 10 // screen pixels within which diamonds will merge on release
+    const SNAP_SIBLING_PX = 14
+    const SNAP_ROAD_PX = 16
 
-    const checkSnap = (dragKey: string, livePos: [number, number], meta: ReturnType<typeof metaRef.current>, pw: number, ph: number, px: number, py: number): string | null => {
-      if (!dragKey.startsWith('jt|')) return null
+    const checkSnap = (dragKey: string, livePos: [number, number], meta: ReturnType<typeof metaRef.current>, pw: number, ph: number, px: number, py: number): SnapTarget | null => {
+      if (!dragKey.startsWith('jt|') || !meta) return null
       const parts = dragKey.split('|')
       if (parts.length !== 3) return null
       const hexKey = parts[1]
-      const { controlPoints } = smoothedRoadDataRef.current
-      const siblings = controlPoints.filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey && cp.key !== dragKey)
-      if (!meta) return null
-      const snapThresh = SNAP_SCREEN_PX / (zoomRef.current ?? 1)
-      const [dx, dy] = projectToCanvas(livePos[0], livePos[1], meta, pw, ph, px, py)
+      const zoom = zoomRef.current ?? 1
+      const [dpx, dpy] = projectToCanvas(livePos[0], livePos[1], meta, pw, ph, px, py)
+
+      // Sibling jt| snap (same junction, different arm)
+      const siblings = smoothedRoadDataRef.current.controlPoints.filter(
+        cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey && cp.key !== dragKey
+      )
+      const sibThresh = SNAP_SIBLING_PX / zoom
       for (const sib of siblings) {
         const [sx, sy] = projectToCanvas(sib.pos[0], sib.pos[1], meta, pw, ph, px, py)
-        if (Math.hypot(dx - sx, dy - sy) <= snapThresh) return sib.key
+        if (Math.hypot(dpx - sx, dpy - sy) <= sibThresh)
+          return { kind: 'sibling', key: sib.key, pos: sib.pos }
       }
+
+      // Road chain snap — nearest point on any chain polyline
+      const roadThresh = SNAP_ROAD_PX / zoom
+      let bestDist = roadThresh, bestPos: [number, number] | null = null
+      for (const chain of smoothedRoadDataRef.current.chains) {
+        if (chain.id.startsWith('stub|')) continue
+        const pts = chain.chain
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [ax, ay] = projectToCanvas(pts[i][0], pts[i][1], meta, pw, ph, px, py)
+          const [bx, by] = projectToCanvas(pts[i + 1][0], pts[i + 1][1], meta, pw, ph, px, py)
+          const ddx = bx - ax, ddy = by - ay, lenSq = ddx * ddx + ddy * ddy
+          if (lenSq === 0) continue
+          const t = Math.max(0, Math.min(1, ((dpx - ax) * ddx + (dpy - ay) * ddy) / lenSq))
+          const nx = ax + t * ddx, ny = ay + t * ddy
+          const dist = Math.hypot(dpx - nx, dpy - ny)
+          if (dist < bestDist) { bestDist = dist; bestPos = unprojectFromCanvas(nx, ny, meta, pw, ph, px, py) }
+        }
+      }
+      if (bestPos) return { kind: 'road', pos: bestPos }
+
       return null
     }
 
@@ -1951,7 +1989,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (draggingCpKeyRef.current) {
         const lonLat = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
         dragLiveOverrideRef.current = { ...dragLiveOverrideRef.current, [draggingCpKeyRef.current]: lonLat }
-        snapPreviewKeyRef.current = checkSnap(draggingCpKeyRef.current, lonLat, meta, pw, ph, px, py)
+        snapPreviewRef.current = checkSnap(draggingCpKeyRef.current, lonLat, meta, pw, ph, px, py)
         scheduleRedraw()
         return
       }
@@ -2038,15 +2076,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
       // CP drag commit
       const dragKey = draggingCpKeyRef.current
-      const snapTarget = snapPreviewKeyRef.current
+      const snap = snapPreviewRef.current
       const finalPos = dragKey ? dragLiveOverrideRef.current[dragKey] : null
       draggingCpKeyRef.current = null
-      snapPreviewKeyRef.current = null
+      snapPreviewRef.current = null
       if (dragRafRef.current !== null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null }
       dragLiveOverrideRef.current = {}
-      if (dragKey && snapTarget) {
-        deleteRoadControlOverrideRef.current(dragKey)
-        deleteRoadControlOverrideRef.current(snapTarget)
+      if (dragKey && snap) {
+        // Set both (sibling) or just the dragged one (road) to the snap position.
+        // Never delete overrides — keep all arms dissolved and independently positioned.
+        setRoadControlOverrideRef.current(dragKey, snap.pos)
+        if (snap.kind === 'sibling') setRoadControlOverrideRef.current(snap.key, snap.pos)
       } else if (dragKey && finalPos) {
         setRoadControlOverrideRef.current(dragKey, finalPos)
       }
