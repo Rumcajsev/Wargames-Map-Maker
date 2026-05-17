@@ -37,7 +37,7 @@ export function buildRoadChains(
   chainOverrides: Record<string, [number, number][]> = {},
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
-): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number] }[] } {
+): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string }[] } {
   if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [] }
 
   let interHexDist = 0, hexScaleSamples = 0
@@ -293,7 +293,7 @@ export function buildRoadChains(
       // Emit em| control points at relaxed positions (each edge visited once via visitedPairs)
       for (let i = 0; i < edgeKeys.length; i++) {
         const ek = edgeKeys[i]
-        if (ek !== null) controlPoints.push({ key: ek, pos: relaxed[i] })
+        if (ek !== null) controlPoints.push({ key: ek, pos: relaxed[i], chainId: id })
       }
 
       const a = startKey < endKey ? startKey : endKey

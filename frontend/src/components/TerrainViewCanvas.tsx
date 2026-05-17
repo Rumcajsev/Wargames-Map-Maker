@@ -1325,10 +1325,26 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const edgeR = 3 * handleScale
       const diamondR = 4 * handleScale
 
+      // Build wiggled-chain lookup for em| dot snapping
+      const wigChainById = new Map<string, [number, number][]>()
+      for (const c of liveRoadData.chains) wigChainById.set(c.id, c.chain)
+
+      const nearestOnWigChain = (chainId: string, lon: number, lat: number): [number, number] => {
+        const wc = wigChainById.get(chainId)
+        if (!wc || wc.length === 0) return [lon, lat]
+        let best = wc[0], bestD = Infinity
+        for (const p of wc) {
+          const d = (p[0] - lon) ** 2 + (p[1] - lat) ** 2
+          if (d < bestD) { bestD = d; best = p }
+        }
+        return best
+      }
+
       ctx.save()
-      for (const { key, pos } of controlPoints) {
+      for (const { key, pos, chainId } of controlPoints) {
         const isJunc = key.startsWith('ja|')
         const isSpineSide = key.startsWith('jt|')
+        const isEdge = key.startsWith('em|')
         if (isSpineSide) {
           const hexKey = key.split('|')[1]
           if (!splitHexes.has(hexKey)) continue
@@ -1337,7 +1353,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           const hexKey = key.slice(3)
           if (splitHexes.has(hexKey)) continue
         }
-        const [x, y] = project(pos[0], pos[1])
+        const displayPos = isEdge && chainId ? nearestOnWigChain(chainId, pos[0], pos[1]) : pos
+        const [x, y] = project(displayPos[0], displayPos[1])
         const overridden = !!overrides[key]
         ctx.beginPath()
         if (isSpineSide) {
