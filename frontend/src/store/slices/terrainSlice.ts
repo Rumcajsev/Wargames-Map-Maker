@@ -34,6 +34,7 @@ export type TerrainSlice = {
   terrainColors: Record<string, string>
   terrainTextureScales: Record<string, number>
   terrainBlobOverrides: Record<string, BlobOverride>
+  terrainTypeBlobStyles: Record<string, BlobOverride>
   // Terrain render mode
   terrainRenderMode: 'blob' | 'field'
   fieldFreq: number
@@ -85,6 +86,7 @@ export type TerrainSlice = {
   setTerrainColor: (terrain: string, color: string) => void
   setTerrainTextureScale: (terrain: string, scale: number) => void
   setTerrainBlobOverride: (key: string, override: BlobOverride | null) => void
+  setTerrainTypeBlobStyle: (terrain: string, style: BlobOverride | null) => void
   setTerrainRenderMode: (v: 'blob' | 'field') => void
   setFieldFreq: (v: number) => void
   setFieldAmp: (v: number) => void
@@ -138,6 +140,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   terrainColors: { ...TERRAIN_COLORS },
   terrainTextureScales: { clear: 3, woods: 3, light_woods: 3 },
   terrainBlobOverrides: {},
+  terrainTypeBlobStyles: {},
 
   terrainRenderMode: 'blob',
   fieldFreq: 0.3,
@@ -472,6 +475,14 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
       return { terrainBlobOverrides: rest }
     }
     return { terrainBlobOverrides: { ...s.terrainBlobOverrides, [key]: cleaned } }
+  }),
+
+  setTerrainTypeBlobStyle: (terrain, style) => set((s) => {
+    if (style === null) {
+      const { [terrain]: _, ...rest } = s.terrainTypeBlobStyles
+      return { terrainTypeBlobStyles: rest }
+    }
+    return { terrainTypeBlobStyles: { ...s.terrainTypeBlobStyles, [terrain]: { ...s.terrainTypeBlobStyles[terrain], ...style } } }
   }),
 
   setTerrainRenderMode: (v) => set({ terrainRenderMode: v }),

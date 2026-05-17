@@ -139,6 +139,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail,
     riverWiggleFreq, riverWiggleAmp, riverSmoothing,
     terrainBlobOverrides, setTerrainBlobOverride,
+    terrainTypeBlobStyles,
     lakeOverrides, setLakeOverride,
     realisticCoastline,
     beachStrip, beachColor, beachWidth,
@@ -279,6 +280,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const terrainColorsRef = useRef(terrainColors)
   const terrainTextureScalesRef = useRef(terrainTextureScales)
   const terrainBlobOverridesRef = useRef(terrainBlobOverrides)
+  const terrainTypeBlobStylesRef = useRef(terrainTypeBlobStyles)
   const lakeOverridesRef = useRef(lakeOverrides)
   const terrainRenderModeRef = useRef(terrainRenderMode)
   const fieldFreqRef = useRef(fieldFreq)
@@ -462,6 +464,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const beachWidthRef = useRef(beachWidth)
   beachWidthRef.current = beachWidth
   terrainBlobOverridesRef.current = terrainBlobOverrides
+  terrainTypeBlobStylesRef.current = terrainTypeBlobStyles
   lakeOverridesRef.current = lakeOverrides
   terrainRenderModeRef.current = terrainRenderMode
   fieldFreqRef.current = fieldFreq
@@ -695,9 +698,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         return true
       }).map(p => ({ ...p, hex: { ...p.hex, terrain } }))
       if (terrainProjected.length === 0) return []
-      return buildTerrainBlobsV2(terrainProjected, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius)
+      const ts = terrainTypeBlobStyles[terrain]?.enabled ? terrainTypeBlobStyles[terrain] : null
+      return buildTerrainBlobsV2(
+        terrainProjected,
+        ts?.smooth ?? terrainBlobSmooth,
+        ts?.offset ?? terrainBlobOffset,
+        ts?.bump ?? terrainBlobBump,
+        ts?.sweepFreq ?? terrainBlobSweepFreq,
+        ts?.lobeFreq ?? terrainBlobLobeFreq,
+        ts?.lobeAmp ?? terrainBlobLobeAmp,
+        ts?.lobeThreshold ?? terrainBlobLobeThreshold,
+        ts?.lobeDirection ?? terrainBlobLobeDirection,
+        hexRadius,
+      )
     })
-  }, [projectedHexes, blobComponentsByTerrain, terrainBlobOverrides, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius, realisticCoastline])
+  }, [projectedHexes, blobComponentsByTerrain, terrainBlobOverrides, terrainTypeBlobStyles, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius, realisticCoastline])
   const defaultTerrainBlobsRef = useRef(defaultTerrainBlobs)
   defaultTerrainBlobsRef.current = defaultTerrainBlobs
 
@@ -964,7 +979,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             return true
           }).map(p => ({ ...p, hex: { ...p.hex, terrain } }))
           if (terrainProjected.length === 0) return []
-          return buildTerrainBlobsV2(terrainProjected, terrainBlobSmoothRef.current, terrainBlobOffsetRef.current, terrainBlobBumpRef.current, terrainBlobSweepFreqRef.current, terrainBlobLobeFreqRef.current, terrainBlobLobeAmpRef.current, terrainBlobLobeThresholdRef.current, terrainBlobLobeDirectionRef.current, R)
+          const tsRef = terrainTypeBlobStylesRef.current[terrain]?.enabled ? terrainTypeBlobStylesRef.current[terrain] : null
+          return buildTerrainBlobsV2(
+            terrainProjected,
+            tsRef?.smooth ?? terrainBlobSmoothRef.current,
+            tsRef?.offset ?? terrainBlobOffsetRef.current,
+            tsRef?.bump ?? terrainBlobBumpRef.current,
+            tsRef?.sweepFreq ?? terrainBlobSweepFreqRef.current,
+            tsRef?.lobeFreq ?? terrainBlobLobeFreqRef.current,
+            tsRef?.lobeAmp ?? terrainBlobLobeAmpRef.current,
+            tsRef?.lobeThreshold ?? terrainBlobLobeThresholdRef.current,
+            tsRef?.lobeDirection ?? terrainBlobLobeDirectionRef.current,
+            R,
+          )
         })
         const lakeOverriddenKeys = new Set(Object.keys(lakeOverridesRef.current))
         const defaultLakeProjected = projected
@@ -1551,7 +1578,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [generatedHexes, terrainRenderMode, fieldFreq, fieldAmp, fieldOctaves, fieldPersistence, fieldWildness, terrainColors, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, beachStrip, beachColor, beachWidth])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, beachStrip, beachColor, beachWidth])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes])

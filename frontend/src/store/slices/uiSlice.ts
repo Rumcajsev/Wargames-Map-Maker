@@ -366,6 +366,9 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       }
     }
   }
+  if (fromVersion < 15) {
+    if (!s.terrainTypeBlobStyles) s.terrainTypeBlobStyles = {}
+  }
   return s
 }
 
