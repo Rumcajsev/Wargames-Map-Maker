@@ -1302,21 +1302,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const { controlPoints } = liveRoadData
       const overrides = roadControlOverridesRef.current
 
-      // Determine merged/split state per junction hex.
-      // A junction is split when its two jt| terminals are at different canvas positions.
-      const jtByHex = new Map<string, { key: string; pos: [number, number] }[]>()
-      for (const cp of controlPoints) {
-        if (!cp.key.startsWith('jt|')) continue
-        const hexKey = cp.key.split('|')[1]
-        if (!jtByHex.has(hexKey)) jtByHex.set(hexKey, [])
-        jtByHex.get(hexKey)!.push(cp)
-      }
-      const splitHexes = new Set<string>()
-      for (const [hexKey, cps] of jtByHex) {
-        if (cps.length < 2) continue
-        const [ax, ay] = project(cps[0].pos[0], cps[0].pos[1])
-        const [bx, by] = project(cps[1].pos[0], cps[1].pos[1])
-        if (Math.hypot(ax - bx, ay - by) > 2) splitHexes.add(hexKey)
+      // A hex is "dissolved" when any jt| override exists for it.
+      // In that state all arm dots are shown individually; the ja| dot is hidden.
+      const dissolvedHexes = new Set<string>()
+      for (const key of Object.keys(overrides)) {
+        if (key.startsWith('jt|')) dissolvedHexes.add(key.split('|')[1])
       }
 
       // Scale handles inversely with zoom so they stay a fixed screen size
@@ -1354,11 +1344,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const isEdge = key.startsWith('em|')
         if (isSpineSide) {
           const hexKey = key.split('|')[1]
-          if (!splitHexes.has(hexKey)) continue
+          if (!dissolvedHexes.has(hexKey)) continue
         }
         if (isJunc) {
           const hexKey = key.slice(3)
-          if (splitHexes.has(hexKey)) continue
+          if (dissolvedHexes.has(hexKey)) continue
         }
         const [x, y] = project(pos[0], pos[1])
         const overridden = !!overrides[key]
@@ -1870,28 +1860,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
       const { controlPoints } = smoothedRoadDataRef.current
 
-      // Determine which junction hexes are split (jt| terminals at different canvas positions)
-      const jtByHexHit = new Map<string, { key: string; pos: [number, number] }[]>()
-      for (const cp of controlPoints) {
-        if (!cp.key.startsWith('jt|')) continue
-        const hexKey = cp.key.split('|')[1]
-        if (!jtByHexHit.has(hexKey)) jtByHexHit.set(hexKey, [])
-        jtByHexHit.get(hexKey)!.push(cp)
-      }
-      const splitHexesHit = new Set<string>()
-      for (const [hexKey, cps] of jtByHexHit) {
-        if (cps.length < 2) continue
-        const [ax, ay] = projectToCanvas(cps[0].pos[0], cps[0].pos[1], meta, pw, ph, px, py)
-        const [bx, by] = projectToCanvas(cps[1].pos[0], cps[1].pos[1], meta, pw, ph, px, py)
-        if (Math.hypot(ax - bx, ay - by) > 2) splitHexesHit.add(hexKey)
+      const dissolvedHexesHit = new Set<string>()
+      for (const key of Object.keys(roadControlOverridesRef.current)) {
+        if (key.startsWith('jt|')) dissolvedHexesHit.add(key.split('|')[1])
       }
 
       const currentZoom = zoomRef.current ?? 1
 
       // Road CP hit test (diamonds/circles/edge midpoints) — road only
       if (roadNodeEditModeRef.current) {
-        const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|') && splitHexesHit.has(cp.key.split('|')[1]))
-        const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|') && !splitHexesHit.has(cp.key.slice(3)))
+        const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|') && dissolvedHexesHit.has(cp.key.split('|')[1]))
+        const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|') && !dissolvedHexesHit.has(cp.key.slice(3)))
         const edges = controlPoints.filter(cp => cp.key.startsWith('em|'))
         for (const [cps, hitRScreen] of [[spineSides, 10], [junctions, 10], [edges, 8]] as const) {
           const hitR = (hitRScreen as number) / currentZoom
@@ -2319,74 +2298,32 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           })
         }
 
-        // Split junction: available when the junction has a spine pair and is currently merged
-        const jtCps = (smoothedRoadDataRef.current.controlPoints ?? []).filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey)
-        if (jtCps.length === 2) {
-          const meta = metaRef.current
-          const { w: cssW, h: cssH } = frameDimsRef.current
-          const isMerged = (() => {
-            if (!meta || cssW === 0) return false
-            const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
-            const [ax, ay] = projectToCanvas(jtCps[0].pos[0], jtCps[0].pos[1], meta, pw, ph, px, py)
-            const [bx, by] = projectToCanvas(jtCps[1].pos[0], jtCps[1].pos[1], meta, pw, ph, px, py)
-            return Math.hypot(ax - bx, ay - by) <= 2
-          })()
-          if (isMerged) {
+        // Dissolve junction: create an individual jt| arm override for every road arm,
+        // all starting at the current junction centre — then each can be dragged freely.
+        const h = hexesRef.current.find(hx => hx.q === hex.q && hx.r === hex.r)
+        const armNeighbors = [...new Set(
+          roadEdgesRef.current
+            .filter(e => (e.q1 === hex.q && e.r1 === hex.r) || (e.q2 === hex.q && e.r2 === hex.r))
+            .map(e => e.q1 === hex.q && e.r1 === hex.r ? `${e.q2},${e.r2}` : `${e.q1},${e.r1}`)
+        )]
+        if (armNeighbors.length > 2) {
+          const isAlreadyDissolved = armNeighbors.every(nk => !!roadControlOverridesRef.current[`jt|${hexKey}|${nk}`])
+          if (!isAlreadyDissolved) {
             items.push({
-              label: 'Split junction',
+              label: 'Dissolve junction',
               action: () => {
-                // Apply auto-stagger: offset each terminal 12% of hex spacing along spine
-                const h = hexesRef.current.find(h => h.q === hex.q && h.r === hex.r)
-                if (!h || !meta || cssW === 0) return
-                const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
-                const cPx = projectToCanvas(h.center[0], h.center[1], meta, pw, ph, px, py)
-                const v0Px = projectToCanvas(h.vertices[0][0], h.vertices[0][1], meta, pw, ph, px, py)
-                const hexRadiusPx = Math.hypot(v0Px[0] - cPx[0], v0Px[1] - cPx[1])
-                const staggerPx = hexRadiusPx * 0.25
-                // Direction: from jtCps[0] terminal toward jtCps[1] terminal (spine direction)
-                const [p0x, p0y] = projectToCanvas(jtCps[0].pos[0], jtCps[0].pos[1], meta, pw, ph, px, py)
-                const [p1x, p1y] = projectToCanvas(jtCps[1].pos[0], jtCps[1].pos[1], meta, pw, ph, px, py)
-                // Fallback spine dir: use hex center to vertex[0] direction
-                const spDx = p1x - p0x || (v0Px[0] - cPx[0])
-                const spDy = p1y - p0y || (v0Px[1] - cPx[1])
-                const spLen = Math.hypot(spDx, spDy) || 1
-                const snx = spDx / spLen, sny = spDy / spLen
-                const pos0 = unprojectFromCanvas(p0x - snx * staggerPx, p0y - sny * staggerPx, meta, pw, ph, px, py)
-                const pos1 = unprojectFromCanvas(p1x + snx * staggerPx, p1y + sny * staggerPx, meta, pw, ph, px, py)
-                setRoadControlOverrideRef.current(jtCps[0].key, pos0)
-                setRoadControlOverrideRef.current(jtCps[1].key, pos1)
+                const juncCenter: [number, number] =
+                  roadControlOverridesRef.current[`ja|${hexKey}`] as [number, number] ??
+                  h?.center as [number, number]
+                if (!juncCenter) return
+                for (const nk of armNeighbors) {
+                  setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, juncCenter)
+                }
               },
             })
           }
         }
 
-        // Estimate inter-hex distance from adjacent hex centers for randomize
-        const neighbors = (smoothedRoadDataRef.current.controlPoints ?? [])
-          .filter(cp => cp.key === `ja|${hexKey}` || cp.key.startsWith('em|'))
-        const h = hexesRef.current.find(h => h.q === hex.q && h.r === hex.r)
-        if (h) {
-          items.push({
-            label: 'Randomize junction',
-            action: () => {
-              // Compute rough inter-hex scale from edge midpoints near this hex
-              const meta = metaRef.current!
-              const { pw, ph, px, py } = computePaper(frameDimsRef.current.w, frameDimsRef.current.h, meta)
-              const nearEdges = Object.keys(roadControlOverridesRef.current).concat(
-                smoothedRoadDataRef.current.controlPoints.map(cp => cp.key)
-              ).filter(k => k.startsWith('em|') && k.includes(hexKey))
-              // Estimate hex radius from project output of nearby hex
-              const cPx = projectToCanvas(h.center[0], h.center[1], meta, pw, ph, px, py)
-              const v0Px = projectToCanvas(h.vertices[0][0], h.vertices[0][1], meta, pw, ph, px, py)
-              const hexRadiusPx = Math.hypot(v0Px[0] - cPx[0], v0Px[1] - cPx[1])
-              // Random position within ~40% of hex radius from center, in lon/lat
-              const angle = Math.random() * Math.PI * 2
-              const dist = (0.2 + Math.random() * 0.3) * hexRadiusPx
-              const offsetX = Math.cos(angle) * dist, offsetY = Math.sin(angle) * dist
-              const newPos = unprojectFromCanvas(cPx[0] + offsetX, cPx[1] + offsetY, meta, pw, ph, px, py)
-              setRoadControlOverrideRef.current(`ja|${hexKey}`, newPos)
-            },
-          })
-        }
 
       }
 

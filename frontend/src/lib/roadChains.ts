@@ -165,14 +165,13 @@ export function buildRoadChains(
     const termA: [number, number] = overrides[spineSideCpKey(k, bestPair[0])] ?? defaultA
     const termB: [number, number] = overrides[spineSideCpKey(k, bestPair[1])] ?? defaultB
 
-    // Map every arm to its terminal
+    // Map every arm to its terminal; per-arm jt| override takes precedence for branch arms
     armToTerminal.set(`${k}|${bestPair[0]}`, termA)
     armToTerminal.set(`${k}|${bestPair[1]}`, termB)
-    for (const bn of sideA) armToTerminal.set(`${k}|${bn}`, termA)
-    for (const bn of sideB) armToTerminal.set(`${k}|${bn}`, termB)
-    // Branches that had no hex center (shouldn't happen, but safe fallback)
+    for (const bn of sideA) armToTerminal.set(`${k}|${bn}`, overrides[spineSideCpKey(k, bn)] ?? termA)
+    for (const bn of sideB) armToTerminal.set(`${k}|${bn}`, overrides[spineSideCpKey(k, bn)] ?? termB)
     for (const bn of branches) {
-      if (!sideA.has(bn) && !sideB.has(bn)) armToTerminal.set(`${k}|${bn}`, termA)
+      if (!sideA.has(bn) && !sideB.has(bn)) armToTerminal.set(`${k}|${bn}`, overrides[spineSideCpKey(k, bn)] ?? termA)
     }
 
     sideTerminals.set(`${k}|${bestPair[0]}`, termA)
@@ -400,6 +399,17 @@ export function buildRoadChains(
       emittedJuncCps.add(cpKey)
       junctionMap.set(cpKey, { pos: term, tier: minTier })
       controlPoints.push({ key: cpKey, pos: term })
+    }
+    // Emit jt| for branch arms that have been individually dissolved
+    for (const nk of globalAdj.get(k) ?? []) {
+      if (spinePair.includes(nk)) continue
+      const cpKey = spineSideCpKey(k, nk)
+      if (!overrides[cpKey]) continue
+      if (emittedJuncCps.has(cpKey)) continue
+      emittedJuncCps.add(cpKey)
+      const pos = armToTerminal.get(`${k}|${nk}`) ?? hexIdx.get(k)?.center ?? [0, 0] as [number, number]
+      junctionMap.set(cpKey, { pos, tier: minTier })
+      controlPoints.push({ key: cpKey, pos })
     }
   }
 
