@@ -1325,23 +1325,30 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const edgeR = 3 * handleScale
       const diamondR = 4 * handleScale
 
-      // Build wiggled-chain lookup for em| dot snapping
-      const wigChainById = new Map<string, [number, number][]>()
-      for (const c of liveRoadData.chains) wigChainById.set(c.id, c.chain)
-
-      const nearestOnWigChain = (chainId: string, lon: number, lat: number): [number, number] => {
-        const wc = wigChainById.get(chainId)
-        if (!wc || wc.length === 0) return [lon, lat]
-        let best = wc[0], bestD = Infinity
-        for (const p of wc) {
-          const d = (p[0] - lon) ** 2 + (p[1] - lat) ** 2
-          if (d < bestD) { bestD = d; best = p }
+      // Ghost skeleton: draw hovered chain's baseChain as a dashed line (pre-wiggle)
+      const hovChainForGhost = draggingCpKeyRef.current ? null : hoveredChainRef.current
+      const hovChainData = hovChainForGhost?.kind === 'road'
+        ? liveRoadData.chains.find(c => c.id === hovChainForGhost.id)
+        : null
+      if (hovChainData?.baseChain && hovChainData.baseChain.length >= 2) {
+        const bc = hovChainData.baseChain
+        ctx.save()
+        ctx.beginPath()
+        const [gx0, gy0] = project(bc[0][0], bc[0][1])
+        ctx.moveTo(gx0, gy0)
+        for (let i = 1; i < bc.length; i++) {
+          const [gx, gy] = project(bc[i][0], bc[i][1])
+          ctx.lineTo(gx, gy)
         }
-        return best
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+        ctx.lineWidth = 1.5 * handleScale
+        ctx.setLineDash([4 * handleScale, 4 * handleScale])
+        ctx.stroke()
+        ctx.restore()
       }
 
       ctx.save()
-      for (const { key, pos, chainId } of controlPoints) {
+      for (const { key, pos } of controlPoints) {
         const isJunc = key.startsWith('ja|')
         const isSpineSide = key.startsWith('jt|')
         const isEdge = key.startsWith('em|')
@@ -1353,8 +1360,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           const hexKey = key.slice(3)
           if (splitHexes.has(hexKey)) continue
         }
-        const displayPos = isEdge && chainId ? nearestOnWigChain(chainId, pos[0], pos[1]) : pos
-        const [x, y] = project(displayPos[0], displayPos[1])
+        const [x, y] = project(pos[0], pos[1])
         const overridden = !!overrides[key]
         ctx.beginPath()
         if (isSpineSide) {
