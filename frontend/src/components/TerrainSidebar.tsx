@@ -16,14 +16,6 @@ export function TerrainSidebar() {
     thresholds, setTerrainThreshold,
     disabledTerrains, toggleTerrainDisabled,
     selectedHex, setSelectedHex,
-    terrainBlobSmooth, setTerrainBlobSmooth,
-    terrainBlobOffset, setTerrainBlobOffset,
-    terrainBlobBump, setTerrainBlobBump,
-    terrainBlobSweepFreq, setTerrainBlobSweepFreq,
-    terrainBlobLobeFreq, setTerrainBlobLobeFreq,
-    terrainBlobLobeAmp, setTerrainBlobLobeAmp,
-    terrainBlobLobeThreshold, setTerrainBlobLobeThreshold,
-    terrainBlobLobeDirection, setTerrainBlobLobeDirection,
     terrainColors,
     terrainRenderMode, setTerrainRenderMode,
     terrainLayersEnabled, setTerrainLayersEnabled,
@@ -39,6 +31,8 @@ export function TerrainSidebar() {
 
   const [openSettingsTerrain, setOpenSettingsTerrain] = useState<string | null>(null)
   const [settingsAnchorY, setSettingsAnchorY] = useState(0)
+  const [defaultsOpen, setDefaultsOpen] = useState(false)
+  const [defaultsAnchorY, setDefaultsAnchorY] = useState(0)
 
   const selectBrush = (terrain: string) => {
     if (terrainPaintMode && terrainPaintBrush === terrain) {
@@ -52,12 +46,12 @@ export function TerrainSidebar() {
     if (openSettingsTerrain === terrain) {
       setOpenSettingsTerrain(null)
     } else {
+      setDefaultsOpen(false)
       setOpenSettingsTerrain(terrain)
       setSettingsAnchorY(y)
     }
   }
 
-  // Keyboard shortcuts: 1–8 for terrain brushes, Escape to deselect
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -68,6 +62,7 @@ export function TerrainSidebar() {
       } else if (e.key === 'Escape') {
         setActiveTool({ type: 'none' })
         setOpenSettingsTerrain(null)
+        setDefaultsOpen(false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -82,6 +77,12 @@ export function TerrainSidebar() {
           terrain={openSettingsTerrain}
           anchorY={settingsAnchorY}
           onClose={() => setOpenSettingsTerrain(null)}
+        />
+      )}
+      {defaultsOpen && (
+        <TerrainSettingsFlyout
+          anchorY={defaultsAnchorY}
+          onClose={() => setDefaultsOpen(false)}
         />
       )}
       <div style={sidebarStyle}>
@@ -164,76 +165,31 @@ export function TerrainSidebar() {
                 />
                 Terrain layers (paint stacks blobs)
               </label>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Corner Rounding</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{terrainBlobSmooth}</span>
-                </div>
-                <input type="range" min={0} max={5} step={1} value={terrainBlobSmooth}
-                  onChange={e => setTerrainBlobSmooth(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Waviness</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(terrainBlobBump * 100)}%</span>
-                </div>
-                <input type="range" min={0} max={60} step={1} value={Math.round(terrainBlobBump * 100)}
-                  onChange={e => setTerrainBlobBump(Number(e.target.value) / 100)}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Inset</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{terrainBlobOffset > 0 ? '+' : ''}{Math.round(terrainBlobOffset * 100)}%</span>
-                </div>
-                <input type="range" min={-80} max={30} step={1} value={Math.round(terrainBlobOffset * 100)}
-                  onChange={e => setTerrainBlobOffset(Number(e.target.value) / 100)}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Wave Scale</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{terrainBlobSweepFreq.toFixed(2)}</span>
-                </div>
-                <input type="range" min={40} max={100} step={1} value={Math.round(terrainBlobSweepFreq * 100)}
-                  onChange={e => setTerrainBlobSweepFreq(Number(e.target.value) / 100)}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Fringe Scale</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{terrainBlobLobeFreq.toFixed(1)}</span>
-                </div>
-                <input type="range" min={20} max={50} step={1} value={Math.round(terrainBlobLobeFreq * 10)}
-                  onChange={e => setTerrainBlobLobeFreq(Number(e.target.value) / 10)}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Fringe Strength</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(terrainBlobLobeAmp * 100)}%</span>
-                </div>
-                <input type="range" min={0} max={100} step={1} value={Math.round(terrainBlobLobeAmp * 100)}
-                  onChange={e => setTerrainBlobLobeAmp(Number(e.target.value) / 100)}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                  <span>Fringe Sparsity</span>
-                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(terrainBlobLobeThreshold * 100)}%</span>
-                </div>
-                <input type="range" min={0} max={40} step={1} value={Math.round(terrainBlobLobeThreshold * 100)}
-                  onChange={e => setTerrainBlobLobeThreshold(Number(e.target.value) / 100)}
-                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>Fringe Direction</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button style={modeBtn(terrainBlobLobeDirection >= 0)} onClick={() => setTerrainBlobLobeDirection(1)}>Outward</button>
-                  <button style={modeBtn(terrainBlobLobeDirection < 0)} onClick={() => setTerrainBlobLobeDirection(-1)}>Inward</button>
-                </div>
-              </div>
+              <button
+                data-terrain-flyout=""
+                onClick={e => {
+                  if (defaultsOpen) {
+                    setDefaultsOpen(false)
+                  } else {
+                    setOpenSettingsTerrain(null)
+                    setDefaultsOpen(true)
+                    setDefaultsAnchorY(e.currentTarget.getBoundingClientRect().top)
+                  }
+                }}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: defaultsOpen ? '#1a1f1a' : 'none',
+                  border: `1px solid ${defaultsOpen ? '#3a5a3a' : '#1e1f2e'}`,
+                  borderRadius: 3, padding: '5px 8px', cursor: 'pointer',
+                  fontFamily: 'ui-monospace, monospace', fontSize: 11,
+                  color: defaultsOpen ? '#c0e0c0' : '#8a8aaa', width: '100%',
+                }}
+                onMouseEnter={e => { if (!defaultsOpen) e.currentTarget.style.color = '#a0a0c0' }}
+                onMouseLeave={e => { if (!defaultsOpen) e.currentTarget.style.color = '#8a8aaa' }}
+              >
+                <span>Default blob shape</span>
+                <span style={{ fontSize: 9, color: '#4a4a6a' }}>›</span>
+              </button>
             </div>
           )}
 

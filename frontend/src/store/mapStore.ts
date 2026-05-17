@@ -24,6 +24,7 @@ export interface BlobOverride {
   lobeThreshold?: number
   lobeDirection?: number
   textureScale?: number
+  enabled?: boolean
 }
 
 export interface ElevationThresholds {

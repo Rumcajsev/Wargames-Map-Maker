@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function TerrainBrushPicker({ activeBrush, paintMode, onSelect, onSettings }: Props) {
-  const { terrainColors } = useMapStore()
+  const { terrainColors, terrainTypeBlobStyles } = useMapStore()
   const [hoveredTerrain, setHoveredTerrain] = useState<string | null>(null)
 
   return (
@@ -26,6 +26,7 @@ export function TerrainBrushPicker({ activeBrush, paintMode, onSelect, onSetting
         const active = paintMode && activeBrush === terrain
         const hovered = hoveredTerrain === terrain
         const color = terrainColors[terrain] ?? TERRAIN_COLORS[terrain] ?? '#888'
+        const hasOverride = terrainTypeBlobStyles[terrain]?.enabled === true
         return (
           <div
             key={terrain}
@@ -60,6 +61,9 @@ export function TerrainBrushPicker({ activeBrush, paintMode, onSelect, onSetting
               <span style={{ flex: 1, textTransform: 'capitalize' }}>
                 {terrainLabel(terrain)}
               </span>
+              {hasOverride && (
+                <span style={{ width: 4, height: 4, borderRadius: '50%', background: color, flexShrink: 0, opacity: 0.8 }} />
+              )}
               <span style={{ color: '#3a3a5a', fontSize: 9 }}>{idx + 1}</span>
             </button>
             {hovered && onSettings && (
