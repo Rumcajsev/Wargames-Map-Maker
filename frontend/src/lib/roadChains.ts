@@ -287,9 +287,11 @@ export function buildRoadChains(
       for (let it = 0; it < iters; it++) {
         for (let i = 1; i < relaxed.length - 1; i++) {
           if (pinned[i]) continue
+          const avgX = (relaxed[i - 1][0] + relaxed[i + 1][0]) / 2
+          const avgY = (relaxed[i - 1][1] + relaxed[i + 1][1]) / 2
           relaxed[i] = [
-            (relaxed[i - 1][0] + relaxed[i + 1][0]) / 2,
-            (relaxed[i - 1][1] + relaxed[i + 1][1]) / 2,
+            relaxed[i][0] + 0.1 * (avgX - relaxed[i][0]),
+            relaxed[i][1] + 0.1 * (avgY - relaxed[i][1]),
           ]
         }
       }
