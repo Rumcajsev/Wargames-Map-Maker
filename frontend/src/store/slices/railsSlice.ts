@@ -11,6 +11,8 @@ export type RailsSlice = {
   railPaintMode: boolean
   railPaintEraser: boolean
   railStyle: RailStyle
+  showRawOsmRails: boolean
+  setShowRawOsmRails: (v: boolean) => void
   fetchRails: () => Promise<void>
   setRailsDisplayMode: (mode: 'raw' | 'per_hex') => void
   setRailsFetchTypes: (types: string[]) => void
@@ -33,6 +35,9 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
   railPaintMode: false,
   railPaintEraser: false,
   railStyle: { ...DEFAULT_RAIL_STYLE },
+
+  showRawOsmRails: false,
+  setShowRawOsmRails: (v) => set({ showRawOsmRails: v }),
 
   clearRails: () => set(s => ({
     rawRailWays: [], railEdges: [], railsStatus: 'idle', railsError: null,

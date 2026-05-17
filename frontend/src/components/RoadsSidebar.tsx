@@ -151,6 +151,8 @@ export function RoadsSidebar() {
     railsStatus, railsError,
     fetchRoads, fetchRails,
     clearRoads, clearRails,
+    showRawOsmRoads, setShowRawOsmRoads,
+    showRawOsmRails, setShowRawOsmRails,
     roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
     selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
@@ -429,6 +431,12 @@ export function RoadsSidebar() {
               {roadsStatus === 'error' && roadsError && (
                 <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{roadsError}</div>
               )}
+              {roadsStatus === 'done' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={showRawOsmRoads} onChange={e => setShowRawOsmRoads(e.target.checked)} style={{ cursor: 'pointer' }} />
+                  Show raw OSM ways
+                </label>
+              )}
             </div>
 
             <div>
@@ -463,6 +471,12 @@ export function RoadsSidebar() {
               </button>
               {railsStatus === 'error' && railsError && (
                 <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{railsError}</div>
+              )}
+              {railsStatus === 'done' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={showRawOsmRails} onChange={e => setShowRawOsmRails(e.target.checked)} style={{ cursor: 'pointer' }} />
+                  Show raw OSM ways
+                </label>
               )}
             </div>
           </div>
