@@ -11,6 +11,7 @@ export type HexNumberParams = {
   /** 0–5 = edge index, 6 = center */
   edgeIndex: number
   color: string
+  fontScale: number
   R: number
   edgeMode: string
   inMargin: (verts: [number, number][]) => boolean
@@ -97,9 +98,9 @@ function edgeTransform(
 }
 
 export function drawHexNumbers(params: HexNumberParams) {
-  const { ctx, projected, numberMap, edgeIndex, color, R, edgeMode, inMargin } = params
+  const { ctx, projected, numberMap, edgeIndex, color, fontScale, R, edgeMode, inMargin } = params
 
-  const fontSize = Math.max(4, R * 0.16)
+  const fontSize = Math.max(4, R * 0.16 * fontScale)
   ctx.save()
   ctx.font = `${fontSize}px Georgia, serif`
   ctx.fillStyle = color

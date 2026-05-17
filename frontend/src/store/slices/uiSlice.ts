@@ -12,6 +12,7 @@ export type UiSlice = {
   hexNumberStartCorner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   hexNumberEdge: number
   hexNumberColor: string
+  hexNumberFontScale: number
   terrainDisplacement: number
   terrainNoiseFrequency: number
   terrainNoiseSeed: number
@@ -41,6 +42,7 @@ export type UiSlice = {
   setHexNumberStartCorner: (v: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right') => void
   setHexNumberEdge: (v: number) => void
   setHexNumberColor: (v: string) => void
+  setHexNumberFontScale: (v: number) => void
   setTerrainDisplacement: (v: number) => void
   setTerrainNoiseFrequency: (v: number) => void
   setTerrainNoiseSeed: (v: number) => void
@@ -78,6 +80,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   hexNumberStartCorner: 'top-left',
   hexNumberEdge: 4,
   hexNumberColor: '#8a8a8a',
+  hexNumberFontScale: 1.0,
   terrainDisplacement: 18,
   terrainNoiseFrequency: 6,
   terrainNoiseSeed: 2,
@@ -180,6 +183,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   setHexNumberStartCorner: (v) => set({ hexNumberStartCorner: v }),
   setHexNumberEdge: (v) => set({ hexNumberEdge: v }),
   setHexNumberColor: (v) => set({ hexNumberColor: v }),
+  setHexNumberFontScale: (v) => set({ hexNumberFontScale: v }),
   setTerrainDisplacement: (v) => set({ terrainDisplacement: v }),
   setTerrainNoiseFrequency: (v) => set({ terrainNoiseFrequency: v }),
   setTerrainNoiseSeed: (v) => set({ terrainNoiseSeed: v }),
@@ -394,6 +398,7 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (s.hexNumberStartCorner === undefined) s.hexNumberStartCorner = 'top-left'
     if (s.hexNumberEdge === undefined) s.hexNumberEdge = 4
     if (s.hexNumberColor === undefined) s.hexNumberColor = '#8a8a8a'
+    if (s.hexNumberFontScale === undefined) s.hexNumberFontScale = 1.0
   }
   return s
 }

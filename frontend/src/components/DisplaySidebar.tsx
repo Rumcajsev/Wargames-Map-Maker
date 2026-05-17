@@ -92,6 +92,7 @@ export function DisplaySidebar() {
     hexNumberStartCorner, setHexNumberStartCorner,
     hexNumberEdge, setHexNumberEdge,
     hexNumberColor, setHexNumberColor,
+    hexNumberFontScale, setHexNumberFontScale,
     hexOrientation,
   } = useMapStore()
 
@@ -182,6 +183,20 @@ export function DisplaySidebar() {
               <div style={{ fontSize: 10, color: '#5a5a7a', lineHeight: 1.5 }}>
                 Click an edge<br />dot or center
               </div>
+            </div>
+
+            {/* Size */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 28, flexShrink: 0 }}>Size</div>
+              <input
+                type="range" min={0.3} max={2.5} step={0.05}
+                value={hexNumberFontScale}
+                onChange={e => setHexNumberFontScale(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a', width: 24, textAlign: 'right' }}>
+                {hexNumberFontScale.toFixed(1)}×
+              </span>
             </div>
 
             {/* Color */}
