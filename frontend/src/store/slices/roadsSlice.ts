@@ -35,8 +35,11 @@ export type RoadsSlice = {
   setRoadPaintBrush: (v: 0 | 1 | 2) => void
   setRoadPaintEraser: (v: boolean) => void
   setRoadNodeEditMode: (v: boolean) => void
+  roadSnapBindings: Record<string, string>
   setRoadControlOverride: (key: string, pos: [number, number]) => void
   deleteRoadControlOverride: (key: string) => void
+  setRoadSnapBinding: (jtKey: string, emKey: string) => void
+  deleteRoadSnapBinding: (jtKey: string) => void
   setRoadWiggleAmp: (v: number) => void
   setRoadWiggleFreq: (v: number) => void
   setRoadSmoothing: (v: number) => void
@@ -82,6 +85,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadSmoothing: 10,
   roadPathSmoothing: 0,
   roadChainOverrides: {},
+  roadSnapBindings: {},
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
   roadSegmentProps: {},
   roadHopProps: {},
@@ -91,7 +95,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
 
   clearRoads: () => set(s => ({
     rawRoadWays: [], roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null,
-    roadPaintMode: false, roadPaintEraser: false, roadNodeEditMode: false,
+    roadPaintMode: false, roadPaintEraser: false, roadNodeEditMode: false, roadSnapBindings: {},
     activeTool: (s.activeTool.type === 'road' || s.activeTool.type === 'node-edit') ? { type: 'none' } as ActiveTool : s.activeTool,
   })),
   clearManualRoads: () => { get().pushUndoSnapshot(); set((s) => ({ roadEdges: s.roadEdges.filter((e) => !e.manual) })) },
@@ -139,7 +143,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
           }
         }
       }
-      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, roadsStatus: 'done' })
+      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, roadSnapBindings: {}, roadsStatus: 'done' })
     } catch (e) {
       set({ roadsStatus: 'error', roadsError: String(e) })
     }
@@ -192,14 +196,20 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
           }
         }
       }
-      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, settlementRoadsStatus: 'done' })
+      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, roadSnapBindings: {}, settlementRoadsStatus: 'done' })
     } catch (e) {
       set({ settlementRoadsStatus: 'error', settlementRoadsError: String(e) })
     }
   },
 
   setRoadNodeEditMode: (v) => set({ roadNodeEditMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, terrainPaintMode: false, elevationPaintMode: false } : {}) }),
-  deleteRoadControlOverride: (key) => set(s => { const { [key]: _, ...rest } = s.roadControlOverrides; return { roadControlOverrides: rest } }),
+  deleteRoadControlOverride: (key) => set(s => {
+    const { [key]: _a, ...restOverrides } = s.roadControlOverrides
+    const { [key]: _b, ...restBindings } = s.roadSnapBindings
+    return { roadControlOverrides: restOverrides, roadSnapBindings: restBindings }
+  }),
+  setRoadSnapBinding: (jtKey, emKey) => set(s => ({ roadSnapBindings: { ...s.roadSnapBindings, [jtKey]: emKey } })),
+  deleteRoadSnapBinding: (jtKey) => set(s => { const { [jtKey]: _, ...rest } = s.roadSnapBindings; return { roadSnapBindings: rest } }),
   setRoadWiggleAmp: (v) => set({ roadWiggleAmp: v }),
   setRoadWiggleFreq: (v) => set({ roadWiggleFreq: v }),
   setRoadSmoothing: (v) => set({ roadSmoothing: v }),

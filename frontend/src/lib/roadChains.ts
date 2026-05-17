@@ -37,8 +37,21 @@ export function buildRoadChains(
   chainOverrides: Record<string, [number, number][]> = {},
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
-): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string }[] } {
+  snapBindings: Record<string, string> = {},
+): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string; chainIdx?: number }[] } {
   if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [] }
+
+  // Resolve snap-bound jt| endpoints to stable em| hex midpoints. These midpoints don't
+  // move with wiggle/smoothing, so connections survive parameter changes.
+  const effectiveOverrides: Record<string, [number, number]> = { ...overrides }
+  for (const [jtKey, emKey] of Object.entries(snapBindings)) {
+    const parts = emKey.split('|')
+    if (parts.length !== 3) continue
+    const h1 = hexIdx.get(parts[1]), h2 = hexIdx.get(parts[2])
+    if (!h1 || !h2) continue
+    effectiveOverrides[jtKey] = (overrides[emKey] as [number, number] | undefined) ??
+      [(h1.center[0] + h2.center[0]) / 2, (h1.center[1] + h2.center[1]) / 2]
+  }
 
   let interHexDist = 0, hexScaleSamples = 0
   for (const e of roadEdges.slice(0, 8)) {
@@ -87,7 +100,7 @@ export function buildRoadChains(
     junctionPositions.set(k, count > 0 ? [sumX / count, sumY / count] : [h.center[0], h.center[1]])
   }
 
-  for (const [ok, pos] of Object.entries(overrides)) {
+  for (const [ok, pos] of Object.entries(effectiveOverrides)) {
     if (ok.startsWith('ja|')) junctionPositions.set(ok.slice(3), pos)
   }
 
@@ -162,16 +175,16 @@ export function buildRoadChains(
     // Apply user position overrides for the two side terminals
     const defaultA: [number, number] = [jc[0] + snx * offset, jc[1] + sny * offset]
     const defaultB: [number, number] = [jc[0] - snx * offset, jc[1] - sny * offset]
-    const termA: [number, number] = overrides[spineSideCpKey(k, bestPair[0])] ?? defaultA
-    const termB: [number, number] = overrides[spineSideCpKey(k, bestPair[1])] ?? defaultB
+    const termA: [number, number] = effectiveOverrides[spineSideCpKey(k, bestPair[0])] ?? defaultA
+    const termB: [number, number] = effectiveOverrides[spineSideCpKey(k, bestPair[1])] ?? defaultB
 
     // Map every arm to its terminal; per-arm jt| override takes precedence for branch arms
     armToTerminal.set(`${k}|${bestPair[0]}`, termA)
     armToTerminal.set(`${k}|${bestPair[1]}`, termB)
-    for (const bn of sideA) armToTerminal.set(`${k}|${bn}`, overrides[spineSideCpKey(k, bn)] ?? termA)
-    for (const bn of sideB) armToTerminal.set(`${k}|${bn}`, overrides[spineSideCpKey(k, bn)] ?? termB)
+    for (const bn of sideA) armToTerminal.set(`${k}|${bn}`, effectiveOverrides[spineSideCpKey(k, bn)] ?? termA)
+    for (const bn of sideB) armToTerminal.set(`${k}|${bn}`, effectiveOverrides[spineSideCpKey(k, bn)] ?? termB)
     for (const bn of branches) {
-      if (!sideA.has(bn) && !sideB.has(bn)) armToTerminal.set(`${k}|${bn}`, overrides[spineSideCpKey(k, bn)] ?? termA)
+      if (!sideA.has(bn) && !sideB.has(bn)) armToTerminal.set(`${k}|${bn}`, effectiveOverrides[spineSideCpKey(k, bn)] ?? termA)
     }
 
     sideTerminals.set(`${k}|${bestPair[0]}`, termA)
@@ -255,9 +268,9 @@ export function buildRoadChains(
         const h1 = hexIdx.get(cur), h2 = hexIdx.get(next)
         if (h1 && h2) {
           const ek = edgeCpKey(cur, next)
-          const isOverridden = !!overrides[ek]
+          const isOverridden = !!effectiveOverrides[ek]
           const mid: [number, number] = isOverridden
-            ? overrides[ek]
+            ? effectiveOverrides[ek]
             : [(h1.center[0] + h2.center[0]) / 2, (h1.center[1] + h2.center[1]) / 2]
           pts.push(mid); pinned.push(isOverridden); edgeKeys.push(ek)
           seenEdges.add(ek)
@@ -295,13 +308,19 @@ export function buildRoadChains(
         }
       }
 
-      // Emit em| control points at relaxed positions (each edge visited once via visitedPairs)
-      for (let i = 0; i < edgeKeys.length; i++) {
-        const ek = edgeKeys[i]
-        if (ek !== null) controlPoints.push({ key: ek, pos: relaxed[i], chainId: id })
-      }
       const storedHandles = chainOverrides[id]
       const steps = Math.round(smoothing)
+      const stepsActual = steps === 0 ? 1 : Math.max(2, steps)
+
+      // Emit em| control points. chainIdx tracks where each em| lands in the catmullRom output
+      // so we can split chains at exact indices later. Only reliable without storedHandles.
+      for (let i = 0; i < edgeKeys.length; i++) {
+        const ek = edgeKeys[i]
+        if (ek !== null) controlPoints.push({
+          key: ek, pos: relaxed[i], chainId: id,
+          chainIdx: storedHandles ? undefined : i * stepsActual,
+        })
+      }
       let baseChain: [number, number][]
       if (steps === 0) {
         baseChain = storedHandles && storedHandles.length >= 2
@@ -368,7 +387,7 @@ export function buildRoadChains(
   // Stub chains linking the two side terminals (the short spine section between T-junctions).
   // Skipped when the junction is fully dissolved — each arm has its own free endpoint.
   for (const [k, spinePair] of spineNeighbors) {
-    const allDissolved = [...(globalAdj.get(k) ?? [])].every(nk => !!overrides[spineSideCpKey(k, nk)])
+    const allDissolved = [...(globalAdj.get(k) ?? [])].every(nk => !!effectiveOverrides[spineSideCpKey(k, nk)])
     if (allDissolved) continue
     const termA = sideTerminals.get(`${k}|${spinePair[0]}`)
     const termB = sideTerminals.get(`${k}|${spinePair[1]}`)
@@ -407,7 +426,7 @@ export function buildRoadChains(
     for (const nk of globalAdj.get(k) ?? []) {
       if (spinePair.includes(nk)) continue
       const cpKey = spineSideCpKey(k, nk)
-      if (!overrides[cpKey]) continue
+      if (!effectiveOverrides[cpKey]) continue
       if (emittedJuncCps.has(cpKey)) continue
       emittedJuncCps.add(cpKey)
       const pos = armToTerminal.get(`${k}|${nk}`) ?? hexIdx.get(k)?.center ?? [0, 0] as [number, number]
@@ -419,6 +438,33 @@ export function buildRoadChains(
   // For junction hexes that have no spine (shouldn't happen, but keep the dot)
   for (const [k, entry] of junctionMap) {
     if (!k.includes('|')) controlPoints.push({ key: juncCpKey(k), pos: entry.pos })
+  }
+
+  // Split road chains where an arm is snap-bound to an em| midpoint on that chain.
+  // We split the baseChain at the exact catmullRom index then re-wiggle each half,
+  // so the shared fork point becomes a pinned chain endpoint (zero wiggle displacement).
+  // This guarantees the arm and both road halves always meet at the same point regardless
+  // of wiggle amplitude, frequency, or smoothing settings.
+  if (Object.keys(snapBindings).length > 0) {
+    const splitChainIds = new Set<string>()
+    for (const emKey of Object.values(snapBindings)) {
+      const emCp = controlPoints.find(cp => cp.key === emKey && cp.chainIdx !== undefined)
+      if (!emCp || emCp.chainId === undefined || emCp.chainIdx === undefined) continue
+      if (splitChainIds.has(emCp.chainId)) continue
+      const ci = chains.findIndex(c => c.id === emCp.chainId)
+      if (ci < 0) continue
+      const c = chains[ci]
+      const si = emCp.chainIdx
+      const base = c.baseChain ?? c.chain
+      if (si <= 0 || si >= base.length - 1) continue
+      splitChainIds.add(c.id)
+      const baseA = base.slice(0, si + 1)
+      const baseB = base.slice(si)
+      chains.splice(ci, 1,
+        { tier: c.tier, chain: wiggleChain(baseA, wiggleAmplitude, wiggleFreq), baseChain: baseA, id: `${c.id}|sA` },
+        { tier: c.tier, chain: wiggleChain(baseB, wiggleAmplitude, wiggleFreq), baseChain: baseB, id: `${c.id}|sB` },
+      )
+    }
   }
 
   return { chains, junctions: Array.from(junctionMap.values()), controlPoints }

@@ -113,6 +113,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     addRoadEdge, removeRoadHexEdges, addRailEdge, removeRailHexEdges,
     activePanel,
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
+    roadSnapBindings, setRoadSnapBinding, deleteRoadSnapBinding,
     roadNodeEditMode,
     roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing,
     roadChainOverrides, setRoadChainOverride,
@@ -186,6 +187,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const setRoadControlOverrideRef = useRef(setRoadControlOverride)
   const roadNodeEditModeRef = useRef(roadNodeEditMode)
   const deleteRoadControlOverrideRef = useRef(deleteRoadControlOverride)
+  const setRoadSnapBindingRef = useRef(setRoadSnapBinding)
+  const deleteRoadSnapBindingRef = useRef(deleteRoadSnapBinding)
   const resetHexOverrideRef = useRef(resetHexOverride)
   const removeHexTerrainLayerRef = useRef(removeHexTerrainLayer)
   const roadWiggleAmpRef = useRef(roadWiggleAmp)
@@ -367,6 +370,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   setRoadControlOverrideRef.current = setRoadControlOverride
   roadNodeEditModeRef.current = roadNodeEditMode
   deleteRoadControlOverrideRef.current = deleteRoadControlOverride
+  setRoadSnapBindingRef.current = setRoadSnapBinding
+  deleteRoadSnapBindingRef.current = deleteRoadSnapBinding
   overrideHexTerrainRef.current = overrideHexTerrain
   addHexTerrainLayerRef.current = addHexTerrainLayer
   terrainLayersEnabledRef.current = terrainLayersEnabled
@@ -510,8 +515,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
 
   const smoothedRoadData = useMemo(
-    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps),
-    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps],
+    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings),
+    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings],
   )
   const smoothedRoadDataRef = useRef(smoothedRoadData)
   smoothedRoadDataRef.current = smoothedRoadData
@@ -1877,7 +1882,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Control point drag
   const draggingCpKeyRef = useRef<string | null>(null)
   const draggingCpGroupKeysRef = useRef<string[]>([])
-  type SnapTarget = { kind: 'sibling'; key: string; pos: [number, number] } | { kind: 'road'; pos: [number, number] }
+  type SnapTarget = { kind: 'sibling'; key: string; pos: [number, number] } | { kind: 'road'; emKey: string; pos: [number, number] }
   const snapPreviewRef = useRef<SnapTarget | null>(null)
 
   useEffect(() => {
@@ -1986,24 +1991,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           return { kind: 'sibling', key: sib.key, pos: sib.pos }
       }
 
-      // Road chain snap — nearest point on any chain polyline
+      // Road snap — nearest em| control point. These are stable hex-edge midpoints that
+      // don't shift with wiggle/smoothing, so the connection is permanent.
       const roadThresh = SNAP_ROAD_PX / zoom
-      let bestDist = roadThresh, bestPos: [number, number] | null = null
-      for (const chain of smoothedRoadDataRef.current.chains) {
-        if (chain.id.startsWith('stub|')) continue
-        const pts = chain.chain
-        for (let i = 0; i < pts.length - 1; i++) {
-          const [ax, ay] = projectToCanvas(pts[i][0], pts[i][1], meta, pw, ph, px, py)
-          const [bx, by] = projectToCanvas(pts[i + 1][0], pts[i + 1][1], meta, pw, ph, px, py)
-          const ddx = bx - ax, ddy = by - ay, lenSq = ddx * ddx + ddy * ddy
-          if (lenSq === 0) continue
-          const t = Math.max(0, Math.min(1, ((dpx - ax) * ddx + (dpy - ay) * ddy) / lenSq))
-          const nx = ax + t * ddx, ny = ay + t * ddy
-          const dist = Math.hypot(dpx - nx, dpy - ny)
-          if (dist < bestDist) { bestDist = dist; bestPos = unprojectFromCanvas(nx, ny, meta, pw, ph, px, py) }
-        }
+      let bestDist = roadThresh, bestEmKey: string | null = null, bestEmPos: [number, number] | null = null
+      for (const cp of smoothedRoadDataRef.current.controlPoints) {
+        if (!cp.key.startsWith('em|')) continue
+        const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
+        const dist = Math.hypot(dpx - cx, dpy - cy)
+        if (dist < bestDist) { bestDist = dist; bestEmKey = cp.key; bestEmPos = cp.pos }
       }
-      if (bestPos) return { kind: 'road', pos: bestPos }
+      if (bestEmKey && bestEmPos) return { kind: 'road', emKey: bestEmKey, pos: bestEmPos }
 
       return null
     }
@@ -2133,10 +2131,20 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       dragLiveOverrideRef.current = {}
       if (dragKey && snap) {
         const snapPos = snap.pos
-        for (const k of groupKeys) setRoadControlOverrideRef.current(k, snapPos)
-        if (snap.kind === 'sibling') setRoadControlOverrideRef.current(snap.key, snapPos)
+        for (const k of groupKeys) {
+          setRoadControlOverrideRef.current(k, snapPos)
+          if (snap.kind === 'road') setRoadSnapBindingRef.current(k, snap.emKey)
+          else deleteRoadSnapBindingRef.current(k)
+        }
+        if (snap.kind === 'sibling') {
+          setRoadControlOverrideRef.current(snap.key, snapPos)
+          deleteRoadSnapBindingRef.current(snap.key)
+        }
       } else if (dragKey && finalPos) {
-        for (const k of groupKeys) setRoadControlOverrideRef.current(k, finalPos)
+        for (const k of groupKeys) {
+          setRoadControlOverrideRef.current(k, finalPos)
+          deleteRoadSnapBindingRef.current(k)
+        }
       }
     }
 
