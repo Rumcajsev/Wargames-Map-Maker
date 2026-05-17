@@ -33,9 +33,13 @@ export function buildHexNumberMap(
   const flatTop = hexOrientation === 'flat'
   const offsets = hexes.map(h => ({ hex: h, ...axialToOffset(h.q, h.r, flatTop) }))
 
+  // Derive bounds only from full hexes so numbering starts at 01 for the
+  // first fully visible hex, not from hidden partial hexes at the edges.
+  const fullOffsets = offsets.filter(o => !o.hex.partial)
+
   let minCol = Infinity, maxCol = -Infinity
   let minRow = Infinity, maxRow = -Infinity
-  for (const { col, row } of offsets) {
+  for (const { col, row } of fullOffsets) {
     if (col < minCol) minCol = col
     if (col > maxCol) maxCol = col
     if (row < minRow) minRow = row
@@ -46,7 +50,7 @@ export function buildHexNumberMap(
   const flipRow = startCorner === 'bottom-left' || startCorner === 'bottom-right'
 
   const result = new Map<string, string>()
-  for (const { hex, col, row } of offsets) {
+  for (const { hex, col, row } of fullOffsets) {
     const c = flipCol ? maxCol - col + 1 : col - minCol + 1
     const r = flipRow ? maxRow - row + 1 : row - minRow + 1
     result.set(`${hex.q},${hex.r}`, String(c).padStart(2, '0') + String(r).padStart(2, '0'))
