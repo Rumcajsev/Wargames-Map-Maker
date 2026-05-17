@@ -1337,31 +1337,53 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.restore()
       }
 
+      // Group coincident jt| endpoints (within 2px) into a single draggable dot
+      const jtDots = controlPoints.filter(cp => cp.key.startsWith('jt|') && dissolvedHexes.has(cp.key.split('|')[1]))
+      const jtGroups: { keys: string[]; pos: [number, number] }[] = []
+      for (const cp of jtDots) {
+        const [cx, cy] = project(cp.pos[0], cp.pos[1])
+        let merged = false
+        for (const g of jtGroups) {
+          const [gx, gy] = project(g.pos[0], g.pos[1])
+          if (Math.hypot(cx - gx, cy - gy) < 2) { g.keys.push(cp.key); merged = true; break }
+        }
+        if (!merged) jtGroups.push({ keys: [cp.key], pos: cp.pos })
+      }
+
       ctx.save()
+      // ja| and em| dots
       for (const { key, pos } of controlPoints) {
         const isJunc = key.startsWith('ja|')
-        const isSpineSide = key.startsWith('jt|')
         const isEdge = key.startsWith('em|')
-        if (isSpineSide) {
-          const hexKey = key.split('|')[1]
-          if (!dissolvedHexes.has(hexKey)) continue
-        }
+        if (key.startsWith('jt|')) continue  // rendered as groups below
         if (isJunc) {
           const hexKey = key.slice(3)
           if (dissolvedHexes.has(hexKey)) continue
         }
         const [x, y] = project(pos[0], pos[1])
-        const overridden = !!overrides[key]
         ctx.beginPath()
-        if (isSpineSide) {
+        ctx.arc(x, y, isJunc ? juncR : edgeR, 0, Math.PI * 2)
+        ctx.fillStyle = isJunc ? 'rgba(255,255,255,0.6)' : (!!overrides[key] ? '#ffcc44' : 'rgba(255,255,255,0.6)')
+        ctx.fill()
+        ctx.strokeStyle = isJunc ? '#cc8800' : '#888'
+        ctx.lineWidth = handleScale
+        ctx.stroke()
+      }
+      // jt| group dots — lone endpoint = diamond, connected group = circle
+      for (const g of jtGroups) {
+        const [x, y] = project(g.pos[0], g.pos[1])
+        const isGroup = g.keys.length >= 2
+        const dragging = g.keys.includes(draggingCpKeyRef.current ?? '')
+        ctx.beginPath()
+        if (isGroup) {
+          ctx.arc(x, y, juncR, 0, Math.PI * 2)
+        } else {
           const r = diamondR
           ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
-        } else {
-          ctx.arc(x, y, isJunc ? juncR : edgeR, 0, Math.PI * 2)
         }
-        ctx.fillStyle = overridden ? '#ffcc44' : 'rgba(255,255,255,0.6)'
+        ctx.fillStyle = dragging ? '#ffcc44' : isGroup ? 'rgba(100,200,255,0.8)' : 'rgba(255,255,255,0.6)'
         ctx.fill()
-        ctx.strokeStyle = isSpineSide ? '#4488cc' : isJunc ? '#cc8800' : '#888'
+        ctx.strokeStyle = isGroup ? '#2288cc' : '#4488cc'
         ctx.lineWidth = handleScale
         ctx.stroke()
       }
@@ -1854,6 +1876,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Control point drag
   const draggingCpKeyRef = useRef<string | null>(null)
+  const draggingCpGroupKeysRef = useRef<string[]>([])
   type SnapTarget = { kind: 'sibling'; key: string; pos: [number, number] } | { kind: 'road'; pos: [number, number] }
   const snapPreviewRef = useRef<SnapTarget | null>(null)
 
@@ -1880,17 +1903,39 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
       const currentZoom = zoomRef.current ?? 1
 
-      // Road CP hit test (diamonds/circles/edge midpoints) — road only
+      // Road CP hit test — road only
       if (roadNodeEditModeRef.current) {
-        const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|') && dissolvedHexesHit.has(cp.key.split('|')[1]))
+        // Build jt| groups for hit testing (same grouping as draw)
+        const jtDotsHit = controlPoints.filter(cp => cp.key.startsWith('jt|') && dissolvedHexesHit.has(cp.key.split('|')[1]))
+        const jtGroupsHit: { keys: string[]; pos: [number, number] }[] = []
+        for (const cp of jtDotsHit) {
+          const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
+          let merged = false
+          for (const g of jtGroupsHit) {
+            const [gx, gy] = projectToCanvas(g.pos[0], g.pos[1], meta, pw, ph, px, py)
+            if (Math.hypot(cx - gx, cy - gy) < 2) { g.keys.push(cp.key); merged = true; break }
+          }
+          if (!merged) jtGroupsHit.push({ keys: [cp.key], pos: cp.pos })
+        }
+        const hitR = 10 / currentZoom
+        for (const g of jtGroupsHit) {
+          const [cx, cy] = projectToCanvas(g.pos[0], g.pos[1], meta, pw, ph, px, py)
+          if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
+            draggingCpKeyRef.current = g.keys[0]
+            draggingCpGroupKeysRef.current = g.keys
+            e.stopPropagation()
+            return
+          }
+        }
         const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|') && !dissolvedHexesHit.has(cp.key.slice(3)))
         const edges = controlPoints.filter(cp => cp.key.startsWith('em|'))
-        for (const [cps, hitRScreen] of [[spineSides, 10], [junctions, 10], [edges, 8]] as const) {
-          const hitR = (hitRScreen as number) / currentZoom
+        for (const [cps, hitRScreen] of [[junctions, 10], [edges, 8]] as const) {
+          const r = (hitRScreen as number) / currentZoom
           for (const cp of cps) {
             const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
-            if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
+            if (Math.hypot(logical.lx - cx, logical.ly - cy) <= r) {
               draggingCpKeyRef.current = cp.key
+              draggingCpGroupKeysRef.current = [cp.key]
               e.stopPropagation()
               return
             }
@@ -1985,10 +2030,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!logical) return
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
 
-      // CP drag
+      // CP drag — move all keys in the group together
       if (draggingCpKeyRef.current) {
         const lonLat = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
-        dragLiveOverrideRef.current = { ...dragLiveOverrideRef.current, [draggingCpKeyRef.current]: lonLat }
+        const groupOverrides: Record<string, [number, number]> = {}
+        for (const k of draggingCpGroupKeysRef.current) groupOverrides[k] = lonLat
+        dragLiveOverrideRef.current = { ...dragLiveOverrideRef.current, ...groupOverrides }
         snapPreviewRef.current = checkSnap(draggingCpKeyRef.current, lonLat, meta, pw, ph, px, py)
         scheduleRedraw()
         return
@@ -2076,19 +2123,20 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
       // CP drag commit
       const dragKey = draggingCpKeyRef.current
+      const groupKeys = draggingCpGroupKeysRef.current
       const snap = snapPreviewRef.current
       const finalPos = dragKey ? dragLiveOverrideRef.current[dragKey] : null
       draggingCpKeyRef.current = null
+      draggingCpGroupKeysRef.current = []
       snapPreviewRef.current = null
       if (dragRafRef.current !== null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null }
       dragLiveOverrideRef.current = {}
       if (dragKey && snap) {
-        // Set both (sibling) or just the dragged one (road) to the snap position.
-        // Never delete overrides — keep all arms dissolved and independently positioned.
-        setRoadControlOverrideRef.current(dragKey, snap.pos)
-        if (snap.kind === 'sibling') setRoadControlOverrideRef.current(snap.key, snap.pos)
+        const snapPos = snap.pos
+        for (const k of groupKeys) setRoadControlOverrideRef.current(k, snapPos)
+        if (snap.kind === 'sibling') setRoadControlOverrideRef.current(snap.key, snapPos)
       } else if (dragKey && finalPos) {
-        setRoadControlOverrideRef.current(dragKey, finalPos)
+        for (const k of groupKeys) setRoadControlOverrideRef.current(k, finalPos)
       }
     }
 
@@ -2360,16 +2408,51 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
                   const [nq, nr] = nk.split(',').map(Number)
                   const nh = hexesRef.current.find(hx => hx.q === nq && hx.r === nr)
                   if (nh) {
-                    // Offset arm endpoint 20% of the way toward the neighbor hex center
                     const dx = nh.center[0] - juncCenter[0], dy = nh.center[1] - juncCenter[1]
-                    const armPos: [number, number] = [juncCenter[0] + dx * 0.2, juncCenter[1] + dy * 0.2]
-                    setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, armPos)
+                    setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, [juncCenter[0] + dx * 0.2, juncCenter[1] + dy * 0.2])
                   } else {
                     setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, juncCenter)
                   }
                 }
               },
             })
+          } else {
+            // Junction is fully dissolved — offer to dissolve any connected groups
+            const jtCpsForHex = (smoothedRoadDataRef.current.controlPoints ?? [])
+              .filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey)
+            const meta = metaRef.current
+            const { w: cssW2, h: cssH2 } = frameDimsRef.current
+            if (meta && cssW2 > 0) {
+              const { pw, ph, px, py } = computePaper(cssW2, cssH2, meta)
+              const groups: { keys: string[]; pos: [number, number] }[] = []
+              for (const cp of jtCpsForHex) {
+                const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
+                let merged = false
+                for (const g of groups) {
+                  const [gx, gy] = projectToCanvas(g.pos[0], g.pos[1], meta, pw, ph, px, py)
+                  if (Math.hypot(cx - gx, cy - gy) < 2) { g.keys.push(cp.key); merged = true; break }
+                }
+                if (!merged) groups.push({ keys: [cp.key], pos: cp.pos })
+              }
+              const connectedGroups = groups.filter(g => g.keys.length >= 2)
+              if (connectedGroups.length > 0) {
+                items.push({
+                  label: 'Dissolve group',
+                  action: () => {
+                    for (const g of connectedGroups) {
+                      for (const key of g.keys) {
+                        const nk = key.split('|')[2]
+                        const [nq, nr] = nk.split(',').map(Number)
+                        const nh = hexesRef.current.find(hx => hx.q === nq && hx.r === nr)
+                        const dx = (nh?.center[0] ?? g.pos[0]) - g.pos[0]
+                        const dy = (nh?.center[1] ?? g.pos[1]) - g.pos[1]
+                        setRoadControlOverrideRef.current(key, [g.pos[0] + dx * 0.2, g.pos[1] + dy * 0.2])
+                      }
+                    }
+                  },
+                })
+              }
+            }
           }
         }
 
