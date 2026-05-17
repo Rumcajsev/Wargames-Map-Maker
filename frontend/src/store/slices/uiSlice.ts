@@ -120,12 +120,21 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     }
 
     updates.roadNodeEditMode = tool.type === 'node-edit'
+    updates.riverNodeEditMode = tool.type === 'river-node-edit'
+
+    updates.roadSelectMode = tool.type === 'road-select'
+    if (!updates.roadPaintMode && !updates.roadSelectMode) {
+      updates.selectedRoadSegmentKeys = []
+      updates.selectedRoadHopKey = null
+    }
 
     updates.riverEditMode = tool.type === 'river-paint' || tool.type === 'river-select'
     updates.riverSelectMode = tool.type === 'river-select'
+    if (!updates.riverEditMode) { updates.selectedSegmentKeys = []; updates.selectedHopKey = null }
 
     updates.canalEditMode = tool.type === 'canal-paint' || tool.type === 'canal-select'
     updates.canalSelectMode = tool.type === 'canal-select'
+    if (!updates.canalEditMode) updates.selectedCanalSegmentKeys = []
 
     updates.highlightPaintMode = tool.type === 'highlight-paint'
     updates.highlightLineEraser = tool.type === 'highlight-erase'
@@ -208,6 +217,8 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         railsFetchTypes: s.railsFetchTypes, railsStatus: s.railsStatus,
         riverEdges: s.riverEdges, canalEdges: s.canalEdges,
         riverSegmentProps: s.riverSegmentProps, canalSegmentProps: s.canalSegmentProps,
+        riverHopProps: s.riverHopProps,
+        roadSegmentProps: s.roadSegmentProps, roadHopProps: s.roadHopProps,
         riverStyle: s.riverStyle, canalStyle: s.canalStyle,
         elevationStatus: s.elevationStatus,
         showReliefHeatmap: s.showReliefHeatmap, showElevHeatmap: s.showElevHeatmap,
@@ -217,7 +228,8 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
         illustratedStyle: s.illustratedStyle,
         riverWidthScale: s.riverWidthScale, canalWidthScale: s.canalWidthScale,
-        riverCurveSteps: s.riverCurveSteps, riverWobble: s.riverWobble, riverDetail: s.riverDetail,
+        riverWiggleAmp: s.riverWiggleAmp, riverWiggleFreq: s.riverWiggleFreq, riverSmoothing: s.riverSmoothing,
+        roadWiggleAmp: s.roadWiggleAmp, roadWiggleFreq: s.roadWiggleFreq, roadSmoothing: s.roadSmoothing,
         roadTierStyles: s.roadTierStyles, railStyle: s.railStyle,
         woodsHexStyle: s.woodsHexStyle, blobSize: s.blobSize, blobCount: s.blobCount,
         showBridges: s.showBridges, bridgeStyle: s.bridgeStyle,

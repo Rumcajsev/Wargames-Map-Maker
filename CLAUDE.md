@@ -74,6 +74,13 @@ Terrain generation and elevation use SSE streaming (`/terrain-stream`, `/elevati
 
 ---
 
+## Working style
+
+- **Commit after every logical change.** Each self-contained fix, feature, or refactor gets its own commit before moving on. This makes reverting any single step a simple `git reset --hard <sha>` without losing unrelated work.
+- Before starting a multi-step task, commit (or ask the user to commit) the current working state as a checkpoint.
+
+---
+
 ## Conventions
 
 - No comments unless the *why* is non-obvious (hidden constraint, workaround, subtle invariant)

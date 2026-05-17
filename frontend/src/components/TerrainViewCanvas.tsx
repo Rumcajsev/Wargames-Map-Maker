@@ -7,7 +7,9 @@ import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon } from '../lib/
 import { mulberry32, makePermutation } from '../lib/noise'
 import { projectToCanvas, unprojectFromCanvas, computePaper } from '../lib/projection'
 import { coastalBlobTerrains, getCoastlineRuns, buildSmoothedRing, bleedPolygon, buildTerrainBlobsV2, computeConnectedComponents, buildFieldCanvas } from '../lib/terrainBlobs'
-import { riverChainCache, buildRiverChains } from '../lib/riverChains'
+import { riverChainCache, buildRiverChains, buildRiverChainsV2 } from '../lib/riverChains'
+
+const RIVER_V2 = true
 import { drawRivers as _drawRivers } from '../lib/drawRivers'
 import { buildRoadChains, buildRailChains, spineSideCpKey } from '../lib/roadChains'
 import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
@@ -112,9 +114,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     activePanel,
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadNodeEditMode,
-    roadBendiness, hexRoadBendiness, setRoadBendiness, setHexRoadBendiness, deleteHexRoadBendiness,
+    roadWiggleAmp, roadWiggleFreq, roadSmoothing,
+    roadChainOverrides, setRoadChainOverride,
     riverEdges, canalEdges,
     riverEditMode, canalEditMode, toggleRiverEdge, toggleCanalEdge,
+    riverNodeEditMode, riverChainOverrides, setRiverChainOverride,
+    riverHopProps, selectedHopKey, setRiverHopProp, setSelectedHopKey,
+    roadSelectMode, selectedRoadSegmentKeys, selectedRoadHopKey,
+    setRoadSelectMode, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
+    setRoadSegmentProp, clearRoadSegmentProp, setRoadHopProp, clearRoadHopProp, setSelectedRoadHopKey,
+    roadSegmentProps, roadHopProps,
     showRiverLabels, riverLabelColor,
     riverSegmentProps, canalSegmentProps,
     setRiverSegmentProp, clearRiverSegmentProp,
@@ -127,6 +136,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     lakeBlobSmooth, lakeBlobOffset, lakeBlobBump,
     lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection,
     riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail,
+    riverWiggleFreq, riverWiggleAmp, riverSmoothing,
     terrainBlobOverrides, setTerrainBlobOverride,
     lakeOverrides, setLakeOverride,
     realisticCoastline,
@@ -178,10 +188,23 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const deleteRoadControlOverrideRef = useRef(deleteRoadControlOverride)
   const resetHexOverrideRef = useRef(resetHexOverride)
   const removeHexTerrainLayerRef = useRef(removeHexTerrainLayer)
-  const hexRoadBendinessRef = useRef(hexRoadBendiness)
-  const setHexRoadBendinessRef = useRef(setHexRoadBendiness)
-  const deleteHexRoadBendinessRef = useRef(deleteHexRoadBendiness)
-  const roadBendinessRef = useRef(roadBendiness)
+  const roadWiggleAmpRef = useRef(roadWiggleAmp)
+  const roadWiggleFreqRef = useRef(roadWiggleFreq)
+  const roadSmoothingRef = useRef(roadSmoothing)
+  const roadChainOverridesRef = useRef(roadChainOverrides)
+  const setRoadChainOverrideRef = useRef(setRoadChainOverride)
+  const { deleteRoadChainOverride } = useMapStore()
+  const deleteRoadChainOverrideRef = useRef(deleteRoadChainOverride)
+  const riverNodeEditModeRef = useRef(riverNodeEditMode)
+  const riverChainOverridesRef = useRef(riverChainOverrides)
+  const setRiverChainOverrideRef = useRef(setRiverChainOverride)
+  const riverChainsV2Ref = useRef<import('../lib/riverChains').RiverChainV2[]>([])
+  // Dense-point hover/drag refs (shared by road node edit and river node edit)
+  // handles = sparse edit points (every 5th of the dense catmullRom output)
+  const hoveredChainRef = useRef<{ id: string; handles: [number, number][]; kind: 'road' | 'river' } | null>(null)
+  const hoveredHandleIdxRef = useRef<number | null>(null)
+  const draggingDensePtRef = useRef<{ id: string; handles: [number, number][]; handleIdx: number; kind: 'road' | 'river' } | null>(null)
+  const dragLiveDensePosRef = useRef<[number, number] | null>(null)
   const dragLiveOverrideRef = useRef<Record<string, [number, number]>>({})
   const dragRafRef = useRef<number | null>(null)
   const riverEdgesRef = useRef(riverEdges)
@@ -221,8 +244,26 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const riverCurveStepsRef = useRef(riverCurveSteps)
   const riverWobbleRef = useRef(riverWobble)
   const riverDetailRef = useRef(riverDetail)
+  const riverHopPropsRef = useRef(riverHopProps)
+  const selectedHopKeyRef = useRef(selectedHopKey)
+  const setRiverHopPropRef = useRef(setRiverHopProp)
+  const setSelectedHopKeyRef = useRef(setSelectedHopKey)
+  const riverWiggleFreqRef = useRef(riverWiggleFreq)
+  const riverWiggleAmpRef = useRef(riverWiggleAmp)
+  const riverSmoothingRef = useRef(riverSmoothing)
   const setRiverSegmentPropRef = useRef(setRiverSegmentProp)
   const clearRiverSegmentPropRef = useRef(clearRiverSegmentProp)
+  const roadSelectModeRef = useRef(roadSelectMode)
+  const selectedRoadSegmentKeysRef = useRef(selectedRoadSegmentKeys)
+  const selectedRoadHopKeyRef = useRef(selectedRoadHopKey)
+  const setRoadSelectModeRef = useRef(setRoadSelectMode)
+  const setSelectedRoadSegmentKeysRef = useRef(setSelectedRoadSegmentKeys)
+  const toggleRoadSegmentSelectionRef = useRef(toggleRoadSegmentSelection)
+  const setRoadHopPropRef = useRef(setRoadHopProp)
+  const clearRoadHopPropRef = useRef(clearRoadHopProp)
+  const setSelectedRoadHopKeyRef = useRef(setSelectedRoadHopKey)
+  const roadSegmentPropsRef = useRef(roadSegmentProps)
+  const roadHopPropsRef = useRef(roadHopProps)
   const terrainBlobSmoothRef = useRef(terrainBlobSmooth)
   const terrainBlobOffsetRef = useRef(terrainBlobOffset)
   const terrainBlobBumpRef = useRef(terrainBlobBump)
@@ -330,10 +371,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   terrainLayersEnabledRef.current = terrainLayersEnabled
   resetHexOverrideRef.current = resetHexOverride
   removeHexTerrainLayerRef.current = removeHexTerrainLayer
-  hexRoadBendinessRef.current = hexRoadBendiness
-  setHexRoadBendinessRef.current = setHexRoadBendiness
-  deleteHexRoadBendinessRef.current = deleteHexRoadBendiness
-  roadBendinessRef.current = roadBendiness
+  roadWiggleAmpRef.current = roadWiggleAmp
+  roadWiggleFreqRef.current = roadWiggleFreq
+  roadSmoothingRef.current = roadSmoothing
+  roadChainOverridesRef.current = roadChainOverrides
+  setRoadChainOverrideRef.current = setRoadChainOverride
+  deleteRoadChainOverrideRef.current = deleteRoadChainOverride
+  riverNodeEditModeRef.current = riverNodeEditMode
+  riverChainOverridesRef.current = riverChainOverrides
+  setRiverChainOverrideRef.current = setRiverChainOverride
   riverEdgesRef.current = riverEdges
   canalEdgesRef.current = canalEdges
   riverEditModeRef.current = riverEditMode
@@ -369,8 +415,26 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   riverCurveStepsRef.current = riverCurveSteps
   riverWobbleRef.current = riverWobble
   riverDetailRef.current = riverDetail
+  riverHopPropsRef.current = riverHopProps
+  selectedHopKeyRef.current = selectedHopKey
+  setRiverHopPropRef.current = setRiverHopProp
+  setSelectedHopKeyRef.current = setSelectedHopKey
+  riverWiggleFreqRef.current = riverWiggleFreq
+  riverWiggleAmpRef.current = riverWiggleAmp
+  riverSmoothingRef.current = riverSmoothing
   setRiverSegmentPropRef.current = setRiverSegmentProp
   clearRiverSegmentPropRef.current = clearRiverSegmentProp
+  roadSelectModeRef.current = roadSelectMode
+  selectedRoadSegmentKeysRef.current = selectedRoadSegmentKeys
+  selectedRoadHopKeyRef.current = selectedRoadHopKey
+  setRoadSelectModeRef.current = setRoadSelectMode
+  setSelectedRoadSegmentKeysRef.current = setSelectedRoadSegmentKeys
+  toggleRoadSegmentSelectionRef.current = toggleRoadSegmentSelection
+  setRoadHopPropRef.current = setRoadHopProp
+  clearRoadHopPropRef.current = clearRoadHopProp
+  setSelectedRoadHopKeyRef.current = setSelectedRoadHopKey
+  roadSegmentPropsRef.current = roadSegmentProps
+  roadHopPropsRef.current = roadHopProps
   terrainBlobSmoothRef.current = terrainBlobSmooth
   terrainBlobOffsetRef.current = terrainBlobOffset
   terrainBlobBumpRef.current = terrainBlobBump
@@ -444,8 +508,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
 
   const smoothedRoadData = useMemo(
-    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadBendiness, hexRoadBendiness),
-    [roadEdges, hexIdx, roadControlOverrides, roadBendiness, hexRoadBendiness],
+    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps),
+    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps],
   )
   const smoothedRoadDataRef = useRef(smoothedRoadData)
   smoothedRoadDataRef.current = smoothedRoadData
@@ -1010,8 +1074,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         py: verts.reduce((s, v) => s + v[1], 0) / 6,
       }))
 
-    const riverChainData = buildRiverChains(riverEdgesRef.current, hexesRef.current)
-    const canalChainData = buildRiverChains(canalEdgesRef.current, hexesRef.current)
+    let riverChainData, canalChainData
+    if (RIVER_V2) {
+      const rv2 = buildRiverChainsV2(riverEdgesRef.current, hexesRef.current, riverChainOverridesRef.current, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, riverHopPropsRef.current, riverSegmentPropsRef.current)
+      riverChainsV2Ref.current = rv2
+      riverChainData = rv2.map(c => ({ vertices: c.chain, segKey: c.segKey, hopKeys: c.hopKeys, hopRanges: c.hopRanges }))
+      canalChainData = buildRiverChainsV2(canalEdgesRef.current, hexesRef.current, riverChainOverridesRef.current, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current).map(c => ({ vertices: c.chain, segKey: c.segKey }))
+    } else {
+      riverChainsV2Ref.current = []
+      riverChainData = buildRiverChains(riverEdgesRef.current, hexesRef.current)
+      canalChainData = buildRiverChains(canalEdgesRef.current, hexesRef.current)
+    }
     computedRiverChainsRef.current = riverChainData
     computedCanalChainsRef.current = canalChainData
     riverChainCache.chains = riverChainData
@@ -1028,37 +1101,70 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       riverBaseHW: 1.4 * riverWidthScaleRef.current,
       canalBaseHW: 1.4 * canalWidthScaleRef.current,
       lakeProjCenters,
-      smoothPasses: riverCurveStepsRef.current,
-      wobbleBroad: riverWobbleRef.current * R * 0.5,
-      wobbleDetail: riverDetailRef.current * R * 0.18,
+      smoothPasses: RIVER_V2 ? 0 : riverCurveStepsRef.current,
+      wobbleBroad: RIVER_V2 ? 0 : riverWobbleRef.current * R * 0.5,
+      wobbleDetail: RIVER_V2 ? 0 : riverDetailRef.current * R * 0.18,
       R,
+      riverHopProps: riverHopPropsRef.current,
+      selectedHopKey: selectedHopKeyRef.current,
       project,
     }
 
-    if (!isExport) {
-      const papW = Math.ceil(pw), papH = Math.ceil(ph)
-      if (riversDirtyRef.current || !riversLayerRef.current ||
-          riversLayerPapWRef.current !== papW || riversLayerPapHRef.current !== papH) {
-        const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
-        const offscreen = new OffscreenCanvas(offW, offH)
-        const oCtx = offscreen.getContext('2d')!
-        oCtx.scale(dpr * offZoom, dpr * offZoom)
-        oCtx.translate(-px, -py)
-        oCtx.save()
-        oCtx.beginPath()
-        oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
-        oCtx.clip()
-        _drawRivers(oCtx, riverParams)
-        oCtx.restore()
-        riversLayerRef.current = offscreen
-        riversDirtyRef.current = false
-        riversLayerPapWRef.current = papW
-        riversLayerPapHRef.current = papH
+    // Compute drag state upfront — needed for both river and road live previews below
+    const isDraggingCP = Object.keys(dragLiveOverrideRef.current).length > 0
+    const liveDenseDrag = draggingDensePtRef.current
+    const liveDensePos = dragLiveDensePosRef.current
+    const isDraggingRoadDense = !!(liveDenseDrag?.kind === 'road' && liveDensePos)
+    const isDraggingRiverDense = !!(liveDenseDrag?.kind === 'river' && liveDensePos)
+    const liveChainOverrides = isDraggingRoadDense
+      ? { ...roadChainOverridesRef.current, [liveDenseDrag!.id]: liveDenseDrag!.handles.map((p, i) => i === liveDenseDrag!.handleIdx ? liveDensePos! : p) as [number, number][] }
+      : roadChainOverridesRef.current
+    const isDraggingDense = isDraggingRoadDense
+
+    // During a river node drag, compute live river geometry and bypass the offscreen cache
+    let liveRiverParams = riverParams
+    if (isDraggingRiverDense && liveDenseDrag && liveDensePos) {
+      const liveRiverOverrides = {
+        ...riverChainOverridesRef.current,
+        [liveDenseDrag.id]: liveDenseDrag.handles.map((p, i) => i === liveDenseDrag.handleIdx ? liveDensePos : p) as [number, number][],
       }
-      ctx.drawImage(riversLayerRef.current, px, py, pw, ph)
+      const liveRv2 = buildRiverChainsV2(riverEdgesRef.current, hexesRef.current, liveRiverOverrides, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, riverHopPropsRef.current, riverSegmentPropsRef.current)
+      liveRiverParams = { ...riverParams, riverChainData: liveRv2.map(c => ({ vertices: c.chain, segKey: c.segKey })) }
+    }
+
+    if (!isExport) {
+      if (isDraggingRiverDense) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        ctx.clip()
+        _drawRivers(ctx, liveRiverParams)
+        ctx.restore()
+      } else {
+        const papW = Math.ceil(pw), papH = Math.ceil(ph)
+        if (riversDirtyRef.current || !riversLayerRef.current ||
+            riversLayerPapWRef.current !== papW || riversLayerPapHRef.current !== papH) {
+          const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
+          const offscreen = new OffscreenCanvas(offW, offH)
+          const oCtx = offscreen.getContext('2d')!
+          oCtx.scale(dpr * offZoom, dpr * offZoom)
+          oCtx.translate(-px, -py)
+          oCtx.save()
+          oCtx.beginPath()
+          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.clip()
+          _drawRivers(oCtx, riverParams)
+          oCtx.restore()
+          riversLayerRef.current = offscreen
+          riversDirtyRef.current = false
+          riversLayerPapWRef.current = papW
+          riversLayerPapHRef.current = papH
+        }
+        ctx.drawImage(riversLayerRef.current, px, py, pw, ph)
+      }
     }
     if (isExport) {
-      _drawRivers(ctx, riverParams)
+      _drawRivers(ctx, liveRiverParams)
     }
 
     // Urban area buildings + settlement buildings (rendered below roads)
@@ -1119,16 +1225,31 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     // During a CP drag, compute road geometry with the live position directly — no store update,
     // no React re-render cycle, no useMemo. On drop, the store is updated once for the full rebuild.
-    const isDraggingCP = Object.keys(dragLiveOverrideRef.current).length > 0
     const liveRoadData = isDraggingCP
       ? buildRoadChains(
           roadEdgesRef.current,
           hexIdxRef.current as Map<string, { center: [number, number] }>,
           { ...roadControlOverridesRef.current, ...dragLiveOverrideRef.current },
-          roadBendinessRef.current,
-          hexRoadBendinessRef.current,
+          roadWiggleAmpRef.current,
+          roadWiggleFreqRef.current,
+          roadSmoothingRef.current,
+          roadChainOverridesRef.current,
+          roadSegmentPropsRef.current,
+          roadHopPropsRef.current,
         )
-      : smoothedRoadDataRef.current
+      : isDraggingDense
+        ? buildRoadChains(
+            roadEdgesRef.current,
+            hexIdxRef.current as Map<string, { center: [number, number] }>,
+            roadControlOverridesRef.current,
+            roadWiggleAmpRef.current,
+            roadWiggleFreqRef.current,
+            roadSmoothingRef.current,
+            liveChainOverrides,
+            roadSegmentPropsRef.current,
+            roadHopPropsRef.current,
+          )
+        : smoothedRoadDataRef.current
 
     // Road chains + Rail chains — offscreen cached together
     {
@@ -1136,7 +1257,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const tierStyles = roadTierStylesRef.current
 
       if (!isExport) {
-        if (isDraggingCP) {
+        if (isDraggingCP || isDraggingDense) {
           // Bypass offscreen cache during drag — draw directly so the road bends live
           ctx.save()
           ctx.beginPath()
@@ -1228,6 +1349,34 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.stroke()
       }
 
+      // Dense chain point handles — shown on hovered chain, draggable.
+      // Hidden while a CP (em|/ja|/jt|) drag is active to avoid visual confusion.
+      const hovChain = draggingCpKeyRef.current ? null : hoveredChainRef.current
+      const hovHandleIdx = hoveredHandleIdxRef.current
+      const denseDrag = draggingDensePtRef.current
+      const denseDragPos = dragLiveDensePosRef.current
+      const activeHandles = denseDrag
+        ? denseDrag.handles.map((p, i) => i === denseDrag.handleIdx && denseDragPos ? denseDragPos : p) as [number, number][]
+        : hovChain?.handles ?? null
+      if (activeHandles) {
+        const activeHandleIdx = denseDrag ? denseDrag.handleIdx : hovHandleIdx
+        const dotR = 2.5 * handleScale
+        ctx.save()
+        // interior handles only (skip pinned endpoints at index 0 and last)
+        for (let i = 1; i < activeHandles.length - 1; i++) {
+          const [x, y] = project(activeHandles[i][0], activeHandles[i][1])
+          const isHovered = i === activeHandleIdx
+          ctx.beginPath()
+          ctx.arc(x, y, isHovered ? dotR * 1.8 : dotR, 0, Math.PI * 2)
+          ctx.fillStyle = isHovered ? '#ffcc44' : 'rgba(255,255,255,0.55)'
+          ctx.fill()
+          ctx.strokeStyle = isHovered ? '#cc8800' : 'rgba(100,100,140,0.7)'
+          ctx.lineWidth = handleScale * 0.8
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+
       // Snap preview: highlight the target diamond and the dragged diamond when close enough to merge
       const snapTarget = snapPreviewKeyRef.current
       const dragKey = draggingCpKeyRef.current
@@ -1248,6 +1397,35 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
       }
       ctx.restore()
+    }
+
+    // River node edit handles
+    if (riverNodeEditModeRef.current && RIVER_V2) {
+      const handleScale = 1 / (zoomRef.current ?? 1)
+      const dotR = 2.5 * handleScale
+      const hovChain = hoveredChainRef.current?.kind === 'river' ? hoveredChainRef.current : null
+      const hovHandleIdx = hovChain ? hoveredHandleIdxRef.current : null
+      const denseDrag = draggingDensePtRef.current?.kind === 'river' ? draggingDensePtRef.current : null
+      const denseDragPos = dragLiveDensePosRef.current
+      const activeHandles = denseDrag
+        ? denseDrag.handles.map((p, i) => i === denseDrag.handleIdx && denseDragPos ? denseDragPos : p) as [number, number][]
+        : hovChain?.handles ?? null
+      if (activeHandles) {
+        const activeHandleIdx = denseDrag ? denseDrag.handleIdx : hovHandleIdx
+        ctx.save()
+        for (let i = 1; i < activeHandles.length - 1; i++) {
+          const [x, y] = project(activeHandles[i][0], activeHandles[i][1])
+          const isHovered = i === activeHandleIdx
+          ctx.beginPath()
+          ctx.arc(x, y, isHovered ? dotR * 1.8 : dotR, 0, Math.PI * 2)
+          ctx.fillStyle = isHovered ? '#ffcc44' : 'rgba(255,255,255,0.55)'
+          ctx.fill()
+          ctx.strokeStyle = isHovered ? '#cc8800' : 'rgba(60,140,200,0.8)'
+          ctx.lineWidth = handleScale * 0.8
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
     }
 
     // Settlements — offscreen cached
@@ -1349,13 +1527,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes])
   useEffect(() => { joinedHighlightsDirtyRef.current = true }, [highlights, highlightedHexes, highlightLines])
-  useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle])
+  useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, smoothedRoadData])
-  useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailChains, roadTierStyles, railStyle])
+  useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailChains, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailChains])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, smoothedRoadData, smoothedRailChains, roadNodeEditMode, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, draw])
+  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, smoothedRoadData, smoothedRailChains, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
 
   // Load terrain textures
   useEffect(() => {
@@ -1507,6 +1685,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const sparseHandles = (chain: [number, number][], step = 5): [number, number][] => {
+    const out: [number, number][] = []
+    for (let i = 0; i < chain.length; i += step) out.push(chain[i])
+    if (out[out.length - 1] !== chain[chain.length - 1]) out.push(chain[chain.length - 1])
+    return out
+  }
+
   const clientToLogical = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current
     const { w: cssW, h: cssH } = frameDimsRef.current
@@ -1520,6 +1705,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       cssH,
     }
   }, [])
+  const clientToLogicalRef = useRef(clientToLogical)
+  clientToLogicalRef.current = clientToLogical
 
   // Paint on drag
   const isPaintingRef = useRef(false)
@@ -1675,7 +1862,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return
       if ((e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (!roadNodeEditModeRef.current) return
+      if (!roadNodeEditModeRef.current && !riverNodeEditModeRef.current) return
       const meta = metaRef.current
       const { w: cssW, h: cssH } = frameDimsRef.current
       if (!meta || cssW === 0) return
@@ -1700,20 +1887,63 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         if (Math.hypot(ax - bx, ay - by) > 2) splitHexesHit.add(hexKey)
       }
 
-      // Diamonds (split jt|) > circles (merged ja|) > edge midpoints (em|)
-      // Hit radii are in screen pixels; divide by zoom to get logical-space radii.
       const currentZoom = zoomRef.current ?? 1
-      const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|') && splitHexesHit.has(cp.key.split('|')[1]))
-      const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|') && !splitHexesHit.has(cp.key.slice(3)))
-      const edges = controlPoints.filter(cp => cp.key.startsWith('em|'))
-      for (const [cps, hitRScreen] of [[spineSides, 10], [junctions, 10], [edges, 8]] as const) {
-        const hitR = (hitRScreen as number) / currentZoom
-        for (const cp of cps) {
-          const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
-          if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
-            draggingCpKeyRef.current = cp.key
-            e.stopPropagation()
-            return
+
+      // Road CP hit test (diamonds/circles/edge midpoints) — road only
+      if (roadNodeEditModeRef.current) {
+        const spineSides = controlPoints.filter(cp => cp.key.startsWith('jt|') && splitHexesHit.has(cp.key.split('|')[1]))
+        const junctions = controlPoints.filter(cp => cp.key.startsWith('ja|') && !splitHexesHit.has(cp.key.slice(3)))
+        const edges = controlPoints.filter(cp => cp.key.startsWith('em|'))
+        for (const [cps, hitRScreen] of [[spineSides, 10], [junctions, 10], [edges, 8]] as const) {
+          const hitR = (hitRScreen as number) / currentZoom
+          for (const cp of cps) {
+            const [cx, cy] = projectToCanvas(cp.pos[0], cp.pos[1], meta, pw, ph, px, py)
+            if (Math.hypot(logical.lx - cx, logical.ly - cy) <= hitR) {
+              draggingCpKeyRef.current = cp.key
+              e.stopPropagation()
+              return
+            }
+          }
+        }
+      }
+
+      // Sparse chain handle grab (roads)
+      const handleHitR = 8 / currentZoom
+      if (roadNodeEditModeRef.current) {
+        const { chains } = smoothedRoadDataRef.current
+        for (const c of chains) {
+          if (c.id.startsWith('stub|')) continue
+          const existingHandles = roadChainOverridesRef.current[c.id]
+          const handles = existingHandles ?? sparseHandles(c.baseChain)
+          for (let i = 1; i < handles.length - 1; i++) {
+            const [cx, cy] = projectToCanvas(handles[i][0], handles[i][1], meta, pw, ph, px, py)
+            if (Math.hypot(logical.lx - cx, logical.ly - cy) <= handleHitR) {
+              draggingDensePtRef.current = { id: c.id, handles: [...handles], handleIdx: i, kind: 'road' }
+              dragLiveDensePosRef.current = handles[i]
+              hoveredChainRef.current = null
+              hoveredHandleIdxRef.current = null
+              e.stopPropagation()
+              return
+            }
+          }
+        }
+      }
+
+      // River chain handle grab
+      if (riverNodeEditModeRef.current) {
+        for (const c of riverChainsV2Ref.current) {
+          const existingHandles = riverChainOverridesRef.current[c.segKey]
+          const handles = existingHandles ?? sparseHandles(c.baseChain)
+          for (let i = 1; i < handles.length - 1; i++) {
+            const [cx, cy] = projectToCanvas(handles[i][0], handles[i][1], meta, pw, ph, px, py)
+            if (Math.hypot(logical.lx - cx, logical.ly - cy) <= handleHitR) {
+              draggingDensePtRef.current = { id: c.segKey, handles: [...handles], handleIdx: i, kind: 'river' }
+              dragLiveDensePosRef.current = handles[i]
+              hoveredChainRef.current = null
+              hoveredHandleIdxRef.current = null
+              e.stopPropagation()
+              return
+            }
           }
         }
       }
@@ -1738,28 +1968,118 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       return null
     }
 
+    const scheduleRedraw = () => {
+      if (dragRafRef.current === null) {
+        dragRafRef.current = requestAnimationFrame(() => { dragRafRef.current = null; draw() })
+      }
+    }
+
+    const distToSegment2D = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
+      const dx = bx - ax, dy = by - ay
+      const lenSq = dx * dx + dy * dy
+      if (lenSq === 0) return Math.hypot(px - ax, py - ay)
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+      return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+    }
+
     const onMove = (e: MouseEvent) => {
-      if (!draggingCpKeyRef.current) return
       const meta = metaRef.current
       const { w: cssW, h: cssH } = frameDimsRef.current
       if (!meta || cssW === 0) return
       const logical = clientToLogical(e.clientX, e.clientY)
       if (!logical) return
       const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
-      const lonLat = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
-      // Store live position in ref — no store update, no React re-render, no buildRoadChains via useMemo
-      dragLiveOverrideRef.current = { ...dragLiveOverrideRef.current, [draggingCpKeyRef.current]: lonLat }
-      snapPreviewKeyRef.current = checkSnap(draggingCpKeyRef.current, lonLat, meta, pw, ph, px, py)
-      // Throttle redraws to one per animation frame
-      if (dragRafRef.current === null) {
-        dragRafRef.current = requestAnimationFrame(() => {
-          dragRafRef.current = null
-          draw()
-        })
+
+      // CP drag
+      if (draggingCpKeyRef.current) {
+        const lonLat = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
+        dragLiveOverrideRef.current = { ...dragLiveOverrideRef.current, [draggingCpKeyRef.current]: lonLat }
+        snapPreviewKeyRef.current = checkSnap(draggingCpKeyRef.current, lonLat, meta, pw, ph, px, py)
+        scheduleRedraw()
+        return
       }
+
+      // Dense point drag
+      if (draggingDensePtRef.current) {
+        dragLiveDensePosRef.current = unprojectFromCanvas(logical.lx, logical.ly, meta, pw, ph, px, py)
+        scheduleRedraw()
+        return
+      }
+
+      // Hover detection: find nearest chain, then nearest dot
+      const currentZoom = zoomRef.current ?? 1
+      const chainHoverR = 12 / currentZoom
+      const dotHoverR = 8 / currentZoom
+
+      let bestChainDist = chainHoverR
+      let bestChain: { id: string; baseChain: [number, number][]; kind: 'road' | 'river' } | null = null
+
+      if (roadNodeEditModeRef.current) {
+        const { chains } = smoothedRoadDataRef.current
+        for (const c of chains) {
+          if (c.id.startsWith('stub|')) continue
+          for (let i = 0; i < c.chain.length - 1; i++) {
+            const [ax, ay] = projectToCanvas(c.chain[i][0], c.chain[i][1], meta, pw, ph, px, py)
+            const [bx, by] = projectToCanvas(c.chain[i + 1][0], c.chain[i + 1][1], meta, pw, ph, px, py)
+            const d = distToSegment2D(logical.lx, logical.ly, ax, ay, bx, by)
+            if (d < bestChainDist) { bestChainDist = d; bestChain = { id: c.id, baseChain: c.baseChain, kind: 'road' } }
+          }
+        }
+      }
+
+      if (riverNodeEditModeRef.current) {
+        for (const c of riverChainsV2Ref.current) {
+          for (let i = 0; i < c.chain.length - 1; i++) {
+            const [ax, ay] = projectToCanvas(c.chain[i][0], c.chain[i][1], meta, pw, ph, px, py)
+            const [bx, by] = projectToCanvas(c.chain[i + 1][0], c.chain[i + 1][1], meta, pw, ph, px, py)
+            const d = distToSegment2D(logical.lx, logical.ly, ax, ay, bx, by)
+            if (d < bestChainDist) { bestChainDist = d; bestChain = { id: c.segKey, baseChain: c.baseChain, kind: 'river' } }
+          }
+        }
+      }
+
+      if (!roadNodeEditModeRef.current && !riverNodeEditModeRef.current) return
+
+      let bestHandles: [number, number][] | null = null
+      let bestHandleIdx: number | null = null
+      if (bestChain) {
+        const existing = bestChain.kind === 'road'
+          ? roadChainOverridesRef.current[bestChain.id]
+          : riverChainOverridesRef.current[bestChain.id]
+        bestHandles = existing ?? sparseHandles(bestChain.baseChain)
+        let bestDotDist = dotHoverR
+        for (let i = 1; i < bestHandles.length - 1; i++) {
+          const [cx, cy] = projectToCanvas(bestHandles[i][0], bestHandles[i][1], meta, pw, ph, px, py)
+          const d = Math.hypot(logical.lx - cx, logical.ly - cy)
+          if (d < bestDotDist) { bestDotDist = d; bestHandleIdx = i }
+        }
+      }
+
+      const prevId = hoveredChainRef.current?.id
+      const prevIdx = hoveredHandleIdxRef.current
+      hoveredChainRef.current = bestChain ? { id: bestChain.id, handles: bestHandles!, kind: bestChain.kind } : null
+      hoveredHandleIdxRef.current = bestHandleIdx
+      if (prevId !== bestChain?.id || prevIdx !== bestHandleIdx) scheduleRedraw()
     }
 
     const onUp = (e: MouseEvent) => {
+      // Dense handle drag commit
+      const denseDrag = draggingDensePtRef.current
+      const denseFinalPos = dragLiveDensePosRef.current
+      if (denseDrag && denseFinalPos) {
+        const newHandles = denseDrag.handles.map((p, i) => i === denseDrag.handleIdx ? denseFinalPos : p) as [number, number][]
+        if (denseDrag.kind === 'river') {
+          setRiverChainOverrideRef.current(denseDrag.id, newHandles)
+          riversDirtyRef.current = true
+        } else {
+          setRoadChainOverrideRef.current(denseDrag.id, newHandles)
+          roadsDirtyRef.current = true
+        }
+      }
+      draggingDensePtRef.current = null
+      dragLiveDensePosRef.current = null
+
+      // CP drag commit
       const dragKey = draggingCpKeyRef.current
       const snapTarget = snapPreviewKeyRef.current
       const finalPos = dragKey ? dragLiveOverrideRef.current[dragKey] : null
@@ -1768,22 +2088,32 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (dragRafRef.current !== null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null }
       dragLiveOverrideRef.current = {}
       if (dragKey && snapTarget) {
-        // Merge: clear both jt| overrides so they collapse to junction center
         deleteRoadControlOverrideRef.current(dragKey)
         deleteRoadControlOverrideRef.current(snapTarget)
       } else if (dragKey && finalPos) {
-        // Commit final position to store — triggers one full buildRoadChains rebuild
         setRoadControlOverrideRef.current(dragKey, finalPos)
+      }
+    }
+
+    const onLeave = () => {
+      if (hoveredChainRef.current || hoveredHandleIdxRef.current !== null) {
+        hoveredChainRef.current = null
+        hoveredHandleIdxRef.current = null
+        scheduleRedraw()
       }
     }
 
     el.addEventListener('mousedown', onDown, { capture: true })
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+    el.addEventListener('mouseleave', onLeave)
     return () => {
       el.removeEventListener('mousedown', onDown, { capture: true })
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      el.removeEventListener('mouseleave', onLeave)
+      hoveredChainRef.current = null
+      hoveredHandleIdxRef.current = null
     }
   }, [draw, clientToLogical])
 
@@ -2001,6 +2331,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           })
         }
 
+        // Revert shape: available when the hovered chain has a manual shape override
+        const hovChainId = hoveredChainRef.current?.id
+        if (hovChainId && roadChainOverridesRef.current[hovChainId]) {
+          items.push({
+            label: 'Revert shape',
+            action: () => { deleteRoadChainOverrideRef.current(hovChainId); roadsDirtyRef.current = true },
+            danger: true,
+          })
+        }
+
         // Split junction: available when the junction has a spine pair and is currently merged
         const jtCps = (smoothedRoadDataRef.current.controlPoints ?? []).filter(cp => cp.key.startsWith('jt|') && cp.key.split('|')[1] === hexKey)
         if (jtCps.length === 2) {
@@ -2070,34 +2410,141 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           })
         }
 
-        // Bendiness presets
-        if (hex) {
-          const hexKey = `${hex.q},${hex.r}`
-          const currentBend = hexRoadBendinessRef.current[hexKey]
-          const BEND_PRESETS = [
-            { label: 'Straight', value: 0 },
-            { label: 'Gentle', value: 0.25 },
-            { label: 'Medium', value: 0.5 },
-            { label: 'Curvy', value: 0.75 },
-            { label: 'Wild', value: 1 },
-          ]
-          if (items.length > 0) items.push({ label: '─', action: () => {} })
-          items.push({ label: 'Bendiness:', action: () => {}, dim: true })
-          for (const { label, value } of BEND_PRESETS) {
-            items.push({
-              label,
-              action: () => setHexRoadBendinessRef.current(hexKey, value),
-              dim: currentBend !== undefined && Math.abs(currentBend - value) < 0.01,
-            })
+      }
+
+      // Road segment/hop editing via right-click
+      if (activePanelRef.current === 'roads' && !roadNodeEditModeRef.current) {
+        const meta2 = metaRef.current
+        const logical2 = meta2 ? clientToLogicalRef.current(e.clientX, e.clientY) : null
+        if (meta2 && logical2) {
+          const { lx: lx2, ly: ly2, cssW: cssW2, cssH: cssH2 } = logical2
+          const { pw: pw2, ph: ph2, px: px2, py: py2 } = computePaper(cssW2, cssH2, meta2)
+          const R2 = hexRadiusRef.current
+          const roadChains = smoothedRoadDataRef.current.chains
+
+          let bestChain: typeof roadChains[0] | null = null
+          let bestDist = Infinity
+          for (const chain of roadChains) {
+            if (chain.id.startsWith('stub|')) continue
+            const pxPts = chain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta2, pw2, ph2, px2, py2)) as [number, number][]
+            for (let i = 0; i < pxPts.length - 1; i++) {
+              const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+              const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+              const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx2 - ax) * dx + (ly2 - ay) * dy) / len2)) : 0
+              const dist = Math.hypot(lx2 - (ax + t * dx), ly2 - (ay + t * dy))
+              if (dist < bestDist) { bestDist = dist; bestChain = chain }
+            }
           }
-          if (currentBend !== undefined) {
+
+          if (bestDist < R2 * 0.7 && bestChain) {
+            const pxPts = bestChain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta2, pw2, ph2, px2, py2)) as [number, number][]
+            let bestHopKey: string | null = null, bestHopDist = Infinity
+            if (bestChain.hopKeys && bestChain.hopRanges) {
+              for (let h = 0; h < bestChain.hopKeys.length; h++) {
+                const [hs, he] = bestChain.hopRanges[h]
+                for (let i = hs; i < he; i++) {
+                  const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+                  const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+                  const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx2 - ax) * dx + (ly2 - ay) * dy) / len2)) : 0
+                  const dist = Math.hypot(lx2 - (ax + t * dx), ly2 - (ay + t * dy))
+                  if (dist < bestHopDist) { bestHopDist = dist; bestHopKey = bestChain!.hopKeys![h] }
+                }
+              }
+            }
+
+            const cap = bestChain, capHop = bestHopKey
+            if (items.length > 0) items.push({ label: '─', action: () => {} })
             items.push({
-              label: 'Clear bend override',
-              action: () => deleteHexRoadBendinessRef.current(hexKey),
-              danger: true,
+              label: 'Edit segment',
+              action: () => {
+                setActiveToolRef.current({ type: 'road-select' })
+                setSelectedRoadSegmentKeysRef.current([cap.id])
+                setSelectedRoadHopKeyRef.current(null)
+              },
             })
+            if (capHop) {
+              items.push({
+                label: 'Edit hop here',
+                action: () => {
+                  setActiveToolRef.current({ type: 'road-select' })
+                  setSelectedRoadSegmentKeysRef.current([cap.id])
+                  setSelectedRoadHopKeyRef.current(capHop)
+                },
+              })
+            }
           }
         }
+        if (roadSelectModeRef.current) {
+          if (items.length > 0) items.push({ label: '─', action: () => {} })
+          items.push({ label: 'Exit editing', action: () => setActiveToolRef.current({ type: 'none' }) })
+        }
+      }
+
+      // River segment/hop editing — right-click near a river when in rivers panel
+      if (activePanelRef.current === 'rivers' && riverChainsV2Ref.current.length > 0) {
+        const meta2 = metaRef.current
+        const logical2 = meta2 ? clientToLogicalRef.current(e.clientX, e.clientY) : null
+        if (meta2 && logical2) {
+          const { lx: lx2, ly: ly2, cssW: cssW2, cssH: cssH2 } = logical2
+          const { pw: pw2, ph: ph2, px: px2, py: py2 } = computePaper(cssW2, cssH2, meta2)
+          const R2 = hexRadiusRef.current
+
+          let bestChain: typeof riverChainsV2Ref.current[0] | null = null
+          let bestSegDist = Infinity
+          for (const chain of riverChainsV2Ref.current) {
+            const pxPts = chain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta2, pw2, ph2, px2, py2)) as [number, number][]
+            for (let i = 0; i < pxPts.length - 1; i++) {
+              const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+              const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+              const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx2 - ax) * dx + (ly2 - ay) * dy) / len2)) : 0
+              const dist = Math.hypot(lx2 - (ax + t * dx), ly2 - (ay + t * dy))
+              if (dist < bestSegDist) { bestSegDist = dist; bestChain = chain }
+            }
+          }
+
+          if (bestSegDist < R2 * 0.7 && bestChain) {
+            const pxPts = bestChain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta2, pw2, ph2, px2, py2)) as [number, number][]
+            let bestHopKey: string | null = null, bestHopDist = Infinity
+            for (let h = 0; h < bestChain.hopKeys.length; h++) {
+              const [hs, he] = bestChain.hopRanges[h]
+              for (let i = hs; i < he; i++) {
+                const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+                const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+                const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx2 - ax) * dx + (ly2 - ay) * dy) / len2)) : 0
+                const dist = Math.hypot(lx2 - (ax + t * dx), ly2 - (ay + t * dy))
+                if (dist < bestHopDist) { bestHopDist = dist; bestHopKey = bestChain.hopKeys[h] }
+              }
+            }
+
+            const capturedChain = bestChain, capturedHopKey = bestHopKey
+            if (items.length > 0) items.push({ label: '─', action: () => {} })
+            items.push({
+              label: 'Edit segment',
+              action: () => {
+                setActiveToolRef.current({ type: 'river-select' })
+                setSelectedSegmentKeysRef.current([capturedChain.segKey])
+                setSelectedHopKeyRef.current(null)
+              },
+            })
+            if (capturedHopKey) {
+              items.push({
+                label: 'Edit hop here',
+                action: () => {
+                  setActiveToolRef.current({ type: 'river-select' })
+                  setSelectedSegmentKeysRef.current([capturedChain.segKey])
+                  setSelectedHopKeyRef.current(capturedHopKey)
+                },
+              })
+            }
+          }
+        }
+      }
+      if (riverEditModeRef.current) {
+        if (items.length > 0) items.push({ label: '─', action: () => {} })
+        items.push({
+          label: 'Exit editing',
+          action: () => setActiveToolRef.current({ type: 'none' }),
+        })
       }
 
       // Blob/lake/river editing — available in any panel
@@ -2392,9 +2839,54 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // River select mode
     if (riverSelectModeRef.current && riverEditModeRef.current) {
       const shiftHeld = e.shiftKey
+      const cmdHeld = e.metaKey || e.ctrlKey
+      if (cmdHeld && RIVER_V2 && selectedSegmentKeysRef.current.length > 0) {
+        // Cmd+click: find nearest hop within selected segment(s)
+        const R = hexRadiusRef.current
+        let bestHopKey: string | null = null, bestDist = Infinity
+        for (const chain of riverChainsV2Ref.current) {
+          if (!selectedSegmentKeysRef.current.includes(chain.segKey)) continue
+          const pxPts = chain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py)) as [number,number][]
+          for (let h = 0; h < chain.hopKeys.length; h++) {
+            const [s, e2] = chain.hopRanges[h]
+            for (let i = s; i < e2; i++) {
+              const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+              const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+              const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx - ax) * dx + (ly - ay) * dy) / len2)) : 0
+              const dist = Math.hypot(lx - (ax + t * dx), ly - (ay + t * dy))
+              if (dist < bestDist) { bestDist = dist; bestHopKey = chain.hopKeys[h] }
+            }
+          }
+        }
+        if (bestDist < R * 0.6 && bestHopKey) {
+          setSelectedHopKeyRef.current(selectedHopKeyRef.current === bestHopKey ? null : bestHopKey)
+        } else {
+          setSelectedHopKeyRef.current(null)
+        }
+        draw(); return
+      }
+      // Check if click is near any river chain; if not and nothing is selected, exit mode
+      const R2 = hexRadiusRef.current
+      let nearestDist = Infinity
+      for (const { vertices } of computedRiverChainsRef.current) {
+        const pxPts = vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py)) as [number,number][]
+        for (let i = 0; i < pxPts.length - 1; i++) {
+          const [ax, ay] = pxPts[i], [bx, by] = pxPts[i+1]
+          const dx = bx-ax, dy = by-ay, len2 = dx*dx+dy*dy
+          const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx-ax)*dx+(ly-ay)*dy)/len2)) : 0
+          nearestDist = Math.min(nearestDist, Math.hypot(lx-(ax+t*dx), ly-(ay+t*dy)))
+        }
+      }
+      if (!shiftHeld && nearestDist >= R2 * 0.6) {
+        setSelectedSegmentKeysRef.current([])
+        setSelectedHopKeyRef.current(null)
+        setActiveToolRef.current({ type: 'none' })
+        draw(); return
+      }
       pickSegment(computedRiverChainsRef.current, shiftHeld,
         selectedSegmentKeysRef.current,
         setSelectedSegmentKeysRef.current, toggleSegmentSelectionRef.current)
+      setSelectedHopKeyRef.current(null)
       draw(); return
     }
     // Canal select mode
@@ -2403,6 +2895,77 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       pickSegment(computedCanalChainsRef.current, shiftHeld,
         selectedCanalSegmentKeysRef.current,
         setSelectedCanalSegmentKeysRef.current, toggleCanalSegmentSelectionRef.current)
+      draw(); return
+    }
+
+    // Road select mode
+    if (roadSelectModeRef.current) {
+      const shiftHeld = e.shiftKey
+      const cmdHeld = e.metaKey || e.ctrlKey
+      const R2 = hexRadiusRef.current
+      const roadChains = smoothedRoadDataRef.current.chains
+
+      if (cmdHeld && selectedRoadSegmentKeysRef.current.length > 0) {
+        // Cmd+click: find nearest hop in selected road segments
+        let bestHopKey: string | null = null, bestDist = Infinity
+        for (const chain of roadChains) {
+          if (!selectedRoadSegmentKeysRef.current.includes(chain.id)) continue
+          if (!chain.hopKeys || !chain.hopRanges) continue
+          const pxPts = chain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py)) as [number, number][]
+          for (let h = 0; h < chain.hopKeys.length; h++) {
+            const [s, e2] = chain.hopRanges[h]
+            for (let i = s; i < e2; i++) {
+              const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+              const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+              const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx - ax) * dx + (ly - ay) * dy) / len2)) : 0
+              const dist = Math.hypot(lx - (ax + t * dx), ly - (ay + t * dy))
+              if (dist < bestDist) { bestDist = dist; bestHopKey = chain.hopKeys[h] }
+            }
+          }
+        }
+        if (bestDist < R2 * 0.6 && bestHopKey) {
+          setSelectedRoadHopKeyRef.current(selectedRoadHopKeyRef.current === bestHopKey ? null : bestHopKey)
+        } else {
+          setSelectedRoadHopKeyRef.current(null)
+        }
+        draw(); return
+      }
+
+      // Normal segment pick (find nearest chain)
+      let bestId: string | null = null, bestDist = Infinity
+      for (const chain of roadChains) {
+        if (chain.id.startsWith('stub|')) continue
+        const pxPts = chain.chain.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py)) as [number, number][]
+        for (let i = 0; i < pxPts.length - 1; i++) {
+          const [ax, ay] = pxPts[i], [bx, by] = pxPts[i + 1]
+          const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+          const t = len2 > 0 ? Math.max(0, Math.min(1, ((lx - ax) * dx + (ly - ay) * dy) / len2)) : 0
+          const dist = Math.hypot(lx - (ax + t * dx), ly - (ay + t * dy))
+          if (dist < bestDist) { bestDist = dist; bestId = chain.id }
+        }
+      }
+
+      // If clicking empty space, exit select mode
+      if (!shiftHeld && bestDist >= R2 * 0.6) {
+        setSelectedRoadSegmentKeysRef.current([])
+        setSelectedRoadHopKeyRef.current(null)
+        setActiveToolRef.current({ type: 'none' })
+        draw(); return
+      }
+
+      if (bestDist < R2 * 0.6 && bestId) {
+        if (shiftHeld) {
+          toggleRoadSegmentSelectionRef.current(bestId)
+        } else if (selectedRoadSegmentKeysRef.current.length === 1 && selectedRoadSegmentKeysRef.current[0] === bestId) {
+          setSelectedRoadSegmentKeysRef.current([])
+        } else {
+          setSelectedRoadSegmentKeysRef.current([bestId])
+        }
+        setSelectedRoadHopKeyRef.current(null)
+      } else if (!shiftHeld) {
+        setSelectedRoadSegmentKeysRef.current([])
+        setSelectedRoadHopKeyRef.current(null)
+      }
       draw(); return
     }
 

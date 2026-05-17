@@ -16,8 +16,10 @@ export type RoadsSlice = {
   roadPaintBrush: 0 | 1 | 2
   roadPaintEraser: boolean
   roadNodeEditMode: boolean
-  roadBendiness: number
-  hexRoadBendiness: Record<string, number>
+  roadWiggleAmp: number
+  roadWiggleFreq: number
+  roadSmoothing: number
+  roadChainOverrides: Record<string, [number, number][]>
   roadTierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
   fetchRoads: () => Promise<void>
   fetchSettlementRoads: () => Promise<void>
@@ -34,10 +36,26 @@ export type RoadsSlice = {
   setRoadNodeEditMode: (v: boolean) => void
   setRoadControlOverride: (key: string, pos: [number, number]) => void
   deleteRoadControlOverride: (key: string) => void
-  setRoadBendiness: (v: number) => void
-  setHexRoadBendiness: (key: string, v: number) => void
-  deleteHexRoadBendiness: (key: string) => void
+  setRoadWiggleAmp: (v: number) => void
+  setRoadWiggleFreq: (v: number) => void
+  setRoadSmoothing: (v: number) => void
+  setRoadChainOverride: (id: string, pts: [number, number][]) => void
+  deleteRoadChainOverride: (id: string) => void
+  clearRoadChainOverrides: () => void
   setRoadTierStyle: (tier: 0 | 1 | 2, update: Partial<RoadTierStyle>) => void
+  roadSegmentProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  roadHopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  roadSelectMode: boolean
+  selectedRoadSegmentKeys: string[]
+  selectedRoadHopKey: string | null
+  setRoadSelectMode: (v: boolean) => void
+  toggleRoadSegmentSelection: (key: string) => void
+  setSelectedRoadSegmentKeys: (keys: string[]) => void
+  setRoadSegmentProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
+  clearRoadSegmentProp: (key: string) => void
+  setRoadHopProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
+  clearRoadHopProp: (key: string) => void
+  setSelectedRoadHopKey: (key: string | null) => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -57,9 +75,16 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadPaintBrush: 1,
   roadPaintEraser: false,
   roadNodeEditMode: false,
-  roadBendiness: 0.4,
-  hexRoadBendiness: {},
+  roadWiggleAmp: 0,
+  roadWiggleFreq: 2.5,
+  roadSmoothing: 10,
+  roadChainOverrides: {},
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+  roadSegmentProps: {},
+  roadHopProps: {},
+  roadSelectMode: false,
+  selectedRoadSegmentKeys: [],
+  selectedRoadHopKey: null,
 
   clearRoads: () => set(s => ({
     rawRoadWays: [], roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null,
@@ -111,7 +136,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
           }
         }
       }
-      set({ rawRoadWays: data.raw_ways, roadEdges, roadsStatus: 'done' })
+      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, roadsStatus: 'done' })
     } catch (e) {
       set({ roadsStatus: 'error', roadsError: String(e) })
     }
@@ -164,7 +189,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
           }
         }
       }
-      set({ rawRoadWays: data.raw_ways, roadEdges, settlementRoadsStatus: 'done' })
+      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, settlementRoadsStatus: 'done' })
     } catch (e) {
       set({ settlementRoadsStatus: 'error', settlementRoadsError: String(e) })
     }
@@ -172,9 +197,12 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
 
   setRoadNodeEditMode: (v) => set({ roadNodeEditMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, terrainPaintMode: false, elevationPaintMode: false } : {}) }),
   deleteRoadControlOverride: (key) => set(s => { const { [key]: _, ...rest } = s.roadControlOverrides; return { roadControlOverrides: rest } }),
-  setRoadBendiness: (v) => set({ roadBendiness: v }),
-  setHexRoadBendiness: (key, v) => set(s => ({ hexRoadBendiness: { ...s.hexRoadBendiness, [key]: v } })),
-  deleteHexRoadBendiness: (key) => set(s => { const { [key]: _, ...rest } = s.hexRoadBendiness; return { hexRoadBendiness: rest } }),
+  setRoadWiggleAmp: (v) => set({ roadWiggleAmp: v }),
+  setRoadWiggleFreq: (v) => set({ roadWiggleFreq: v }),
+  setRoadSmoothing: (v) => set({ roadSmoothing: v }),
+  setRoadChainOverride: (id, pts) => set(s => ({ roadChainOverrides: { ...s.roadChainOverrides, [id]: pts } })),
+  deleteRoadChainOverride: (id) => set(s => { const { [id]: _, ...rest } = s.roadChainOverrides; return { roadChainOverrides: rest } }),
+  clearRoadChainOverrides: () => set({ roadChainOverrides: {} }),
   setRoadPaintBrush: (v) => set({ roadPaintBrush: v }),
   setRoadPaintEraser: (v) => set({ roadPaintEraser: v }),
   setRoadControlOverride: (key, pos) => set(s => ({ roadControlOverrides: { ...s.roadControlOverrides, [key]: pos } })),
@@ -207,4 +235,17 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
     styles[tier] = { ...styles[tier], ...update }
     return { roadTierStyles: styles }
   }),
+
+  setRoadSelectMode: (v) => set({ roadSelectMode: v, selectedRoadSegmentKeys: [], selectedRoadHopKey: null }),
+  setSelectedRoadSegmentKeys: (keys) => set({ selectedRoadSegmentKeys: keys }),
+  toggleRoadSegmentSelection: (key) => set(s => ({
+    selectedRoadSegmentKeys: s.selectedRoadSegmentKeys.includes(key)
+      ? s.selectedRoadSegmentKeys.filter(k => k !== key)
+      : [...s.selectedRoadSegmentKeys, key]
+  })),
+  setRoadSegmentProp: (key, prop) => set(s => ({ roadSegmentProps: { ...s.roadSegmentProps, [key]: { ...(s.roadSegmentProps[key] ?? {}), ...prop } } })),
+  clearRoadSegmentProp: (key) => set(s => { const { [key]: _, ...rest } = s.roadSegmentProps; return { roadSegmentProps: rest } }),
+  setRoadHopProp: (key, prop) => set(s => ({ roadHopProps: { ...s.roadHopProps, [key]: { ...(s.roadHopProps[key] ?? {}), ...prop } } })),
+  clearRoadHopProp: (key) => set(s => { const { [key]: _, ...rest } = s.roadHopProps; return { roadHopProps: rest } }),
+  setSelectedRoadHopKey: (key) => set({ selectedRoadHopKey: key }),
 })

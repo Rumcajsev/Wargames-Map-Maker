@@ -53,6 +53,7 @@ export type ActiveTool =
   | { type: 'road'; tier: 0 | 1 | 2; erasing: boolean }
   | { type: 'rail'; erasing: boolean }
   | { type: 'node-edit' }
+  | { type: 'river-node-edit' }
   | { type: 'river-paint' }
   | { type: 'river-select' }
   | { type: 'canal-paint' }
@@ -60,6 +61,7 @@ export type ActiveTool =
   | { type: 'highlight-paint'; id: string }
   | { type: 'highlight-erase'; id: string }
   | { type: 'urban'; mode: 'paint' | 'erase' }
+  | { type: 'road-select' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -473,6 +475,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     canalEdges: s.canalEdges,
     riverSegmentProps: s.riverSegmentProps,
     canalSegmentProps: s.canalSegmentProps,
+    riverHopProps: s.riverHopProps,
     riverStyle: s.riverStyle,
     canalStyle: s.canalStyle,
     elevationStatus: s.elevationStatus,
@@ -489,9 +492,14 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     illustratedStyle: s.illustratedStyle,
     riverWidthScale: s.riverWidthScale,
     canalWidthScale: s.canalWidthScale,
-    riverCurveSteps: s.riverCurveSteps,
-    riverWobble: s.riverWobble,
-    riverDetail: s.riverDetail,
+    riverWiggleAmp: s.riverWiggleAmp,
+    riverWiggleFreq: s.riverWiggleFreq,
+    riverSmoothing: s.riverSmoothing,
+    roadWiggleAmp: s.roadWiggleAmp,
+    roadWiggleFreq: s.roadWiggleFreq,
+    roadSmoothing: s.roadSmoothing,
+    roadSegmentProps: s.roadSegmentProps,
+    roadHopProps: s.roadHopProps,
     roadTierStyles: s.roadTierStyles,
     railStyle: s.railStyle,
     woodsHexStyle: s.woodsHexStyle,

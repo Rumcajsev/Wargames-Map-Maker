@@ -12,25 +12,32 @@ const CogIcon = () => (
 
 interface SegmentPanelProps {
   selectedKeys: string[]
-  segmentProps: Record<string, { width?: number; taper?: number; taperRange?: [number, number] }>
+  segmentProps: Record<string, { width?: number; taper?: number; taperRange?: [number, number]; wiggleAmp?: number; wiggleFreq?: number }>
   baseWidthScale: number
   accentColor: string
   chains: import('../lib/riverChains').RiverChain[]
-  setProp: (key: string, prop: { width?: number; taper?: number; taperRange?: [number, number] }) => void
-  setPropMany: (keys: string[], prop: { width?: number; taper?: number }) => void
+  setProp: (key: string, prop: { width?: number; taper?: number; taperRange?: [number, number]; wiggleAmp?: number; wiggleFreq?: number }) => void
+  setPropMany: (keys: string[], prop: { width?: number; taper?: number; wiggleAmp?: number; wiggleFreq?: number }) => void
   clearPropMany: (keys: string[]) => void
   setSelectedKeys: (keys: string[]) => void
+  showWiggle?: boolean
+  globalWiggleAmp?: number
+  globalWiggleFreq?: number
 }
 
-function SegmentPanel({ selectedKeys, segmentProps, baseWidthScale, accentColor, chains, setProp, setPropMany, clearPropMany, setSelectedKeys }: SegmentPanelProps) {
+function SegmentPanel({ selectedKeys, segmentProps, baseWidthScale, accentColor, chains, setProp, setPropMany, clearPropMany, setSelectedKeys, showWiggle, globalWiggleAmp = 0.25, globalWiggleFreq = 2.5 }: SegmentPanelProps) {
   if (selectedKeys.length === 0) return null
   const n = selectedKeys.length
   const firstProps = segmentProps[selectedKeys[0]]
   const widthVal = firstProps?.width ?? baseWidthScale
   const taperVal = firstProps?.taper ?? 0
+  const wiggleAmpVal = firstProps?.wiggleAmp ?? globalWiggleAmp
+  const wiggleFreqVal = firstProps?.wiggleFreq ?? globalWiggleFreq
   const anyWidthOverride = selectedKeys.some(k => segmentProps[k]?.width !== undefined)
   const anyTaperOverride = selectedKeys.some(k => segmentProps[k]?.taper !== undefined)
-      return (
+  const anyWiggleAmpOverride = selectedKeys.some(k => segmentProps[k]?.wiggleAmp !== undefined)
+  const anyWiggleFreqOverride = selectedKeys.some(k => segmentProps[k]?.wiggleFreq !== undefined)
+  return (
     <div style={sectionStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <div style={labelStyle}>{n === 1 ? 'Segment' : `${n} Segments`}</div>
@@ -66,15 +73,120 @@ function SegmentPanel({ selectedKeys, segmentProps, baseWidthScale, accentColor,
         }}
         style={{ width: '100%', accentColor, marginBottom: 2 }}
       />
-      <div style={{ color: '#4a6a8a', fontSize: 10, marginBottom: 4, lineHeight: 1.4 }}>Start is narrower, end is wider.</div>
+      <div style={{ color: '#4a6a8a', fontSize: 10, marginBottom: 6, lineHeight: 1.4 }}>Start is narrower, end is wider.</div>
+      {showWiggle && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ fontSize: 11 }}>Wiggle amp</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyWiggleAmpOverride ? `${(wiggleAmpVal*100).toFixed(0)}% ●` : `${(wiggleAmpVal*100).toFixed(0)}%`}</span>
+          </div>
+          <input type="range" min={0} max={100} step={1}
+            value={Math.round(wiggleAmpVal * 100)}
+            onChange={e => setPropMany(selectedKeys, { wiggleAmp: Number(e.target.value) / 100 })}
+            style={{ width: '100%', accentColor, marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ fontSize: 11 }}>Wiggle freq</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyWiggleFreqOverride ? `${wiggleFreqVal.toFixed(1)} ●` : wiggleFreqVal.toFixed(1)}</span>
+          </div>
+          <input type="range" min={5} max={100} step={1}
+            value={Math.round(wiggleFreqVal * 10)}
+            onChange={e => setPropMany(selectedKeys, { wiggleFreq: Number(e.target.value) / 10 })}
+            style={{ width: '100%', accentColor, marginBottom: 6 }}
+          />
+        </>
+      )}
       <button
         onClick={() => { clearPropMany(selectedKeys); setSelectedKeys([]) }}
-        style={{ marginTop: 4, width: '100%', padding: '3px 0', background: 'none',
+        style={{ marginTop: 2, width: '100%', padding: '3px 0', background: 'none',
           border: '1px solid #1e1f2e', borderRadius: 3, color: '#4a4a6a',
           cursor: 'pointer', fontFamily: 'inherit', fontSize: 10 }}
         onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
         onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
       >Reset to default</button>
+    </div>
+  )
+}
+
+function HopPanel({ selectedHopKey, hopProps, riverStyle, riverWiggleAmp, riverWiggleFreq, setRiverHopProp, clearRiverHopProp, setSelectedHopKey }: {
+  selectedHopKey: string
+  hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number; width?: number; taper?: number }>
+  riverStyle: import('../store/mapStore').RiverStyleConfig
+  riverWiggleAmp: number
+  riverWiggleFreq: number
+  setRiverHopProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number; width?: number; taper?: number }) => void
+  clearRiverHopProp: (key: string) => void
+  setSelectedHopKey: (key: string | null) => void
+}) {
+  const hp = hopProps[selectedHopKey] ?? {}
+  const ampVal = hp.wiggleAmp ?? riverWiggleAmp
+  const freqVal = hp.wiggleFreq ?? riverWiggleFreq
+  const widthVal = hp.width ?? 1
+  const taperVal = hp.taper ?? 0
+  const hasOverride = !!hopProps[selectedHopKey]
+  const accentColor = riverStyle.color
+
+  return (
+    <div style={{ ...sectionStyle, borderColor: 'rgba(255,200,50,0.3)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <div style={{ ...labelStyle, color: 'rgba(255,200,50,0.8)' }}>Hop{hasOverride ? ' ●' : ''}</div>
+        <button onClick={() => setSelectedHopKey(null)}
+          style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 11, padding: 0 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >✕</button>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Width</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{hp.width !== undefined ? `${(widthVal * 100).toFixed(0)}% ●` : `${(widthVal * 100).toFixed(0)}%`}</span>
+      </div>
+      <input type="range" min={25} max={400} step={5}
+        value={Math.round(widthVal * 100)}
+        onChange={e => setRiverHopProp(selectedHopKey, { width: Number(e.target.value) / 100 })}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Taper</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{hp.taper !== undefined ? `${Math.round(taperVal * 100)}% ●` : `${Math.round(taperVal * 100)}%`}</span>
+      </div>
+      <input type="range" min={0} max={100} step={5}
+        value={Math.round(taperVal * 100)}
+        onChange={e => setRiverHopProp(selectedHopKey, { taper: Number(e.target.value) / 100 })}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Wiggle amp</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{hp.wiggleAmp !== undefined ? `${(ampVal * 100).toFixed(0)}% ●` : `${(ampVal * 100).toFixed(0)}%`}</span>
+      </div>
+      <input type="range" min={0} max={100} step={1}
+        value={Math.round(ampVal * 100)}
+        onChange={e => setRiverHopProp(selectedHopKey, { wiggleAmp: Number(e.target.value) / 100 })}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Wiggle freq</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{hp.wiggleFreq !== undefined ? `${freqVal.toFixed(1)} ●` : freqVal.toFixed(1)}</span>
+      </div>
+      <input type="range" min={5} max={100} step={1}
+        value={Math.round(freqVal * 10)}
+        onChange={e => setRiverHopProp(selectedHopKey, { wiggleFreq: Number(e.target.value) / 10 })}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+
+      {hasOverride && (
+        <button
+          onClick={() => clearRiverHopProp(selectedHopKey)}
+          style={{ marginTop: 2, width: '100%', padding: '3px 0', background: 'none',
+            border: '1px solid #1e1f2e', borderRadius: 3, color: '#4a4a6a',
+            cursor: 'pointer', fontFamily: 'inherit', fontSize: 10 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >Reset hop</button>
+      )}
     </div>
   )
 }
@@ -96,6 +208,10 @@ export function RiversSidebar() {
     canalSegmentProps, setCanalSegmentProp, setCanalSegmentPropMany, clearCanalSegmentPropMany,
     riverWidthScale, canalWidthScale,
     riverStyle, canalStyle,
+    riverNodeEditMode,
+    selectedHopKey, setSelectedHopKey,
+    riverHopProps, setRiverHopProp, clearRiverHopProp,
+    riverWiggleAmp, riverWiggleFreq,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<'river' | 'canal' | 'lake' | null>(null)
@@ -220,9 +336,22 @@ export function RiversSidebar() {
               )}
             </div>
 
+            {/* Node edit */}
+            <button
+              onClick={() => setActiveTool(riverNodeEditMode ? { type: 'none' } : { type: 'river-node-edit' })}
+              style={{ ...btnStyle(riverNodeEditMode), marginTop: 4 }}
+            >
+              <span style={{
+                width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                background: riverNodeEditMode ? '#d0ecd8' : '#3a3a5a',
+                border: `1px solid ${riverNodeEditMode ? '#5a9e6f' : '#4a4a6a'}`,
+              }} />
+              <span style={{ flex: 1 }}>Edit nodes</span>
+            </button>
+
           </div>
           {riverEditMode && !riverSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click hex edges to paint a river.</div>}
-          {riverEditMode && riverSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click a river segment to select it.</div>}
+          {riverEditMode && riverSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click a segment to select it. Cmd+click a selected segment to pick a hop.</div>}
           {canalEditMode && !canalSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click hex edges to paint a canal.</div>}
           {canalEditMode && canalSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click a canal segment to select it.</div>}
           {lakePaintMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click or drag hexes to mark or unmark them as lakes.</div>}
@@ -247,7 +376,27 @@ export function RiversSidebar() {
           setPropMany={setRiverSegmentPropMany}
           clearPropMany={clearRiverSegmentPropMany}
           setSelectedKeys={setSelectedSegmentKeys}
+          showWiggle
+          globalWiggleAmp={riverWiggleAmp}
+          globalWiggleFreq={riverWiggleFreq}
         />
+
+        {/* ── Selected hop ── */}
+        {selectedHopKey && selectedSegmentKeys.length > 0 && (() => {
+          const sp = selectedSegmentKeys.length === 1 ? riverSegmentProps[selectedSegmentKeys[0]] : undefined
+          return (
+            <HopPanel
+              selectedHopKey={selectedHopKey}
+              hopProps={riverHopProps}
+              riverStyle={riverStyle}
+              riverWiggleAmp={sp?.wiggleAmp ?? riverWiggleAmp}
+              riverWiggleFreq={sp?.wiggleFreq ?? riverWiggleFreq}
+              setRiverHopProp={setRiverHopProp}
+              clearRiverHopProp={clearRiverHopProp}
+              setSelectedHopKey={setSelectedHopKey}
+            />
+          )
+        })()}
 
         {/* ── Selected canal segment(s) ── */}
         <SegmentPanel

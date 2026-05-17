@@ -1,6 +1,26 @@
 /** Seeded noise primitives and polygon perturbation utilities.
  *  All functions are pure (no canvas, no React, no store deps). */
 
+const WIGGLE_PERM = makePermutation(17)
+
+/** Perlin-noise perpendicular wiggle for dense polylines.
+ *  Endpoints are pinned; amplitude fades in/out over FADE points to avoid kinks at chain junctions. */
+export function wiggleChain(pts: [number, number][], amplitude: number, frequency: number): [number, number][] {
+  if (amplitude === 0 || pts.length < 3) return pts
+  const n = pts.length
+  const FADE = Math.max(4, Math.floor(n * 0.2))
+  return pts.map((pt, i) => {
+    if (i === 0 || i === n - 1) return pt
+    const fade = Math.min(i, n - 1 - i, FADE) / FADE
+    const prev = pts[i - 1], next = pts[i + 1]
+    const dx = next[0] - prev[0], dy = next[1] - prev[1]
+    const len = Math.hypot(dx, dy)
+    if (len < 1e-6) return pt
+    const noise = perlinNoise2D(pt[0] * frequency, pt[1] * frequency, WIGGLE_PERM)
+    return [pt[0] + (-dy / len) * noise * amplitude * fade, pt[1] + (dx / len) * noise * amplitude * fade] as [number, number]
+  })
+}
+
 export function hashStr(s: string): number {
   let h = 2166136261
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) }

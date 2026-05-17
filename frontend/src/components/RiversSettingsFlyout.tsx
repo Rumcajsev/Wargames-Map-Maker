@@ -28,9 +28,10 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
   const {
     riverWidthScale, setRiverWidthScale,
     canalWidthScale, setCanalWidthScale,
-    riverCurveSteps, setRiverCurveSteps,
-    riverWobble, setRiverWobble,
-    riverDetail, setRiverDetail,
+    riverWiggliness, setRiverWiggliness,
+    riverWiggleFreq, setRiverWiggleFreq,
+    riverWiggleAmp, setRiverWiggleAmp,
+    riverSmoothing, setRiverSmoothing,
     riverStyle, setRiverStyle,
     canalStyle, setCanalStyle,
     lakeBlobSmooth, setLakeBlobSmooth,
@@ -115,26 +116,25 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
             />
           </Row>
 
-          {/* Smooth + displacement + detail — rivers only */}
           {isRiver && (<>
-            <Row label="Smooth" value={`${riverCurveSteps}`}>
-              <input type="range" min={0} max={8} step={1}
-                value={riverCurveSteps}
-                onChange={e => setRiverCurveSteps(Number(e.target.value))}
+            <Row label="Wiggle amp" value={riverWiggleAmp.toFixed(2)}>
+              <input type="range" min={0} max={1.0} step={0.01}
+                value={riverWiggleAmp}
+                onChange={e => setRiverWiggleAmp(Number(e.target.value))}
                 style={inputStyle}
               />
             </Row>
-            <Row label="Displacement" value={`${Math.round(riverWobble * 100)}%`}>
-              <input type="range" min={0} max={100} step={1}
-                value={Math.round(riverWobble * 100)}
-                onChange={e => setRiverWobble(Number(e.target.value) / 100)}
+            <Row label="Wiggle freq" value={riverWiggleFreq.toFixed(1)}>
+              <input type="range" min={0.5} max={10} step={0.1}
+                value={riverWiggleFreq}
+                onChange={e => setRiverWiggleFreq(Number(e.target.value))}
                 style={inputStyle}
               />
             </Row>
-            <Row label="Detail" value={`${Math.round(riverDetail * 100)}%`}>
-              <input type="range" min={0} max={100} step={1}
-                value={Math.round(riverDetail * 100)}
-                onChange={e => setRiverDetail(Number(e.target.value) / 100)}
+            <Row label="Smoothing" value={String(riverSmoothing)}>
+              <input type="range" min={2} max={30} step={1}
+                value={riverSmoothing}
+                onChange={e => setRiverSmoothing(Number(e.target.value))}
                 style={inputStyle}
               />
             </Row>

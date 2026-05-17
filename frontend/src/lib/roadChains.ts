@@ -2,10 +2,18 @@
  *  Converts hex-edge graphs into smooth polyline chains for rendering. */
 
 import { catmullRom } from './geometry'
-import { seededRandom } from './noise'
+import { seededRandom, wiggleChain } from './noise'
 
 export function edgeCpKey(k1: string, k2: string): string {
   return `em|${k1 < k2 ? k1 : k2}|${k1 < k2 ? k2 : k1}`
+}
+
+function roadVKey(v: [number, number]): string {
+  return `${Math.round(v[0] / 1e-5)},${Math.round(v[1] / 1e-5)}`
+}
+export function roadHopKey(v0: [number, number], v1: [number, number]): string {
+  const k0 = roadVKey(v0), k1 = roadVKey(v1)
+  return k0 < k1 ? `${k0}||${k1}` : `${k1}||${k0}`
 }
 
 export function juncCpKey(k: string): string {
@@ -22,9 +30,13 @@ export function buildRoadChains(
   roadEdges: { q1: number; r1: number; q2: number; r2: number; tier: 0 | 1 | 2 }[],
   hexIdx: Map<string, { center: [number, number] }>,
   overrides: Record<string, [number, number]>,
-  globalBendiness: number,
-  hexBendiness: Record<string, number>,
-): { chains: { tier: 0 | 1 | 2; chain: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number] }[] } {
+  wiggleAmpFactor = 0,
+  wiggleFreqFactor = 2.5,
+  smoothing = 10,
+  chainOverrides: Record<string, [number, number][]> = {},
+  segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
+  hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
+): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number] }[] } {
   if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [] }
 
   let interHexDist = 0, hexScaleSamples = 0
@@ -34,7 +46,6 @@ export function buildRoadChains(
   }
   interHexDist = hexScaleSamples > 0 ? interHexDist / hexScaleSamples : 0
   const hexScale = interHexDist * 0.28
-  const MAX_BEND = interHexDist * 0.35
 
   const globalAdj = new Map<string, Set<string>>()
   for (const e of roadEdges) {
@@ -167,7 +178,10 @@ export function buildRoadChains(
     sideTerminals.set(`${k}|${bestPair[1]}`, termB)
   }
 
-  const chains: { tier: 0 | 1 | 2; chain: [number, number][] }[] = []
+  const wiggleAmplitude = wiggleAmpFactor * interHexDist
+  const wiggleFreq = wiggleFreqFactor / interHexDist
+
+  const chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain?: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[] = []
   const junctionMap = new Map<string, { pos: [number, number]; tier: 0 | 1 | 2 }>()
   const controlPoints: { key: string; pos: [number, number] }[] = []
   const seenEdges = new Set<string>()
@@ -213,9 +227,9 @@ export function buildRoadChains(
       return junctionPositions.get(k) ?? h.center
     }
 
-    const walk = (startKey: string): [number, number][] => {
+    const walk = (startKey: string): { pts: [number, number][]; endKey: string } => {
       const h0 = hexIdx.get(startKey)
-      if (!h0) return []
+      if (!h0) return { pts: [], endKey: startKey }
       const startDeg = (adj.get(startKey) ?? []).length
       const pts: [number, number][] = []
       let firstStep = true
@@ -227,7 +241,6 @@ export function buildRoadChains(
           return !visitedPairs.has(ep)
         })
         if (!next) break
-        // Defer pushing start junction point until we know the outgoing direction
         if (firstStep) {
           firstStep = false
           if (startDeg !== 2 || isJunction(startKey)) pts.push(jPos(startKey, h0, next))
@@ -241,15 +254,7 @@ export function buildRoadChains(
           if (overrides[ek]) {
             mid = overrides[ek]
           } else {
-            const mx = (h1.center[0] + h2.center[0]) / 2
-            const my = (h1.center[1] + h2.center[1]) / 2
-            const dx = h2.center[0] - h1.center[0], dy = h2.center[1] - h1.center[1]
-            const len = Math.hypot(dx, dy)
-            const [qa, ra] = (cur < next ? cur : next).split(',').map(Number)
-            const [qb, rb] = (cur < next ? next : cur).split(',').map(Number)
-            const bend = ((hexBendiness[cur] ?? globalBendiness) + (hexBendiness[next] ?? globalBendiness)) / 2
-            const perp = (seededRandom(qa + qb, ra + rb, 5) - 0.5) * 2 * MAX_BEND * bend * 0.4
-            mid = len > 1e-6 ? [mx + (-dy / len) * perp, my + (dx / len) * perp] : [mx, my]
+            mid = [(h1.center[0] + h2.center[0]) / 2, (h1.center[1] + h2.center[1]) / 2]
           }
           pts.push(mid)
           if (!seenEdges.has(ek)) { seenEdges.add(ek); controlPoints.push({ key: ek, pos: mid }) }
@@ -260,22 +265,74 @@ export function buildRoadChains(
         if (curDeg === 1) { const he = hexIdx.get(cur); if (he) pts.push(he.center); break }
         if (isJunction(cur)) { const hj = hexIdx.get(cur); if (hj) pts.push(jPos(cur, hj, prevKey)); break }
       }
-      return pts
+      return { pts, endKey: cur }
     }
 
-    for (const [k, nbs] of adj) { if (nbs.length === 1) { const pts = walk(k); if (pts.length >= 2) chains.push({ tier, chain: catmullRom(pts, 10) }) } }
+    const pushChain = (startKey: string) => {
+      const { pts, endKey } = walk(startKey)
+      if (pts.length < 2) return
+      const a = startKey < endKey ? startKey : endKey
+      const b = startKey < endKey ? endKey : startKey
+      const id = `${tier}|${a}|${b}`
+      const storedHandles = chainOverrides[id]
+      let baseChain: [number, number][]
+      if (storedHandles && storedHandles.length >= 2) {
+        // Pin stored handle endpoints to current computed junction positions so
+        // the chain reconnects correctly even if junctions were moved.
+        const pinned: [number, number][] = [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]]
+        baseChain = catmullRom(pinned, Math.max(2, Math.round(smoothing)))
+      } else {
+        baseChain = catmullRom(pts, Math.max(2, Math.round(smoothing)))
+      }
+
+      const steps = Math.max(2, Math.round(smoothing))
+      const effectiveCtrl = (storedHandles && storedHandles.length >= 2)
+        ? [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]] as [number, number][]
+        : pts
+      const hopCount = effectiveCtrl.length - 1
+      const hopKeysList: string[] = []
+      const hopRanges: [number, number][] = []
+      for (let h = 0; h < hopCount; h++) {
+        hopKeysList.push(roadHopKey(effectiveCtrl[h], effectiveCtrl[h + 1]))
+        hopRanges.push([h * steps, (h + 1) * steps])
+      }
+
+      const sp = segProps[id]
+      const hasAnyOverride = sp?.wiggleAmp !== undefined || sp?.wiggleFreq !== undefined ||
+        hopKeysList.some(k => hopProps[k]?.wiggleAmp !== undefined || hopProps[k]?.wiggleFreq !== undefined)
+
+      let chain: [number, number][]
+      if (!hasAnyOverride) {
+        chain = wiggleChain(baseChain, wiggleAmplitude, wiggleFreq)
+      } else {
+        const dense = [...baseChain] as [number, number][]
+        for (let h = 0; h < hopCount; h++) {
+          const [s, e] = hopRanges[h]
+          const hp = hopProps[hopKeysList[h]]
+          const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+          const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? wiggleFreqFactor) / interHexDist
+          const slice = baseChain.slice(s, e + 1)
+          const wiggled = wiggleChain(slice, amp, freq)
+          for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
+        }
+        chain = dense
+      }
+      chains.push({ tier, chain, baseChain, id, hopKeys: hopKeysList, hopRanges })
+    }
+
+    for (const [k, nbs] of adj) { if (nbs.length === 1) pushChain(k) }
     for (const [k, nbs] of adj) {
       if (isJunction(k)) {
         for (const nk of nbs) {
           const ep = k < nk ? `${k}|${nk}` : `${nk}|${k}`
-          if (!visitedPairs.has(ep)) { const pts = walk(k); if (pts.length >= 2) chains.push({ tier, chain: catmullRom(pts, 10) }) }
+          if (!visitedPairs.has(ep)) pushChain(k)
         }
       }
     }
     for (const [k, nbs] of adj) {
       for (const nk of nbs) {
         const ep = k < nk ? `${k}|${nk}` : `${nk}|${k}`
-        if (!visitedPairs.has(ep)) { const pts = walk(k); if (pts.length >= 2) chains.push({ tier, chain: catmullRom(pts, 10) }) }
+        if (!visitedPairs.has(ep)) pushChain(k)
       }
     }
   }
@@ -289,7 +346,7 @@ export function buildRoadChains(
     const ekA = k < spinePair[0] ? `${k}|${spinePair[0]}` : `${spinePair[0]}|${k}`
     const ekB = k < spinePair[1] ? `${k}|${spinePair[1]}` : `${spinePair[1]}|${k}`
     const stubTier = Math.min(edgeMinTier.get(ekA) ?? 2, edgeMinTier.get(ekB) ?? 2) as 0 | 1 | 2
-    chains.push({ tier: stubTier, chain: [termA, termB] })
+    chains.push({ tier: stubTier, chain: [termA, termB], id: `stub|${k}` })
   }
 
   // Junction dots at each unique side terminal, plus draggable control points

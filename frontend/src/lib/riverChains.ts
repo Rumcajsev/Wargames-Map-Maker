@@ -6,7 +6,8 @@
  *  no re-renders, just a plain reference to the last computed chain data.
  */
 
-import { makePermutation, perlinNoise2D, hashStr } from './noise'
+import { makePermutation, perlinNoise2D, hashStr, wiggleChain } from './noise'
+import { catmullRom } from './geometry'
 import type { GeneratedHex } from '../store/mapStore'
 
 export interface RiverChain {
@@ -180,6 +181,7 @@ export function drawVariableWidthStroke(
   hwStart: number,
   hwEnd: number,
   color: string,
+  widthMultipliers?: number[],
 ) {
   if (pts.length < 2) return
 
@@ -194,7 +196,8 @@ export function drawVariableWidthStroke(
 
   for (let i = 0; i < pts.length - 1; i++) {
     const tMid = totalLen > 1e-6 ? (lens[i] + lens[i + 1]) * 0.5 / totalLen : 0.5
-    const hw = hwStart + (hwEnd - hwStart) * tMid
+    let hw = hwStart + (hwEnd - hwStart) * tMid
+    if (widthMultipliers) hw *= (widthMultipliers[i] + widthMultipliers[i + 1]) * 0.5
     ctx.beginPath()
     ctx.moveTo(pts[i][0], pts[i][1])
     ctx.lineTo(pts[i + 1][0], pts[i + 1][1])
@@ -325,4 +328,156 @@ export function buildRiverChains(
   }
 
   return rawChains.map(vertices => ({ vertices, segKey: segKeyOf(vertices) }))
+}
+
+// ---------------------------------------------------------------------------
+// V2 pipeline: hex corner vertices → catmullRom → (wiggle TBD)
+// Produces the same segKeys as buildRiverChains so per-segment props still apply.
+// ---------------------------------------------------------------------------
+export interface RiverChainV2 {
+  segKey: string
+  chain: [number, number][]
+  baseChain: [number, number][]
+  hopKeys: string[]
+  hopRanges: [number, number][]  // [startIdx, endIdx] in chain for each hop
+}
+
+export function hopKey(v0: [number, number], v1: [number, number]): string {
+  const k0 = vKey(v0), k1 = vKey(v1)
+  return k0 < k1 ? `${k0}||${k1}` : `${k1}||${k0}`
+}
+
+type HopProps = { wiggleAmp?: number; wiggleFreq?: number; width?: number; taper?: number }
+
+type SegWiggleProps = Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+
+export function buildRiverChainsV2(
+  edges: { q1: number; r1: number; q2: number; r2: number }[],
+  hexes: GeneratedHex[],
+  overrides: Record<string, [number, number][]> = {},
+  wiggleFreqFactor = 2.5,
+  wiggleAmpFactor = 0.25,
+  smoothing = 10,
+  hopProps: Record<string, HopProps> = {},
+  segProps: SegWiggleProps = {},
+): RiverChainV2[] {
+  const hexMap = new Map<string, GeneratedHex>()
+  for (const h of hexes) hexMap.set(`${h.q},${h.r}`, h)
+
+  const adj = new Map<string, { key: string; coord: [number, number] }[]>()
+  const coordOf = new Map<string, [number, number]>()
+  const edgeMid = new Map<string, [number, number]>()
+
+  for (const edge of edges) {
+    const h1 = hexMap.get(`${edge.q1},${edge.r1}`), h2 = hexMap.get(`${edge.q2},${edge.r2}`)
+    if (!h1 || !h2) continue
+    const shared = findSharedVerts(h1, h2)
+    if (!shared) continue
+    const [v0, v1] = shared
+    const k0 = vKey(v0), k1 = vKey(v1)
+    coordOf.set(k0, v0); coordOf.set(k1, v1)
+    if (!adj.has(k0)) adj.set(k0, [])
+    if (!adj.has(k1)) adj.set(k1, [])
+    adj.get(k0)!.push({ key: k1, coord: v1 })
+    adj.get(k1)!.push({ key: k0, coord: v0 })
+    const id = k0 < k1 ? `${k0}|${k1}` : `${k1}|${k0}`
+    edgeMid.set(id, [(v0[0] + v1[0]) / 2, (v0[1] + v1[1]) / 2])
+  }
+
+  const degree = new Map<string, number>()
+  for (const [k, nbrs] of adj) degree.set(k, nbrs.length)
+
+  const eid = (a: string, b: string) => a < b ? `${a}|${b}` : `${b}|${a}`
+  const visitedEdges = new Set<string>()
+
+  const walkFrom = (startKey: string, dirKey: string): [number, number][] => {
+    const pts: [number, number][] = [coordOf.get(startKey)!, coordOf.get(dirKey)!]
+    visitedEdges.add(eid(startKey, dirKey))
+    let cur = dirKey
+    for (;;) {
+      if ((degree.get(cur) ?? 0) !== 2) break
+      const nbrs = adj.get(cur) ?? []
+      const next = nbrs.find(n => !visitedEdges.has(eid(cur, n.key)))
+      if (!next) break
+      visitedEdges.add(eid(cur, next.key))
+      pts.push(next.coord)
+      cur = next.key
+    }
+    return pts
+  }
+
+  const rawSparse: { pts: [number, number][]; segKey: string }[] = []
+
+  for (const [k] of adj) {
+    const deg = degree.get(k) ?? 0
+    if (deg === 2) continue
+    for (const nbr of (adj.get(k) ?? [])) {
+      if (visitedEdges.has(eid(k, nbr.key))) continue
+      const pts = walkFrom(k, nbr.key)
+      if (pts.length >= 2) {
+        const a = vKey(pts[0]), b = vKey(pts[pts.length - 1])
+        rawSparse.push({ pts, segKey: a < b ? `${a}||${b}` : `${b}||${a}` })
+      }
+    }
+  }
+  for (const [k] of adj) {
+    for (const nbr of (adj.get(k) ?? [])) {
+      if (visitedEdges.has(eid(k, nbr.key))) continue
+      const pts = walkFrom(k, nbr.key)
+      if (pts.length >= 2) {
+        const a = vKey(pts[0]), b = vKey(pts[pts.length - 1])
+        rawSparse.push({ pts, segKey: a < b ? `${a}||${b}` : `${b}||${a}` })
+      }
+    }
+  }
+
+  // Measure inter-vertex spacing in the same coordinate system as the vertices.
+  let interDist = 0, distSamples = 0
+  outer: for (const { pts } of rawSparse) {
+    for (let i = 1; i < pts.length; i++) {
+      interDist += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+      if (++distSamples >= 12) break outer
+    }
+  }
+  interDist = distSamples > 0 ? interDist / distSamples : 1e-4
+
+  const steps = Math.max(2, Math.round(smoothing))
+  const globalAmp = wiggleAmpFactor * interDist
+  const globalFreq = wiggleFreqFactor / interDist
+
+  return rawSparse.map(({ pts, segKey }) => {
+    const ctrlPts = overrides[segKey] ?? pts
+    const baseChain = catmullRom(ctrlPts, steps)
+
+    const hopCount = ctrlPts.length - 1
+    const hopKeysList: string[] = []
+    const hopRanges: [number, number][] = []
+    for (let h = 0; h < hopCount; h++) {
+      hopKeysList.push(hopKey(ctrlPts[h], ctrlPts[h + 1]))
+      hopRanges.push([h * steps, (h + 1) * steps])
+    }
+
+    // Apply wiggle: hop overrides > segment overrides > globals
+    const sp = segProps[segKey]
+    const hasSegWiggle = sp?.wiggleAmp !== undefined || sp?.wiggleFreq !== undefined
+    const hasAnyOverride = hasSegWiggle || hopKeysList.some(k => hopProps[k]?.wiggleAmp !== undefined || hopProps[k]?.wiggleFreq !== undefined)
+    let chain: [number, number][]
+    if (!hasAnyOverride) {
+      chain = wiggleChain(baseChain, globalAmp, globalFreq)
+    } else {
+      const dense = [...baseChain] as [number, number][]
+      for (let h = 0; h < hopCount; h++) {
+        const [s, e] = hopRanges[h]
+        const hp = hopProps[hopKeysList[h]]
+        const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? wiggleAmpFactor) * interDist
+        const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? wiggleFreqFactor) / interDist
+        const slice = baseChain.slice(s, e + 1)
+        const wiggled = wiggleChain(slice, amp, freq)
+        for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
+      }
+      chain = dense
+    }
+
+    return { segKey, chain, baseChain, hopKeys: hopKeysList, hopRanges }
+  })
 }

@@ -22,17 +22,138 @@ function statusDot(status: string) {
 
 type FlyoutKey = `road-${0 | 1 | 2}` | 'rail'
 
+function RoadSegmentPanel({ selectedKeys, segmentProps, accentColor, globalWiggleAmp, globalWiggleFreq, setProp, clearProp, setSelectedKeys }: {
+  selectedKeys: string[]
+  segmentProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  accentColor: string
+  globalWiggleAmp: number
+  globalWiggleFreq: number
+  setProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
+  clearProp: (key: string) => void
+  setSelectedKeys: (keys: string[]) => void
+}) {
+  if (selectedKeys.length === 0) return null
+  const firstProps = segmentProps[selectedKeys[0]]
+  const ampVal = firstProps?.wiggleAmp ?? globalWiggleAmp
+  const freqVal = firstProps?.wiggleFreq ?? globalWiggleFreq
+  const anyAmpOverride = selectedKeys.some(k => segmentProps[k]?.wiggleAmp !== undefined)
+  const anyFreqOverride = selectedKeys.some(k => segmentProps[k]?.wiggleFreq !== undefined)
+  const hasOverride = anyAmpOverride || anyFreqOverride
+  return (
+    <div style={sectionStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <div style={labelStyle}>Segment{hasOverride ? ' ●' : ''}</div>
+        <button onClick={() => setSelectedKeys([])}
+          style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 11, padding: 0 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >✕</button>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Wiggle amp</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyAmpOverride ? `${(ampVal * 100).toFixed(0)}% ●` : `${(ampVal * 100).toFixed(0)}%`}</span>
+      </div>
+      <input type="range" min={0} max={100} step={1}
+        value={Math.round(ampVal * 100)}
+        onChange={e => { const v = Number(e.target.value) / 100; for (const k of selectedKeys) setProp(k, { wiggleAmp: v }) }}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Wiggle freq</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyFreqOverride ? `${freqVal.toFixed(1)} ●` : freqVal.toFixed(1)}</span>
+      </div>
+      <input type="range" min={5} max={100} step={1}
+        value={Math.round(freqVal * 10)}
+        onChange={e => { const v = Number(e.target.value) / 10; for (const k of selectedKeys) setProp(k, { wiggleFreq: v }) }}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+      {hasOverride && (
+        <button
+          onClick={() => { for (const k of selectedKeys) clearProp(k); setSelectedKeys([]) }}
+          style={{ marginTop: 2, width: '100%', padding: '3px 0', background: 'none',
+            border: '1px solid #1e1f2e', borderRadius: 3, color: '#4a4a6a',
+            cursor: 'pointer', fontFamily: 'inherit', fontSize: 10 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >Reset to default</button>
+      )}
+    </div>
+  )
+}
+
+function RoadHopPanel({ selectedHopKey, hopProps, accentColor, defaultAmp, defaultFreq, setProp, clearProp, setSelectedHopKey }: {
+  selectedHopKey: string
+  hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  accentColor: string
+  defaultAmp: number
+  defaultFreq: number
+  setProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
+  clearProp: (key: string) => void
+  setSelectedHopKey: (key: string | null) => void
+}) {
+  const hp = hopProps[selectedHopKey] ?? {}
+  const ampVal = hp.wiggleAmp ?? defaultAmp
+  const freqVal = hp.wiggleFreq ?? defaultFreq
+  const hasOverride = !!hopProps[selectedHopKey]
+  return (
+    <div style={{ ...sectionStyle, borderColor: 'rgba(255,200,50,0.3)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <div style={{ ...labelStyle, color: 'rgba(255,200,50,0.8)' }}>Hop{hasOverride ? ' ●' : ''}</div>
+        <button onClick={() => setSelectedHopKey(null)}
+          style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 11, padding: 0 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >✕</button>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Wiggle amp</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{hp.wiggleAmp !== undefined ? `${(ampVal * 100).toFixed(0)}% ●` : `${(ampVal * 100).toFixed(0)}%`}</span>
+      </div>
+      <input type="range" min={0} max={100} step={1}
+        value={Math.round(ampVal * 100)}
+        onChange={e => setProp(selectedHopKey, { wiggleAmp: Number(e.target.value) / 100 })}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 11 }}>Wiggle freq</span>
+        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{hp.wiggleFreq !== undefined ? `${freqVal.toFixed(1)} ●` : freqVal.toFixed(1)}</span>
+      </div>
+      <input type="range" min={5} max={100} step={1}
+        value={Math.round(freqVal * 10)}
+        onChange={e => setProp(selectedHopKey, { wiggleFreq: Number(e.target.value) / 10 })}
+        style={{ width: '100%', accentColor, marginBottom: 6 }}
+      />
+      {hasOverride && (
+        <button
+          onClick={() => clearProp(selectedHopKey)}
+          style={{ marginTop: 2, width: '100%', padding: '3px 0', background: 'none',
+            border: '1px solid #1e1f2e', borderRadius: 3, color: '#4a4a6a',
+            cursor: 'pointer', fontFamily: 'inherit', fontSize: 10 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >Reset hop</button>
+      )}
+    </div>
+  )
+}
+
 export function RoadsSidebar() {
   const {
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
     roadNodeEditMode,
     setActiveTool,
-    roadBendiness, setRoadBendiness,
+    roadWiggleAmp, setRoadWiggleAmp,
+    roadWiggleFreq, setRoadWiggleFreq,
+    roadSmoothing, setRoadSmoothing,
     roadsStatus, roadsError,
     railsStatus, railsError,
     fetchRoads, fetchRails,
     clearRoads, clearRails,
+    roadSelectMode, roadSegmentProps, roadHopProps,
+    selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
+    selectedRoadHopKey, setSelectedRoadHopKey,
+    setRoadSegmentProp, clearRoadSegmentProp, setRoadHopProp, clearRoadHopProp,
   } = useMapStore()
 
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
@@ -194,7 +315,7 @@ export function RoadsSidebar() {
           <div style={labelStyle}>Geometry</div>
           <button
             onClick={() => setActiveTool(roadNodeEditMode ? { type: 'none' } : { type: 'node-edit' })}
-            style={{ ...btnStyle(roadNodeEditMode), width: '100%', marginBottom: 10 }}
+            style={{ ...btnStyle(roadNodeEditMode), width: '100%', marginBottom: 4 }}
           >
             <span style={{
               width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
@@ -203,14 +324,46 @@ export function RoadsSidebar() {
             }} />
             <span style={{ flex: 1 }}>Edit Nodes</span>
           </button>
+          <button
+            onClick={() => setActiveTool(roadSelectMode ? { type: 'none' } : { type: 'road-select' })}
+            style={{ ...btnStyle(roadSelectMode), marginTop: 4, marginBottom: 10 }}
+          >
+            <span style={{
+              width: 9, height: 9, borderRadius: 2, flexShrink: 0,
+              background: roadSelectMode ? '#d0c8f0' : '#3a3a5a',
+              border: `1px solid ${roadSelectMode ? '#7a6ab0' : '#4a4a6a'}`,
+            }} />
+            <span style={{ flex: 1 }}>Select segment</span>
+          </button>
+          {roadSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Click a road to select. Cmd+click to pick a hop. Right-click to exit.</div>}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Bendiness</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(roadBendiness * 100)}%</span>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleAmp.toFixed(2)}</span>
           </div>
           <input
-            type="range" min={0} max={100} step={1}
-            value={Math.round(roadBendiness * 100)}
-            onChange={e => setRoadBendiness(Number(e.target.value) / 100)}
+            type="range" min={0} max={1} step={0.01}
+            value={roadWiggleAmp}
+            onChange={e => setRoadWiggleAmp(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleFreq.toFixed(1)}</span>
+          </div>
+          <input
+            type="range" min={0.5} max={10} step={0.1}
+            value={roadWiggleFreq}
+            onChange={e => setRoadWiggleFreq(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Smoothing</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadSmoothing}</span>
+          </div>
+          <input
+            type="range" min={2} max={30} step={1}
+            value={roadSmoothing}
+            onChange={e => setRoadSmoothing(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer' }}
           />
         </div>
@@ -290,6 +443,34 @@ export function RoadsSidebar() {
             </div>
           </div>
         </div>
+
+        {selectedRoadSegmentKeys.length > 0 && (
+          <RoadSegmentPanel
+            selectedKeys={selectedRoadSegmentKeys}
+            segmentProps={roadSegmentProps}
+            accentColor='#7a6ab0'
+            globalWiggleAmp={roadWiggleAmp}
+            globalWiggleFreq={roadWiggleFreq}
+            setProp={setRoadSegmentProp}
+            clearProp={clearRoadSegmentProp}
+            setSelectedKeys={setSelectedRoadSegmentKeys}
+          />
+        )}
+        {selectedRoadHopKey && selectedRoadSegmentKeys.length > 0 && (() => {
+          const sp = selectedRoadSegmentKeys.length === 1 ? roadSegmentProps[selectedRoadSegmentKeys[0]] : undefined
+          return (
+            <RoadHopPanel
+              selectedHopKey={selectedRoadHopKey}
+              hopProps={roadHopProps}
+              accentColor='#7a6ab0'
+              defaultAmp={sp?.wiggleAmp ?? roadWiggleAmp}
+              defaultFreq={sp?.wiggleFreq ?? roadWiggleFreq}
+              setProp={setRoadHopProp}
+              clearProp={clearRoadHopProp}
+              setSelectedHopKey={setSelectedRoadHopKey}
+            />
+          )
+        })()}
 
       </div>
     </>
