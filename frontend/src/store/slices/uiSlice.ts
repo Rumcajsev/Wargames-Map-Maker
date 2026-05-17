@@ -204,6 +204,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
       version: 10,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
+        mapMode: s.mapMode, diptychJoin: s.diptychJoin,
         hexSizeMm: s.hexSizeMm, hexOrientation: s.hexOrientation,
         marginMm: s.marginMm, hexEdgeMode: s.hexEdgeMode,
         generatedHexes: s.generatedHexes, generatedMetadata: s.generatedMetadata,
@@ -251,7 +252,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         urbanDisplayMode: s.urbanDisplayMode, urbanScale: s.urbanScale,
         urbanVertexRatio: s.urbanVertexRatio, urbanNoise: s.urbanNoise,
         urbanBuildingCount: s.urbanBuildingCount, urbanBuildingSize: s.urbanBuildingSize,
-        terrainBlobOverrides: s.terrainBlobOverrides,
+        terrainBlobOverrides: s.terrainBlobOverrides, terrainTypeBlobStyles: s.terrainTypeBlobStyles,
         terrainBlobSmooth: s.terrainBlobSmooth, terrainBlobOffset: s.terrainBlobOffset,
         terrainBlobBump: s.terrainBlobBump, terrainBlobSweepFreq: s.terrainBlobSweepFreq,
         terrainBlobLobeFreq: s.terrainBlobLobeFreq, terrainBlobLobeAmp: s.terrainBlobLobeAmp,
@@ -368,6 +369,9 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 15) {
     if (!s.terrainTypeBlobStyles) s.terrainTypeBlobStyles = {}
+  }
+  if (fromVersion < 16) {
+    if (s.blankMap === undefined) s.blankMap = false
   }
   return s
 }

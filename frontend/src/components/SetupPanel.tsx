@@ -10,9 +10,10 @@ export function SetupPanel() {
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     center, zoom, framePixelWidth, bearing,
     generateStatus, generateError, generateProgress,
+    blankMap,
     setPaperSize, setOrientation, setMapMode, setDiptychJoin,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
-    generateMap,
+    generateMap, setBlankMap,
   } = useMapStore()
 
   const [elapsed, setElapsed] = useState(0)
@@ -184,6 +185,16 @@ export function SetupPanel() {
       </div>
 
       <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={blankMap}
+            onChange={(e) => setBlankMap(e.target.checked)}
+            style={{ accentColor: '#3a7a4a', width: 14, height: 14, cursor: 'pointer' }}
+          />
+          <span style={{ color: '#b0b0c8', fontSize: 12 }}>Blank map</span>
+          <span style={{ color: '#5a5a7a', fontSize: 11 }}>— all clear, no OSM</span>
+        </label>
         <button
           onClick={generateMap}
           disabled={generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0}

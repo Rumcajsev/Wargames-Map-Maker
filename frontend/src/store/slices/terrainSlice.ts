@@ -45,6 +45,9 @@ export type TerrainSlice = {
   // Terrain paint
   terrainPaintMode: boolean
   terrainPaintBrush: string
+  // Blank map
+  blankMap: boolean
+  setBlankMap: (v: boolean) => void
   // Lake state
   autoLakesEnabled: boolean
   lakeSensitivity: number
@@ -152,6 +155,10 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   terrainPaintMode: false,
   terrainPaintBrush: 'clear',
 
+  blankMap: false,
+
+  setBlankMap: (v) => set({ blankMap: v }),
+
   autoLakesEnabled: false,
   lakeSensitivity: 0.4,
   lakePaintMode: false,
@@ -255,8 +262,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
       const reader = resp.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let shouldStop = false
 
-      while (true) {
+      while (!shouldStop) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
@@ -265,6 +273,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
         buffer = lines.pop() ?? ''
 
         for (const line of lines) {
+          if (shouldStop) break
           if (!line.startsWith('data: ')) continue
           const jsonStr = line.slice(6).trim()
           if (!jsonStr) continue
@@ -313,6 +322,22 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
               elevation_class: null,
               coastline_clip: null,
             }))
+            if (get().blankMap) {
+              set({
+                step: 'terrain',
+                generatedMetadata: event.metadata as GridMetadata,
+                generatedHexes: placeholder,
+                generateStatus: 'done',
+                generateProgress: null,
+                highlightedHexes: {},
+                highlightLines: {},
+                highlightEdgePaths: {},
+                highlightPaintMode: false,
+              })
+              reader.cancel()
+              shouldStop = true
+              break
+            }
             set({
               step: 'terrain',
               generatedMetadata: event.metadata as GridMetadata,
