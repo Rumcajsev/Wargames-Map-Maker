@@ -1569,8 +1569,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     if (!meta || hexes.length === 0 || cssW === 0) return
     const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
     const dpr = window.devicePixelRatio || 1
+    const PRINT_DPI = 300
+    const scale300dpi = (meta.paper_mm[0] / 25.4 * PRINT_DPI) / pw
+    const fieldScale = Math.max(dpr, scale300dpi)
     const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
-    const R_device = meta.outer_radius_m * scalePxPerM * dpr
+    const R_device = meta.outer_radius_m * scalePxPerM * fieldScale
 
     const fieldTextures: Record<string, FieldTextureData> = {}
     const forestImg = forestTextureRef.current
@@ -1591,7 +1594,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     fieldCanvasRef.current = buildFieldCanvas(
       hexes, meta, pw, ph, px, py,
-      dpr,
+      fieldScale,
       fieldFreq, fieldAmp, fieldOctaves, fieldPersistence,
       fieldWildness, terrainColors, TERRAIN_COLORS,
       Object.keys(fieldTextures).length > 0 ? fieldTextures : undefined,
