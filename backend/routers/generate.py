@@ -55,7 +55,7 @@ async def generate_rivers(config: RiversConfig) -> dict:
 
 @router.post("/roads")
 async def generate_roads(config: RoadsConfig) -> dict:
-    from services.roads import generate_road_hexes
+    from services.roads_v2 import generate_road_hexes
     try:
         return await generate_road_hexes(config)
     except Exception as exc:
@@ -73,7 +73,7 @@ async def generate_settlement_roads(config: SettlementRoadsConfig) -> dict:
 
 @router.post("/rails")
 async def generate_rails(config: RailsConfig) -> dict:
-    from services.rails import generate_rail_hexes
+    from services.rails_v2 import generate_rail_hexes
     try:
         return await generate_rail_hexes(config)
     except Exception as exc:
