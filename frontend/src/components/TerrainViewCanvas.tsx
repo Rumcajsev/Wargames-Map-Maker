@@ -1376,34 +1376,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.stroke()
       }
 
-      // Dense chain point handles — shown on hovered chain, draggable.
-      // Hidden while a CP (em|/ja|/jt|) drag is active to avoid visual confusion.
-      const hovChain = draggingCpKeyRef.current ? null : hoveredChainRef.current
-      const hovHandleIdx = hoveredHandleIdxRef.current
-      const denseDrag = draggingDensePtRef.current
-      const denseDragPos = dragLiveDensePosRef.current
-      const activeHandles = denseDrag
-        ? denseDrag.handles.map((p, i) => i === denseDrag.handleIdx && denseDragPos ? denseDragPos : p) as [number, number][]
-        : hovChain?.handles ?? null
-      if (activeHandles) {
-        const activeHandleIdx = denseDrag ? denseDrag.handleIdx : hovHandleIdx
-        const dotR = 2.5 * handleScale
-        ctx.save()
-        // interior handles only (skip pinned endpoints at index 0 and last)
-        for (let i = 1; i < activeHandles.length - 1; i++) {
-          const [x, y] = project(activeHandles[i][0], activeHandles[i][1])
-          const isHovered = i === activeHandleIdx
-          ctx.beginPath()
-          ctx.arc(x, y, isHovered ? dotR * 1.8 : dotR, 0, Math.PI * 2)
-          ctx.fillStyle = isHovered ? '#ffcc44' : 'rgba(255,255,255,0.55)'
-          ctx.fill()
-          ctx.strokeStyle = isHovered ? '#cc8800' : 'rgba(100,100,140,0.7)'
-          ctx.lineWidth = handleScale * 0.8
-          ctx.stroke()
-        }
-        ctx.restore()
-      }
-
       // Snap preview: highlight the target diamond and the dragged diamond when close enough to merge
       const snapTarget = snapPreviewKeyRef.current
       const dragKey = draggingCpKeyRef.current
@@ -1934,29 +1906,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
       }
 
-      // Sparse chain handle grab (roads)
-      const handleHitR = 8 / currentZoom
-      if (roadNodeEditModeRef.current) {
-        const { chains } = smoothedRoadDataRef.current
-        for (const c of chains) {
-          if (c.id.startsWith('stub|')) continue
-          const existingHandles = roadChainOverridesRef.current[c.id]
-          const handles = existingHandles ?? sparseHandles(c.baseChain)
-          for (let i = 1; i < handles.length - 1; i++) {
-            const [cx, cy] = projectToCanvas(handles[i][0], handles[i][1], meta, pw, ph, px, py)
-            if (Math.hypot(logical.lx - cx, logical.ly - cy) <= handleHitR) {
-              draggingDensePtRef.current = { id: c.id, handles: [...handles], handleIdx: i, kind: 'road' }
-              dragLiveDensePosRef.current = handles[i]
-              hoveredChainRef.current = null
-              hoveredHandleIdxRef.current = null
-              e.stopPropagation()
-              return
-            }
-          }
-        }
-      }
-
       // River chain handle grab
+      const handleHitR = 8 / currentZoom
       if (riverNodeEditModeRef.current) {
         for (const c of riverChainsV2Ref.current) {
           const existingHandles = riverChainOverridesRef.current[c.segKey]
