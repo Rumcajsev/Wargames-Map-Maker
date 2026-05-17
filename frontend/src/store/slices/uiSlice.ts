@@ -247,7 +247,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         riverHopProps: s.riverHopProps,
         roadSegmentProps: s.roadSegmentProps, roadHopProps: s.roadHopProps,
         roadChainOverrides: s.roadChainOverrides, roadControlOverrides: s.roadControlOverrides,
-        roadSnapBindings: s.roadSnapBindings, roadPathSmoothing: s.roadPathSmoothing,
+        roadSnapBindings: s.roadSnapBindings, roadPathSmoothing: s.roadPathSmoothing, roadDensityMinChain: s.roadDensityMinChain,
         riverStyle: s.riverStyle, canalStyle: s.canalStyle,
         riverChainOverrides: s.riverChainOverrides,
         riverFlowStyle: s.riverFlowStyle, riverCurveSteps: s.riverCurveSteps,
