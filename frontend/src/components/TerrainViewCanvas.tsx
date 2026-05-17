@@ -1390,11 +1390,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
         ctx.clip()
         if (showRawOsmRoadsRef.current) {
-          ctx.lineWidth = 1
+          const tierColor = ['rgba(220,50,50,0.9)', 'rgba(220,140,30,0.9)', 'rgba(180,180,30,0.85)']
+          const tierWidth = [2.5, 1.5, 1]
+          const hwTier: Record<string, number> = {
+            motorway: 0, motorway_link: 0, trunk: 0, trunk_link: 0,
+            primary: 1, primary_link: 1,
+            secondary: 2, secondary_link: 2, tertiary: 2, tertiary_link: 2,
+          }
           for (const way of rawRoadWaysRef.current) {
             if (way.coords.length < 2) continue
+            const tier = hwTier[way.highway] ?? 2
             ctx.beginPath()
-            ctx.strokeStyle = 'rgba(255, 80, 0, 0.7)'
+            ctx.strokeStyle = tierColor[tier]
+            ctx.lineWidth = tierWidth[tier]
             const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
             ctx.moveTo(x0, y0)
             for (let i = 1; i < way.coords.length; i++) {
