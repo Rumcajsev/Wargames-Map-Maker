@@ -276,6 +276,10 @@ export function buildRoadChains(
       const { pts, endKey, pinned, edgeKeys } = walk(startKey)
       if (pts.length < 2) return
 
+      const a = startKey < endKey ? startKey : endKey
+      const b = startKey < endKey ? endKey : startKey
+      const id = `${tier}|${a}|${b}`
+
       // Laplacian path smoothing: iteratively move each floating waypoint toward
       // the average of its neighbours. Pinned points (junctions, overridden em|) stay fixed.
       const relaxed = pts.slice() as [number, number][]
@@ -295,10 +299,6 @@ export function buildRoadChains(
         const ek = edgeKeys[i]
         if (ek !== null) controlPoints.push({ key: ek, pos: relaxed[i], chainId: id })
       }
-
-      const a = startKey < endKey ? startKey : endKey
-      const b = startKey < endKey ? endKey : startKey
-      const id = `${tier}|${a}|${b}`
       const storedHandles = chainOverrides[id]
       const steps = Math.round(smoothing)
       let baseChain: [number, number][]
