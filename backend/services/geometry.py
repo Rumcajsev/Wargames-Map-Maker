@@ -89,31 +89,66 @@ def polyline_to_hex_sequence(
     return result
 
 
-def spanning_forest(
+def prune_bad_cycles(
     connections: dict[tuple[int, int], set[tuple[int, int]]],
 ) -> dict[tuple[int, int], set[tuple[int, int]]]:
-    """Reduce a hex adjacency graph to a spanning forest (one tree per component).
+    """Remove edges that would produce visual loops, preserving legitimate junction geometry.
 
-    Eliminates all cycles via BFS. Cycle-forming edges — typically produced by
-    several short OSM ways that together loop back — are simply dropped, preventing
-    the chain renderer from drawing visual loops.
+    Uses union-find (Kruskal-style) to detect cycle-forming back edges.  When a back
+    edge is found:
+    - Both endpoints degree ≥ 3 (junction–junction): keep it.  The chain renderer stops
+      at junctions, so each such edge becomes its own short segment — no loop results.
+    - Either endpoint degree ≤ 2 (pass-through or dead-end): drop it.  The renderer
+      would walk the whole cycle and draw it as a closed visual loop.
+
+    Junction-to-junction edges are processed first so they anchor the spanning tree
+    and are never the ones dropped.
     """
-    forest: dict[tuple[int, int], set[tuple[int, int]]] = {h: set() for h in connections}
-    visited: set[tuple[int, int]] = set()
-    for start in connections:
-        if start in visited:
-            continue
-        visited.add(start)
-        queue = [start]
-        while queue:
-            node = queue.pop(0)
-            for neighbor in sorted(connections[node]):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    forest[node].add(neighbor)
-                    forest[neighbor].add(node)
-                    queue.append(neighbor)
-    return forest
+    degree = {h: len(conns) for h, conns in connections.items()}
+
+    edges: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+    for h, conns in connections.items():
+        for n in conns:
+            edges.add((min(h, n), max(h, n)))
+
+    parent = {h: h for h in connections}
+    rank: dict[tuple[int, int], int] = {h: 0 for h in connections}
+
+    def find(x: tuple[int, int]) -> tuple[int, int]:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x: tuple[int, int], y: tuple[int, int]) -> bool:
+        px, py = find(x), find(y)
+        if px == py:
+            return False
+        if rank[px] < rank[py]:
+            px, py = py, px
+        parent[py] = px
+        if rank[px] == rank[py]:
+            rank[px] += 1
+        return True
+
+    result: dict[tuple[int, int], set[tuple[int, int]]] = {h: set() for h in connections}
+
+    # Junction–junction edges first so they are never the dropped back edge.
+    def edge_key(e: tuple[tuple[int, int], tuple[int, int]]) -> tuple[int, tuple]:
+        a, b = e
+        return (0 if degree[a] >= 3 and degree[b] >= 3 else 1, e)
+
+    for a, b in sorted(edges, key=edge_key):
+        if union(a, b):
+            result[a].add(b)
+            result[b].add(a)
+        elif degree[a] >= 3 and degree[b] >= 3:
+            # Back edge between two junctions: safe to keep (won't produce a loop).
+            result[a].add(b)
+            result[b].add(a)
+        # else: back edge involving a pass-through/dead-end → drop to prevent visual loop.
+
+    return result
 
 
 def smooth_hex_path(path: list[tuple[int, int]]) -> list[tuple[int, int]]:

@@ -1,7 +1,7 @@
 import math
 from shapely.geometry import LineString
 
-from services.geometry import METERS_PER_DEGREE, make_lonlat_to_hex, polyline_to_hex_sequence, smooth_hex_path, spanning_forest, compute_bbox
+from services.geometry import METERS_PER_DEGREE, make_lonlat_to_hex, polyline_to_hex_sequence, smooth_hex_path, prune_bad_cycles, compute_bbox
 from services.overpass import post_overpass
 
 # Lower index = higher priority (rail beats light_rail beats narrow_gauge …)
@@ -51,7 +51,7 @@ def _build_rail_data(
                 if prev not in hex_railway or _rt_rank(rt_type) < _rt_rank(hex_railway[prev]):
                     hex_railway[prev] = rt_type
 
-    hex_connections = spanning_forest(hex_connections)
+    hex_connections = prune_bad_cycles(hex_connections)
 
     rail_hexes = [
         {
