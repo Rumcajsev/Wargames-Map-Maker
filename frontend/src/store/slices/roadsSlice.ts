@@ -19,6 +19,7 @@ export type RoadsSlice = {
   roadWiggleAmp: number
   roadWiggleFreq: number
   roadSmoothing: number
+  roadPathSmoothing: number
   roadChainOverrides: Record<string, [number, number][]>
   roadTierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
   fetchRoads: () => Promise<void>
@@ -39,6 +40,7 @@ export type RoadsSlice = {
   setRoadWiggleAmp: (v: number) => void
   setRoadWiggleFreq: (v: number) => void
   setRoadSmoothing: (v: number) => void
+  setRoadPathSmoothing: (v: number) => void
   setRoadChainOverride: (id: string, pts: [number, number][]) => void
   deleteRoadChainOverride: (id: string) => void
   clearRoadChainOverrides: () => void
@@ -78,6 +80,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadWiggleAmp: 0,
   roadWiggleFreq: 2.5,
   roadSmoothing: 10,
+  roadPathSmoothing: 0,
   roadChainOverrides: {},
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
   roadSegmentProps: {},
@@ -200,6 +203,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setRoadWiggleAmp: (v) => set({ roadWiggleAmp: v }),
   setRoadWiggleFreq: (v) => set({ roadWiggleFreq: v }),
   setRoadSmoothing: (v) => set({ roadSmoothing: v }),
+  setRoadPathSmoothing: (v) => set({ roadPathSmoothing: v }),
   setRoadChainOverride: (id, pts) => set(s => ({ roadChainOverrides: { ...s.roadChainOverrides, [id]: pts } })),
   deleteRoadChainOverride: (id) => set(s => { const { [id]: _, ...rest } = s.roadChainOverrides; return { roadChainOverrides: rest } }),
   clearRoadChainOverrides: () => set({ roadChainOverrides: {} }),

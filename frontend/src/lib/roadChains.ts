@@ -33,6 +33,7 @@ export function buildRoadChains(
   wiggleAmpFactor = 0,
   wiggleFreqFactor = 2.5,
   smoothing = 10,
+  pathSmoothing = 0,
   chainOverrides: Record<string, [number, number][]> = {},
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
@@ -227,11 +228,14 @@ export function buildRoadChains(
       return junctionPositions.get(k) ?? h.center
     }
 
-    const walk = (startKey: string): { pts: [number, number][]; endKey: string } => {
+    // pinned[i] = true means pts[i] must not move during path smoothing
+    const walk = (startKey: string): { pts: [number, number][]; endKey: string; pinned: boolean[]; edgeKeys: (string | null)[] } => {
       const h0 = hexIdx.get(startKey)
-      if (!h0) return { pts: [], endKey: startKey }
+      if (!h0) return { pts: [], endKey: startKey, pinned: [], edgeKeys: [] }
       const startDeg = (adj.get(startKey) ?? []).length
       const pts: [number, number][] = []
+      const pinned: boolean[] = []
+      const edgeKeys: (string | null)[] = []
       let firstStep = true
       let prevKey = startKey
       let cur = startKey
@@ -243,34 +247,55 @@ export function buildRoadChains(
         if (!next) break
         if (firstStep) {
           firstStep = false
-          if (startDeg !== 2 || isJunction(startKey)) pts.push(jPos(startKey, h0, next))
+          if (startDeg !== 2 || isJunction(startKey)) {
+            pts.push(jPos(startKey, h0, next)); pinned.push(true); edgeKeys.push(null)
+          }
         }
         const ep = cur < next ? `${cur}|${next}` : `${next}|${cur}`
         visitedPairs.add(ep)
         const h1 = hexIdx.get(cur), h2 = hexIdx.get(next)
         if (h1 && h2) {
           const ek = edgeCpKey(cur, next)
-          let mid: [number, number]
-          if (overrides[ek]) {
-            mid = overrides[ek]
-          } else {
-            mid = [(h1.center[0] + h2.center[0]) / 2, (h1.center[1] + h2.center[1]) / 2]
-          }
-          pts.push(mid)
-          if (!seenEdges.has(ek)) { seenEdges.add(ek); controlPoints.push({ key: ek, pos: mid }) }
+          const isOverridden = !!overrides[ek]
+          const mid: [number, number] = isOverridden
+            ? overrides[ek]
+            : [(h1.center[0] + h2.center[0]) / 2, (h1.center[1] + h2.center[1]) / 2]
+          pts.push(mid); pinned.push(isOverridden); edgeKeys.push(ek)
+          seenEdges.add(ek)
         }
         prevKey = cur
         cur = next
         const curDeg = (adj.get(cur) ?? []).length
-        if (curDeg === 1) { const he = hexIdx.get(cur); if (he) pts.push(he.center); break }
-        if (isJunction(cur)) { const hj = hexIdx.get(cur); if (hj) pts.push(jPos(cur, hj, prevKey)); break }
+        if (curDeg === 1) { const he = hexIdx.get(cur); if (he) { pts.push(he.center); pinned.push(true); edgeKeys.push(null) } break }
+        if (isJunction(cur)) { const hj = hexIdx.get(cur); if (hj) { pts.push(jPos(cur, hj, prevKey)); pinned.push(true); edgeKeys.push(null) } break }
       }
-      return { pts, endKey: cur }
+      return { pts, endKey: cur, pinned, edgeKeys }
     }
 
     const pushChain = (startKey: string) => {
-      const { pts, endKey } = walk(startKey)
+      const { pts, endKey, pinned, edgeKeys } = walk(startKey)
       if (pts.length < 2) return
+
+      // Laplacian path smoothing: iteratively move each floating waypoint toward
+      // the average of its neighbours. Pinned points (junctions, overridden em|) stay fixed.
+      const relaxed = pts.slice() as [number, number][]
+      const iters = Math.round(pathSmoothing)
+      for (let it = 0; it < iters; it++) {
+        for (let i = 1; i < relaxed.length - 1; i++) {
+          if (pinned[i]) continue
+          relaxed[i] = [
+            (relaxed[i - 1][0] + relaxed[i + 1][0]) / 2,
+            (relaxed[i - 1][1] + relaxed[i + 1][1]) / 2,
+          ]
+        }
+      }
+
+      // Emit em| control points at relaxed positions (each edge visited once via visitedPairs)
+      for (let i = 0; i < edgeKeys.length; i++) {
+        const ek = edgeKeys[i]
+        if (ek !== null) controlPoints.push({ key: ek, pos: relaxed[i] })
+      }
+
       const a = startKey < endKey ? startKey : endKey
       const b = startKey < endKey ? endKey : startKey
       const id = `${tier}|${a}|${b}`
@@ -279,19 +304,17 @@ export function buildRoadChains(
       let baseChain: [number, number][]
       if (steps === 0) {
         baseChain = storedHandles && storedHandles.length >= 2
-          ? [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]]
-          : pts.slice()
+          ? [relaxed[0], ...storedHandles.slice(1, -1), relaxed[relaxed.length - 1]]
+          : relaxed.slice()
       } else if (storedHandles && storedHandles.length >= 2) {
-        // Pin stored handle endpoints to current computed junction positions so
-        // the chain reconnects correctly even if junctions were moved.
-        const pinned: [number, number][] = [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]]
+        const pinned: [number, number][] = [relaxed[0], ...storedHandles.slice(1, -1), relaxed[relaxed.length - 1]]
         baseChain = catmullRom(pinned, Math.max(2, steps))
       } else {
-        baseChain = catmullRom(pts, Math.max(2, steps))
+        baseChain = catmullRom(relaxed, Math.max(2, steps))
       }
       const effectiveCtrl = (storedHandles && storedHandles.length >= 2)
-        ? [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]] as [number, number][]
-        : pts
+        ? [relaxed[0], ...storedHandles.slice(1, -1), relaxed[relaxed.length - 1]] as [number, number][]
+        : relaxed
       const hopCount = effectiveCtrl.length - 1
       const denseSteps = Math.max(1, steps)
       const hopKeysList: string[] = []

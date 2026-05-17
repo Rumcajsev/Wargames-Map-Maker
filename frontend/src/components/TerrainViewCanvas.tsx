@@ -114,7 +114,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     activePanel,
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadNodeEditMode,
-    roadWiggleAmp, roadWiggleFreq, roadSmoothing,
+    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing,
     roadChainOverrides, setRoadChainOverride,
     riverEdges, canalEdges,
     riverEditMode, canalEditMode, toggleRiverEdge, toggleCanalEdge,
@@ -191,6 +191,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const roadWiggleAmpRef = useRef(roadWiggleAmp)
   const roadWiggleFreqRef = useRef(roadWiggleFreq)
   const roadSmoothingRef = useRef(roadSmoothing)
+  const roadPathSmoothingRef = useRef(roadPathSmoothing)
   const roadChainOverridesRef = useRef(roadChainOverrides)
   const setRoadChainOverrideRef = useRef(setRoadChainOverride)
   const { deleteRoadChainOverride } = useMapStore()
@@ -374,6 +375,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   roadWiggleAmpRef.current = roadWiggleAmp
   roadWiggleFreqRef.current = roadWiggleFreq
   roadSmoothingRef.current = roadSmoothing
+  roadPathSmoothingRef.current = roadPathSmoothing
   roadChainOverridesRef.current = roadChainOverrides
   setRoadChainOverrideRef.current = setRoadChainOverride
   deleteRoadChainOverrideRef.current = deleteRoadChainOverride
@@ -508,8 +510,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
 
   const smoothedRoadData = useMemo(
-    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps),
-    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps],
+    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps),
+    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps],
   )
   const smoothedRoadDataRef = useRef(smoothedRoadData)
   smoothedRoadDataRef.current = smoothedRoadData
@@ -1233,6 +1235,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           roadWiggleAmpRef.current,
           roadWiggleFreqRef.current,
           roadSmoothingRef.current,
+          roadPathSmoothingRef.current,
           roadChainOverridesRef.current,
           roadSegmentPropsRef.current,
           roadHopPropsRef.current,
@@ -1245,6 +1248,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             roadWiggleAmpRef.current,
             roadWiggleFreqRef.current,
             roadSmoothingRef.current,
+            roadPathSmoothingRef.current,
             liveChainOverrides,
             roadSegmentPropsRef.current,
             roadHopPropsRef.current,
