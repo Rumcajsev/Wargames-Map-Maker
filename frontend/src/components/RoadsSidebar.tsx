@@ -361,7 +361,7 @@ export function RoadsSidebar() {
             <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadSmoothing}</span>
           </div>
           <input
-            type="range" min={2} max={30} step={1}
+            type="range" min={0} max={30} step={1}
             value={roadSmoothing}
             onChange={e => setRoadSmoothing(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer' }}

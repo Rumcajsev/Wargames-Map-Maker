@@ -275,26 +275,30 @@ export function buildRoadChains(
       const b = startKey < endKey ? endKey : startKey
       const id = `${tier}|${a}|${b}`
       const storedHandles = chainOverrides[id]
+      const steps = Math.round(smoothing)
       let baseChain: [number, number][]
-      if (storedHandles && storedHandles.length >= 2) {
+      if (steps === 0) {
+        baseChain = storedHandles && storedHandles.length >= 2
+          ? [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]]
+          : pts.slice()
+      } else if (storedHandles && storedHandles.length >= 2) {
         // Pin stored handle endpoints to current computed junction positions so
         // the chain reconnects correctly even if junctions were moved.
         const pinned: [number, number][] = [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]]
-        baseChain = catmullRom(pinned, Math.max(2, Math.round(smoothing)))
+        baseChain = catmullRom(pinned, Math.max(2, steps))
       } else {
-        baseChain = catmullRom(pts, Math.max(2, Math.round(smoothing)))
+        baseChain = catmullRom(pts, Math.max(2, steps))
       }
-
-      const steps = Math.max(2, Math.round(smoothing))
       const effectiveCtrl = (storedHandles && storedHandles.length >= 2)
         ? [pts[0], ...storedHandles.slice(1, -1), pts[pts.length - 1]] as [number, number][]
         : pts
       const hopCount = effectiveCtrl.length - 1
+      const denseSteps = Math.max(1, steps)
       const hopKeysList: string[] = []
       const hopRanges: [number, number][] = []
       for (let h = 0; h < hopCount; h++) {
         hopKeysList.push(roadHopKey(effectiveCtrl[h], effectiveCtrl[h + 1]))
-        hopRanges.push([h * steps, (h + 1) * steps])
+        hopRanges.push([h * denseSteps, (h + 1) * denseSteps])
       }
 
       const sp = segProps[id]
