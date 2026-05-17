@@ -52,6 +52,8 @@ export type RoadsSlice = {
   roadHopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
   roadDensityMinChain: number
   setRoadDensityMinChain: (v: number) => void
+  showRawOsmRoads: boolean
+  setShowRawOsmRoads: (v: boolean) => void
   roadSelectMode: boolean
   selectedRoadSegmentKeys: string[]
   selectedRoadHopKey: string | null
@@ -92,6 +94,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadSegmentProps: {},
   roadHopProps: {},
   roadDensityMinChain: 1,
+  showRawOsmRoads: false,
   roadSelectMode: false,
   selectedRoadSegmentKeys: [],
   selectedRoadHopKey: null,
@@ -106,16 +109,15 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setRoadsFetchTiers: (tiers) => set({ roadsFetchTiers: tiers }),
   setRoadsVisibleTiers: (tiers) => set({ roadsVisibleTiers: tiers }),
   setRoadDensityMinChain: (v) => set({ roadDensityMinChain: v }),
+  setShowRawOsmRoads: (v) => set({ showRawOsmRoads: v }),
 
   fetchRoads: async () => {
-    const { generatedMetadata, hexOrientation, roadsFetchTiers } = get()
+    const { generatedMetadata, hexOrientation } = get()
     if (!generatedMetadata) return
 
     set({ roadsStatus: 'loading', roadsError: null })
 
-    const highway_types = roadsFetchTiers.flatMap(
-      (on, t) => on ? TIER_HIGHWAYS[t as 0 | 1 | 2] : []
-    )
+    const highway_types = TIER_HIGHWAYS.flat()
 
     try {
       const resp = await fetch('/api/generate/roads', {
@@ -154,7 +156,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   },
 
   fetchSettlementRoads: async () => {
-    const { generatedMetadata, hexOrientation, roadsFetchTiers, settlements } = get()
+    const { generatedMetadata, hexOrientation, settlements } = get()
     if (!generatedMetadata) return
 
     const includedSettlements = settlements
@@ -162,10 +164,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
       .map((s) => ({ lat: s.lat, lon: s.lon, name: s.name }))
     if (includedSettlements.length < 2) return
 
-    const highway_types = roadsFetchTiers.flatMap(
-      (on, t) => (on ? TIER_HIGHWAYS[t as 0 | 1 | 2] : [])
-    )
-    if (highway_types.length === 0) return
+    const highway_types = [...TIER_HIGHWAYS[0], ...TIER_HIGHWAYS[1]]
 
     set({ settlementRoadsStatus: 'loading', settlementRoadsError: null })
 
