@@ -89,6 +89,33 @@ def polyline_to_hex_sequence(
     return result
 
 
+def spanning_forest(
+    connections: dict[tuple[int, int], set[tuple[int, int]]],
+) -> dict[tuple[int, int], set[tuple[int, int]]]:
+    """Reduce a hex adjacency graph to a spanning forest (one tree per component).
+
+    Eliminates all cycles via BFS. Cycle-forming edges — typically produced by
+    several short OSM ways that together loop back — are simply dropped, preventing
+    the chain renderer from drawing visual loops.
+    """
+    forest: dict[tuple[int, int], set[tuple[int, int]]] = {h: set() for h in connections}
+    visited: set[tuple[int, int]] = set()
+    for start in connections:
+        if start in visited:
+            continue
+        visited.add(start)
+        queue = [start]
+        while queue:
+            node = queue.pop(0)
+            for neighbor in sorted(connections[node]):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    forest[node].add(neighbor)
+                    forest[neighbor].add(node)
+                    queue.append(neighbor)
+    return forest
+
+
 def smooth_hex_path(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
     changed = True
     while changed:
