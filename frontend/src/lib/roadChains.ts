@@ -365,8 +365,11 @@ export function buildRoadChains(
     }
   }
 
-  // Stub chains linking the two side terminals (the short spine section between T-junctions)
+  // Stub chains linking the two side terminals (the short spine section between T-junctions).
+  // Skipped when the junction is fully dissolved — each arm has its own free endpoint.
   for (const [k, spinePair] of spineNeighbors) {
+    const allDissolved = [...(globalAdj.get(k) ?? [])].every(nk => !!overrides[spineSideCpKey(k, nk)])
+    if (allDissolved) continue
     const termA = sideTerminals.get(`${k}|${spinePair[0]}`)
     const termB = sideTerminals.get(`${k}|${spinePair[1]}`)
     if (!termA || !termB) continue
