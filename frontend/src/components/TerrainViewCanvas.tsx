@@ -2317,7 +2317,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
                   h?.center as [number, number]
                 if (!juncCenter) return
                 for (const nk of armNeighbors) {
-                  setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, juncCenter)
+                  const [nq, nr] = nk.split(',').map(Number)
+                  const nh = hexesRef.current.find(hx => hx.q === nq && hx.r === nr)
+                  if (nh) {
+                    // Offset arm endpoint 20% of the way toward the neighbor hex center
+                    const dx = nh.center[0] - juncCenter[0], dy = nh.center[1] - juncCenter[1]
+                    const armPos: [number, number] = [juncCenter[0] + dx * 0.2, juncCenter[1] + dy * 0.2]
+                    setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, armPos)
+                  } else {
+                    setRoadControlOverrideRef.current(`jt|${hexKey}|${nk}`, juncCenter)
+                  }
                 }
               },
             })
