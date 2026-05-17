@@ -252,13 +252,12 @@ export function buildRoadChains(
       let firstStep = true
       let prevKey = startKey
       let cur = startKey
-      const chainNodes = new Set<string>([startKey])
       for (;;) {
         const next = (adj.get(cur) ?? []).find(nk => {
           const ep = cur < nk ? `${cur}|${nk}` : `${nk}|${cur}`
           return !visitedPairs.has(ep)
         })
-        if (!next || chainNodes.has(next)) break
+        if (!next) break
         if (firstStep) {
           firstStep = false
           if (startDeg !== 2 || isJunction(startKey)) {
@@ -279,7 +278,6 @@ export function buildRoadChains(
         }
         prevKey = cur
         cur = next
-        chainNodes.add(cur)
         const curDeg = (adj.get(cur) ?? []).length
         if (curDeg === 1) { const he = hexIdx.get(cur); if (he) { pts.push(he.center); pinned.push(true); edgeKeys.push(null) } break }
         if (isJunction(cur)) { const hj = hexIdx.get(cur); if (hj) { pts.push(jPos(cur, hj, prevKey)); pinned.push(true); edgeKeys.push(null) } break }
