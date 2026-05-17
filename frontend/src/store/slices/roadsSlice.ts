@@ -117,7 +117,8 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
 
     set({ roadsStatus: 'loading', roadsError: null })
 
-    const highway_types = TIER_HIGHWAYS.flat()
+    const { roadsFetchTiers } = get()
+    const highway_types = TIER_HIGHWAYS.flatMap((hw, i) => roadsFetchTiers[i] ? hw : [])
 
     try {
       const resp = await fetch('/api/generate/roads', {

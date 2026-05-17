@@ -147,6 +147,7 @@ export function RoadsSidebar() {
     roadWiggleFreq, setRoadWiggleFreq,
     roadSmoothing, setRoadSmoothing,
     roadPathSmoothing, setRoadPathSmoothing,
+    roadsFetchTiers, setRoadsFetchTiers,
     roadsStatus, roadsError,
     railsStatus, railsError,
     fetchRoads, fetchRails,
@@ -415,9 +416,19 @@ export function RoadsSidebar() {
                   </button>
                 )}
               </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 5 }}>
+                {(['Motorway', 'Primary', 'Tertiary'] as const).map((label, i) => (
+                  <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
+                    <input type="checkbox" checked={roadsFetchTiers[i as 0|1|2]}
+                      onChange={e => { const t = [...roadsFetchTiers] as [boolean,boolean,boolean]; t[i as 0|1|2] = e.target.checked; setRoadsFetchTiers(t) }}
+                      style={{ cursor: 'pointer' }} />
+                    {label}
+                  </label>
+                ))}
+              </div>
               <button
                 onClick={() => fetchRoads()}
-                disabled={roadsStatus === 'loading'}
+                disabled={roadsStatus === 'loading' || !roadsFetchTiers.some(Boolean)}
                 style={{
                   width: '100%', padding: '4px 0',
                   background: 'none', border: '1px solid #2a3a2a',
