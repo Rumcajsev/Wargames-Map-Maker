@@ -472,7 +472,6 @@ export type FieldTextureData = {
   data: Uint8ClampedArray
   w: number
   h: number
-  scaleR: number
 }
 
 export function buildFieldCanvas(
@@ -565,9 +564,8 @@ export function buildFieldCanvas(
 
       const tex = textures?.[displaced.terrain]
       if (tex) {
-        const texPx = R * tex.scaleR
-        const tx = Math.floor(((fx_ % texPx) / texPx) * tex.w)
-        const ty = Math.floor(((fy_ % texPx) / texPx) * tex.h)
+        const tx = fx_ % tex.w
+        const ty = fy_ % tex.h
         const ti = (ty * tex.w + tx) * 4
         const ta = tex.data[ti + 3] / 255
         r = Math.round(r + (Math.min(r, tex.data[ti])     - r) * ta)

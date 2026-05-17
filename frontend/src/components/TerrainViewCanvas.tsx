@@ -1568,22 +1568,30 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const { w: cssW, h: cssH } = frameDimsRef.current
     if (!meta || hexes.length === 0 || cssW === 0) return
     const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    const dpr = window.devicePixelRatio || 1
+    const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
+    const R_device = meta.outer_radius_m * scalePxPerM * dpr
+
     const fieldTextures: Record<string, FieldTextureData> = {}
     const forestImg = forestTextureRef.current
     if (forestImg && forestImg.complete && forestImg.naturalWidth > 0) {
-      const tmp = document.createElement('canvas')
-      tmp.width = forestImg.naturalWidth; tmp.height = forestImg.naturalHeight
-      const tmpCtx = tmp.getContext('2d')!
-      tmpCtx.drawImage(forestImg, 0, 0)
-      const id = tmpCtx.getImageData(0, 0, tmp.width, tmp.height)
       const scaleR = terrainTextureScalesRef.current['woods'] ?? 3
-      fieldTextures['woods'] = { data: id.data, w: tmp.width, h: tmp.height, scaleR }
-      fieldTextures['light_woods'] = { data: id.data, w: tmp.width, h: tmp.height, scaleR }
+      const tileW = Math.max(1, Math.ceil(R_device * scaleR))
+      const tileH = Math.max(1, Math.ceil(tileW * forestImg.naturalHeight / forestImg.naturalWidth))
+      const tmp = document.createElement('canvas')
+      tmp.width = tileW; tmp.height = tileH
+      const tmpCtx = tmp.getContext('2d')!
+      tmpCtx.imageSmoothingEnabled = true
+      tmpCtx.imageSmoothingQuality = 'high'
+      tmpCtx.drawImage(forestImg, 0, 0, tileW, tileH)
+      const id = tmpCtx.getImageData(0, 0, tileW, tileH)
+      fieldTextures['woods'] = { data: id.data, w: tileW, h: tileH }
+      fieldTextures['light_woods'] = { data: id.data, w: tileW, h: tileH }
     }
 
     fieldCanvasRef.current = buildFieldCanvas(
       hexes, meta, pw, ph, px, py,
-      window.devicePixelRatio || 1,
+      dpr,
       fieldFreq, fieldAmp, fieldOctaves, fieldPersistence,
       fieldWildness, terrainColors, TERRAIN_COLORS,
       Object.keys(fieldTextures).length > 0 ? fieldTextures : undefined,
