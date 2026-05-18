@@ -39,8 +39,8 @@ export function buildRoadChains(
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   snapBindings: Record<string, string> = {},
   chaikinPasses = 4,
-): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string; chainIdx?: number }[] } {
-  if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [] }
+): { chains: { tier: 0 | 1 | 2; chain: [number, number][]; baseChain: [number, number][]; id: string; hopKeys?: string[]; hopRanges?: [number, number][] }[]; junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]; controlPoints: { key: string; pos: [number, number]; chainId?: string; chainIdx?: number }[]; interHexDist: number } {
+  if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [], interHexDist: 0 }
 
   // Resolve snap-bound jt| endpoints to stable em| hex midpoints. These midpoints don't
   // move with wiggle/smoothing, so connections survive parameter changes.
@@ -199,6 +199,10 @@ export function buildRoadChains(
   const junctionMap = new Map<string, { pos: [number, number]; tier: 0 | 1 | 2 }>()
   const controlPoints: { key: string; pos: [number, number] }[] = []
   const seenEdges = new Set<string>()
+  // Hexes that are genuine junctions in at least one tier (per-tier degree > 2).
+  // Used to suppress stub chains and junction dots for hexes that only appear as
+  // junctions due to cross-tier edge aggregation in globalAdj.
+  const tierJunctionHexes = new Set<string>()
 
   const byTier = new Map<0 | 1 | 2, typeof roadEdges>()
   for (const e of roadEdges) {
@@ -217,7 +221,11 @@ export function buildRoadChains(
     }
 
     const visitedPairs = new Set<string>()
-    const isJunction = (k: string) => (globalAdj.get(k)?.size ?? 0) > 2
+    // isJunction is intentionally per-tier: a hex is a junction only when this
+    // tier alone has > 2 connections there. Using globalAdj caused tier-0 roads
+    // to form T-junctions wherever a tier-1 road happened to share the same hex.
+    const isJunction = (k: string) => (adj.get(k)?.length ?? 0) > 2
+    for (const [k, nbs] of adj) { if (nbs.length > 2) tierJunctionHexes.add(k) }
 
     for (const [k] of adj) {
       if (isJunction(k) && !spineNeighbors.has(k)) {
@@ -395,6 +403,7 @@ export function buildRoadChains(
   // Stub chains linking the two side terminals (the short spine section between T-junctions).
   // Skipped when the junction is fully dissolved — each arm has its own free endpoint.
   for (const [k, spinePair] of spineNeighbors) {
+    if (!tierJunctionHexes.has(k)) continue
     const allDissolved = [...(globalAdj.get(k) ?? [])].every(nk => !!effectiveOverrides[spineSideCpKey(k, nk)])
     if (allDissolved) continue
     const termA = sideTerminals.get(`${k}|${spinePair[0]}`)
@@ -410,6 +419,7 @@ export function buildRoadChains(
   // Junction dots at each unique side terminal, plus draggable control points
   const emittedJuncCps = new Set<string>()
   for (const [k, spinePair] of spineNeighbors) {
+    if (!tierJunctionHexes.has(k)) continue
     const h = hexIdx.get(k)
     let minTier: 0 | 1 | 2 = 2
     for (const nk of globalAdj.get(k) ?? []) {
