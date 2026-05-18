@@ -136,11 +136,18 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
 
     updates.roadNodeEditMode = tool.type === 'node-edit'
     updates.riverNodeEditMode = tool.type === 'river-node-edit'
+    updates.railNodeEditMode = tool.type === 'rail-node-edit'
 
     updates.roadSelectMode = tool.type === 'road-select'
     if (!updates.roadPaintMode && !updates.roadSelectMode) {
       updates.selectedRoadSegmentKeys = []
       updates.selectedRoadHopKey = null
+    }
+
+    updates.railSelectMode = tool.type === 'rail-select'
+    if (!updates.railSelectMode) {
+      updates.selectedRailSegmentKeys = []
+      updates.selectedRailHopKey = null
     }
 
     updates.riverEditMode = tool.type === 'river-paint' || tool.type === 'river-select'

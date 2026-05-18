@@ -156,6 +156,14 @@ export function RoadsSidebar() {
     selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
     selectedRoadHopKey, setSelectedRoadHopKey,
     setRoadSegmentProp, clearRoadSegmentProp, setRoadHopProp, clearRoadHopProp,
+    railNodeEditMode,
+    railWiggleAmp, setRailWiggleAmp, setRailWiggleDragging,
+    railWiggleFreq, setRailWiggleFreq,
+    railSmoothing, setRailSmoothing,
+    railSelectMode, railSegmentProps, railHopProps,
+    selectedRailSegmentKeys, setSelectedRailSegmentKeys, toggleRailSegmentSelection,
+    selectedRailHopKey, setSelectedRailHopKey,
+    setRailSegmentProp, clearRailSegmentProp, setRailHopProp, clearRailHopProp,
   } = useMapStore()
 
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
@@ -300,7 +308,7 @@ export function RoadsSidebar() {
 
         {/* ── Node edit + bendiness ── */}
         <div style={sectionStyle}>
-          <div style={labelStyle}>Geometry</div>
+          <div style={labelStyle}>Road Geometry</div>
           <ToolButton
             label="Edit Nodes"
             active={roadNodeEditMode}
@@ -362,6 +370,63 @@ export function RoadsSidebar() {
             value={roadSmoothing}
             onChange={e => setRoadSmoothing(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer' }}
+          />
+        </div>
+
+        {/* ── Rail geometry ── */}
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Rail Geometry</div>
+          <ToolButton
+            label="Edit Rail Nodes"
+            active={railNodeEditMode}
+            color={railNodeEditMode ? '#b0e0f0' : '#3a3a5a'}
+            swatchBorder={`1px solid ${railNodeEditMode ? '#4a9ab0' : '#4a4a6a'}`}
+            onSelect={() => setActiveTool(railNodeEditMode ? { type: 'none' } : { type: 'rail-node-edit' })}
+          />
+          <div style={{ marginBottom: 10, marginTop: 4 }}>
+            <ToolButton
+              label="Select rail segment"
+              active={railSelectMode}
+              color={railSelectMode ? '#b0d8f0' : '#3a3a5a'}
+              swatchBorder={`1px solid ${railSelectMode ? '#4a88b0' : '#4a4a6a'}`}
+              onSelect={() => setActiveTool(railSelectMode ? { type: 'none' } : { type: 'rail-select' })}
+              accentBg="#1a1a2a"
+              accentBorder="#4a88b0"
+              accentText="#b0d8f0"
+            />
+          </div>
+          {railSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Right-click a rail to select. Right-click to exit.</div>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleAmp.toFixed(2)}</span>
+          </div>
+          <input
+            type="range" min={0} max={1} step={0.01}
+            value={railWiggleAmp}
+            onPointerDown={() => setRailWiggleDragging(true)}
+            onPointerUp={() => setRailWiggleDragging(false)}
+            onChange={e => setRailWiggleAmp(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleFreq.toFixed(1)}</span>
+          </div>
+          <input
+            type="range" min={0.5} max={10} step={0.1}
+            value={railWiggleFreq}
+            onChange={e => setRailWiggleFreq(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railSmoothing}</span>
+          </div>
+          <input
+            type="range" min={0} max={30} step={1}
+            value={railSmoothing}
+            onChange={e => setRailSmoothing(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer' }}
           />
         </div>
 
@@ -568,6 +633,34 @@ export function RoadsSidebar() {
               setProp={setRoadHopProp}
               clearProp={clearRoadHopProp}
               setSelectedHopKey={setSelectedRoadHopKey}
+            />
+          )
+        })()}
+
+        {selectedRailSegmentKeys.length > 0 && (
+          <RoadSegmentPanel
+            selectedKeys={selectedRailSegmentKeys}
+            segmentProps={railSegmentProps}
+            accentColor='#4a9ab0'
+            globalWiggleAmp={railWiggleAmp}
+            globalWiggleFreq={railWiggleFreq}
+            setProp={setRailSegmentProp}
+            clearProp={clearRailSegmentProp}
+            setSelectedKeys={setSelectedRailSegmentKeys}
+          />
+        )}
+        {selectedRailHopKey && selectedRailSegmentKeys.length > 0 && (() => {
+          const sp = selectedRailSegmentKeys.length === 1 ? railSegmentProps[selectedRailSegmentKeys[0]] : undefined
+          return (
+            <RoadHopPanel
+              selectedHopKey={selectedRailHopKey}
+              hopProps={railHopProps}
+              accentColor='#4a9ab0'
+              defaultAmp={sp?.wiggleAmp ?? railWiggleAmp}
+              defaultFreq={sp?.wiggleFreq ?? railWiggleFreq}
+              setProp={setRailHopProp}
+              clearProp={clearRailHopProp}
+              setSelectedHopKey={setSelectedRailHopKey}
             />
           )
         })()}

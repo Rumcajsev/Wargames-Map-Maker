@@ -8,7 +8,7 @@ type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 export type DrawRoadsRailsParams = {
   roadChains: { tier: 0 | 1 | 2; chain: [number, number][] }[]
   junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]
-  railChains: { chain: [number, number][]; isShared: boolean; isLoop: boolean }[]
+  railChains: { chain: [number, number][]; baseChain?: [number, number][]; id?: string; isShared: boolean; isLoop: boolean; hopKeys?: string[]; hopRanges?: [number, number][] }[]
   tierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
   railStyle: RailStyle
   project: (lon: number, lat: number) => [number, number]

@@ -63,6 +63,8 @@ export type ActiveTool =
   | { type: 'highlight-erase'; id: string }
   | { type: 'urban'; mode: 'paint' | 'erase' }
   | { type: 'road-select' }
+  | { type: 'rail-node-edit' }
+  | { type: 'rail-select' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -527,6 +529,14 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     roadPathSmoothing: s.roadPathSmoothing,
     roadDensityMinChain: s.roadDensityMinChain,
     railStyle: s.railStyle,
+    railControlOverrides: s.railControlOverrides,
+    railSnapBindings: s.railSnapBindings,
+    railWiggleAmp: s.railWiggleAmp,
+    railWiggleFreq: s.railWiggleFreq,
+    railSmoothing: s.railSmoothing,
+    railChainOverrides: s.railChainOverrides,
+    railSegmentProps: s.railSegmentProps,
+    railHopProps: s.railHopProps,
     woodsHexStyle: s.woodsHexStyle,
     blobSize: s.blobSize,
     blobCount: s.blobCount,

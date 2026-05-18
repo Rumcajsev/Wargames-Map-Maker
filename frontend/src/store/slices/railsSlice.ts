@@ -12,6 +12,23 @@ export type RailsSlice = {
   railPaintMode: boolean
   railPaintEraser: boolean
   railStyle: RailStyle
+  // Node edit
+  railNodeEditMode: boolean
+  railControlOverrides: Record<string, [number, number]>
+  railSnapBindings: Record<string, string>
+  // Wiggle / smoothing
+  railWiggleAmp: number
+  railWiggleFreq: number
+  railSmoothing: number
+  railWiggleDragging: boolean
+  railChainOverrides: Record<string, [number, number][]>
+  // Segment select
+  railSelectMode: boolean
+  selectedRailSegmentKeys: string[]
+  selectedRailHopKey: string | null
+  railSegmentProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  railHopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+  // Actions
   setOsmRailHighlight: (v: boolean) => void
   fetchRails: () => Promise<void>
   applyOsmRails: () => void
@@ -22,6 +39,26 @@ export type RailsSlice = {
   removeRailHexEdges: (q: number, r: number) => void
   setRailPaintEraser: (v: boolean) => void
   setRailStyle: (update: Partial<RailStyle>) => void
+  setRailNodeEditMode: (v: boolean) => void
+  setRailControlOverride: (key: string, pos: [number, number]) => void
+  deleteRailControlOverride: (key: string) => void
+  setRailSnapBinding: (jtKey: string, emKey: string) => void
+  deleteRailSnapBinding: (jtKey: string) => void
+  setRailWiggleAmp: (v: number) => void
+  setRailWiggleFreq: (v: number) => void
+  setRailSmoothing: (v: number) => void
+  setRailWiggleDragging: (v: boolean) => void
+  setRailChainOverride: (id: string, pts: [number, number][]) => void
+  deleteRailChainOverride: (id: string) => void
+  clearRailChainOverrides: () => void
+  setRailSelectMode: (v: boolean) => void
+  setSelectedRailSegmentKeys: (keys: string[]) => void
+  toggleRailSegmentSelection: (key: string) => void
+  setSelectedRailHopKey: (key: string | null) => void
+  setRailSegmentProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
+  clearRailSegmentProp: (key: string) => void
+  setRailHopProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
+  clearRailHopProp: (key: string) => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -37,6 +74,19 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
   railPaintMode: false,
   railPaintEraser: false,
   railStyle: { ...DEFAULT_RAIL_STYLE },
+  railNodeEditMode: false,
+  railControlOverrides: {},
+  railSnapBindings: {},
+  railWiggleAmp: 0,
+  railWiggleFreq: 2.5,
+  railSmoothing: 10,
+  railWiggleDragging: false,
+  railChainOverrides: {},
+  railSelectMode: false,
+  selectedRailSegmentKeys: [],
+  selectedRailHopKey: null,
+  railSegmentProps: {},
+  railHopProps: {},
 
   setOsmRailHighlight: (v) => set({ osmRailHighlight: v }),
 
@@ -44,18 +94,45 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
     rawRailWays: [], osmRailHexPaths: [], osmRailHighlight: false,
     railEdges: [], railsStatus: 'idle', railsError: null,
     railPaintMode: false, railPaintEraser: false,
-    activeTool: (s.activeTool.type === 'rail') ? { type: 'none' } as ActiveTool : s.activeTool,
+    railNodeEditMode: false, railControlOverrides: {}, railSnapBindings: {},
+    railChainOverrides: {}, railSelectMode: false,
+    selectedRailSegmentKeys: [], selectedRailHopKey: null,
+    activeTool: (s.activeTool.type === 'rail' || s.activeTool.type === 'rail-node-edit' || s.activeTool.type === 'rail-select')
+      ? { type: 'none' } as ActiveTool : s.activeTool,
   })),
   setRailsFetchTypes: (types) => set({ railsFetchTypes: types }),
   setRailPaintEraser: (v) => set({ railPaintEraser: v }),
   setRailStyle: (update) => set((state) => ({ railStyle: { ...state.railStyle, ...update } })),
 
+  setRailNodeEditMode: (v) => set({ railNodeEditMode: v, ...(v ? { railPaintMode: false, roadPaintMode: false, terrainPaintMode: false, elevationPaintMode: false } : {}) }),
+  setRailControlOverride: (key, pos) => set(s => ({ railControlOverrides: { ...s.railControlOverrides, [key]: pos } })),
+  deleteRailControlOverride: (key) => set(s => { const { [key]: _, ...rest } = s.railControlOverrides; return { railControlOverrides: rest } }),
+  setRailSnapBinding: (jtKey, emKey) => set(s => ({ railSnapBindings: { ...s.railSnapBindings, [jtKey]: emKey } })),
+  deleteRailSnapBinding: (jtKey) => set(s => { const { [jtKey]: _, ...rest } = s.railSnapBindings; return { railSnapBindings: rest } }),
+  setRailWiggleAmp: (v) => set({ railWiggleAmp: v }),
+  setRailWiggleFreq: (v) => set({ railWiggleFreq: v }),
+  setRailSmoothing: (v) => set({ railSmoothing: v }),
+  setRailWiggleDragging: (v) => set({ railWiggleDragging: v }),
+  setRailChainOverride: (id, pts) => set(s => ({ railChainOverrides: { ...s.railChainOverrides, [id]: pts } })),
+  deleteRailChainOverride: (id) => set(s => { const { [id]: _, ...rest } = s.railChainOverrides; return { railChainOverrides: rest } }),
+  clearRailChainOverrides: () => set({ railChainOverrides: {} }),
+  setRailSelectMode: (v) => set({ railSelectMode: v, selectedRailSegmentKeys: [], selectedRailHopKey: null }),
+  setSelectedRailSegmentKeys: (keys) => set({ selectedRailSegmentKeys: keys }),
+  toggleRailSegmentSelection: (key) => set(s => ({
+    selectedRailSegmentKeys: s.selectedRailSegmentKeys.includes(key)
+      ? s.selectedRailSegmentKeys.filter(k => k !== key)
+      : [...s.selectedRailSegmentKeys, key],
+  })),
+  setSelectedRailHopKey: (key) => set({ selectedRailHopKey: key }),
+  setRailSegmentProp: (key, prop) => set(s => ({ railSegmentProps: { ...s.railSegmentProps, [key]: { ...(s.railSegmentProps[key] ?? {}), ...prop } } })),
+  clearRailSegmentProp: (key) => set(s => { const { [key]: _, ...rest } = s.railSegmentProps; return { railSegmentProps: rest } }),
+  setRailHopProp: (key, prop) => set(s => ({ railHopProps: { ...s.railHopProps, [key]: { ...(s.railHopProps[key] ?? {}), ...prop } } })),
+  clearRailHopProp: (key) => set(s => { const { [key]: _, ...rest } = s.railHopProps; return { railHopProps: rest } }),
+
   fetchRails: async () => {
     const { generatedMetadata, hexOrientation, railsFetchTypes } = get()
     if (!generatedMetadata) return
-
     set({ railsStatus: 'loading', railsError: null })
-
     try {
       const resp = await fetch('/api/generate/rails', {
         method: 'POST',
@@ -73,7 +150,6 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
       })
       if (!resp.ok) throw new Error(await resp.text())
       const data = await resp.json()
-
       set({ rawRailWays: data.raw_ways, osmRailHexPaths: data.hex_paths ?? [], railsStatus: 'done' })
     } catch (e) {
       set({ railsStatus: 'error', railsError: String(e) })
@@ -92,8 +168,7 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
     const newEdges: RailEdge[] = []
     for (const path of osmRailHexPaths) {
       for (let i = 0; i < path.hexes.length - 1; i++) {
-        const [q1, r1] = path.hexes[i]
-        const [q2, r2] = path.hexes[i + 1]
+        const [q1, r1] = path.hexes[i], [q2, r2] = path.hexes[i + 1]
         const dq = q2 - q1, dr = r2 - r1
         const adj = (dq === 1 && dr === 0) || (dq === -1 && dr === 0) ||
                     (dq === 0 && dr === 1) || (dq === 0 && dr === -1) ||
@@ -103,10 +178,7 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
         const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
         if (existingPairs.has(pairKey)) continue
         const key = railEdgeCanonicalKey(q1, r1, q2, r2)
-        if (!edgeSet.has(key)) {
-          edgeSet.add(key)
-          newEdges.push({ q1, r1, q2, r2 })
-        }
+        if (!edgeSet.has(key)) { edgeSet.add(key); newEdges.push({ q1, r1, q2, r2 }) }
       }
     }
     if (newEdges.length > 0) set(s => ({ railEdges: [...s.railEdges, ...newEdges] }))
@@ -125,7 +197,6 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
   },
 
   removeRailHexEdges: (q, r) => {
-    const { railEdges } = get()
-    set({ railEdges: railEdges.filter((e) => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) })
+    set(s => ({ railEdges: s.railEdges.filter(e => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) }))
   },
 })
