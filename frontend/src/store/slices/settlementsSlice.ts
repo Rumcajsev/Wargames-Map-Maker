@@ -30,6 +30,8 @@ export type SettlementsSlice = {
   setSettlementsAutoPlace: (v: number) => void
   toggleSettlementIncluded: (index: number) => void
   toggleSettlementPlaced: (index: number) => void
+  placeAllSettlements: () => void
+  removeAllSettlements: () => void
   updateSettlement: (index: number, changes: Partial<Pick<Settlement, 'name' | 'type' | 'included' | 'hex_q' | 'hex_r' | 'tier'>>) => void
   deleteSettlement: (index: number) => void
   addSettlement: (s: Omit<Settlement, 'included'> & { hex_q: number; hex_r: number }) => void
@@ -120,6 +122,34 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
         }
       }
     }
+  },
+
+  placeAllSettlements: () => {
+    const { settlements, generatedHexes } = get()
+    const occupied = new Map<string, number>()
+    settlements.forEach((s, i) => {
+      if (s.hex_q !== null) occupied.set(`${s.hex_q},${s.hex_r}`, i)
+    })
+    const updated = settlements.map((s, i) => {
+      if (s.isCustom || s.hex_q !== null) return s
+      for (const hex of generatedHexes) {
+        if (pointInPolygon(s.lon, s.lat, hex.vertices)) {
+          const key = `${hex.q},${hex.r}`
+          if (!occupied.has(key)) {
+            occupied.set(key, i)
+            return { ...s, hex_q: hex.q, hex_r: hex.r }
+          }
+          break
+        }
+      }
+      return s
+    })
+    set({ settlements: updated })
+  },
+
+  removeAllSettlements: () => {
+    const { settlements } = get()
+    set({ settlements: settlements.map((s) => s.isCustom ? s : { ...s, hex_q: null, hex_r: null }) })
   },
 
   updateSettlement: (index, changes) => {

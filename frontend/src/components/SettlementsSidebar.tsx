@@ -55,6 +55,7 @@ export function SettlementsSidebar() {
     fetchSettlements, clearSettlements,
     toggleSettlementPlaced,
     settlementsLimit, setSettlementsLimit,
+    placeAllSettlements, removeAllSettlements,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<SettlementTier | null>(null)
@@ -312,8 +313,26 @@ export function SettlementsSidebar() {
 
           {settlementsStatus === 'done' && osmSettlements.length > 0 && (
             <div style={{ marginTop: 8 }}>
-              <div style={{ ...labelStyle, marginBottom: 4 }}>
-                {osmSettlements.filter(({ s }) => s.hex_q !== null).length}/{osmSettlements.length} on map
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={labelStyle}>
+                  {osmSettlements.filter(({ s }) => s.hex_q !== null).length}/{osmSettlements.length} on map
+                </span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    onClick={placeAllSettlements}
+                    title="Place all"
+                    style={{ background: 'none', border: '1px solid #2a4a2a', borderRadius: 2, color: '#5a8a5a', cursor: 'pointer', fontSize: 9, fontFamily: 'inherit', padding: '1px 5px' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#a0d0a0')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#5a8a5a')}
+                  >all</button>
+                  <button
+                    onClick={removeAllSettlements}
+                    title="Remove all"
+                    style={{ background: 'none', border: '1px solid #4a2a2a', borderRadius: 2, color: '#8a5a5a', cursor: 'pointer', fontSize: 9, fontFamily: 'inherit', padding: '1px 5px' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#d0a0a0')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#8a5a5a')}
+                  >none</button>
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
                 {osmSettlements.map(({ s, i }) => {
