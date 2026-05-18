@@ -20,7 +20,7 @@ export type SettlementsSlice = {
   settlementEditMode: boolean
   settlementPlaceTarget: { q: number; r: number; vertices: [number, number][] } | null
   settlementMoveIndex: number | null
-  settlementPlaceTier: SettlementTier
+  settlementPlaceTier: SettlementTier | null
   settlementTierStyles: Record<SettlementTier, SettlementTierStyle>
   fetchSettlements: () => Promise<void>
   clearSettlements: () => void
@@ -46,7 +46,7 @@ export type SettlementsSlice = {
   setSettlementEditMode: (v: boolean) => void
   setSettlementPlaceTarget: (v: { q: number; r: number; vertices: [number, number][] } | null) => void
   setSettlementMoveIndex: (v: number | null) => void
-  setSettlementPlaceTier: (tier: SettlementTier) => void
+  setSettlementPlaceTier: (tier: SettlementTier | null) => void
   setSettlementTierStyle: (tier: SettlementTier, style: Partial<SettlementTierStyle>) => void
 }
 
@@ -68,7 +68,7 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
   settlementEditMode: false,
   settlementPlaceTarget: null,
   settlementMoveIndex: null,
-  settlementPlaceTier: 1,
+  settlementPlaceTier: null,
   settlementTierStyles: { ...DEFAULT_SETTLEMENT_TIER_STYLES },
 
   setSettlementsLimit: (v) => set({ settlementsLimit: v }),

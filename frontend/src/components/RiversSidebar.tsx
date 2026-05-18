@@ -1,14 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMapStore, LAKE_COLOR } from '../store/mapStore'
 import { RiversSettingsFlyout } from './RiversSettingsFlyout'
 import { riverChainCache, computeTaperRanges } from '../lib/riverChains'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
-
-const CogIcon = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.34.07-.68.07-1.08s-.03-.74-.07-1.08l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.34-.07.69-.07 1.08s.03.74.07 1.08L2.7 13.07c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65z" />
-  </svg>
-)
+import { ToolButton } from './ToolButton'
 
 interface SegmentPanelProps {
   selectedKeys: string[]
@@ -216,35 +211,25 @@ export function RiversSidebar() {
 
   const [openSettings, setOpenSettings] = useState<'river' | 'canal' | 'lake' | null>(null)
   const [settingsAnchorY, setSettingsAnchorY] = useState(0)
-  const [hoveredDraw, setHoveredDraw] = useState<'river' | 'canal' | 'lake' | null>(null)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === '1') setActiveTool(riverEditMode ? { type: 'none' } : { type: 'river-paint' })
+      else if (e.key === '2') setActiveTool(canalEditMode ? { type: 'none' } : { type: 'canal-paint' })
+      else if (e.key === '3') setActiveTool(lakePaintMode ? { type: 'none' } : { type: 'lake' })
+      else if (e.key === '4') setActiveTool(riverNodeEditMode ? { type: 'none' } : { type: 'river-node-edit' })
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [riverEditMode, canalEditMode, lakePaintMode, riverNodeEditMode])
 
   const handleCog = (type: 'river' | 'canal' | 'lake', y: number) => {
     if (openSettings === type) setOpenSettings(null)
     else { setOpenSettings(type); setSettingsAnchorY(y) }
   }
 
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px',
-    background: active ? '#1a2a3a' : 'none',
-    border: `1px solid ${active ? '#3a6a9a' : '#1e1f2e'}`,
-    borderRadius: 3, cursor: 'pointer',
-    fontFamily: 'ui-monospace, monospace', fontSize: 11,
-    color: active ? '#b0d8f0' : '#6a6a8a', textAlign: 'left', width: '100%',
-  })
-
-  const subBtnStyle = (active: boolean): React.CSSProperties => ({
-    padding: '3px 6px', background: active ? '#1a2a3a' : 'none',
-    border: `1px solid ${active ? '#3a6a9a' : '#1e1f2e'}`,
-    borderRadius: 3, cursor: 'pointer',
-    fontFamily: 'ui-monospace, monospace', fontSize: 10,
-    color: active ? '#b0d8f0' : '#6a6a8a',
-  })
-
-  const exitBtnStyle: React.CSSProperties = {
-    padding: '3px 6px', background: 'none',
-    border: '1px solid #1e1f2e', borderRadius: 3, cursor: 'pointer',
-    fontFamily: 'ui-monospace, monospace', fontSize: 10, color: '#4a4a6a',
-  }
+  const RIVER_ACCENT = { accentBg: '#1a2a3a', accentBorder: '#3a6a9a', accentText: '#b0d8f0' }
 
   return (
     <>
@@ -258,96 +243,65 @@ export function RiversSidebar() {
           <div style={labelStyle}>Draw</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
-            {/* River */}
             {(['river', 'canal'] as const).map(type => {
               const isRiver = type === 'river'
               const editMode = isRiver ? riverEditMode : canalEditMode
               const selectMode = isRiver ? riverSelectMode : canalSelectMode
               const style = isRiver ? riverStyle : canalStyle
               const label = isRiver ? 'River' : 'Canal'
+              const paintType = `${type}-paint` as 'river-paint' | 'canal-paint'
+              const selectType = `${type}-select` as 'river-select' | 'canal-select'
               return (
-                <div key={type}
-                  style={{ position: 'relative' }}
-                  onMouseEnter={() => setHoveredDraw(type)}
-                  onMouseLeave={() => setHoveredDraw(null)}
-                >
-                  {!editMode ? (
-                    <button onClick={() => setActiveTool({ type: `${type}-paint` as 'river-paint' | 'canal-paint' })} style={btnStyle(false)}>
-                      <span style={{
-                        width: 9, height: 9, borderRadius: 2, flexShrink: 0,
-                        background: style.color, border: `1px solid ${style.strokeEnabled ? style.strokeColor : style.color}`,
-                      }} />
-                      <span style={{ flex: 1 }}>{label}</span>
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                        <button onClick={() => setActiveTool({ type: `${type}-paint` as 'river-paint' | 'canal-paint' })} style={{ ...subBtnStyle(!selectMode), flex: 1 }}>Paint</button>
-                        <button onClick={() => setActiveTool({ type: `${type}-select` as 'river-select' | 'canal-select' })} style={{ ...subBtnStyle(selectMode), flex: 1 }}>Select</button>
-                        <button onClick={() => setActiveTool({ type: 'none' })} style={exitBtnStyle}>✕</button>
-                      </div>
-                    </div>
-                  )}
-                  {hoveredDraw === type && !editMode && (
-                    <button
-                      data-rivers-flyout=""
-                      onClick={e => { e.stopPropagation(); handleCog(type, e.currentTarget.getBoundingClientRect().top) }}
-                      title={`${label} settings`}
-                      style={{
-                        position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', color: '#5a5a8a', cursor: 'pointer',
-                        padding: '2px 3px', display: 'flex', alignItems: 'center', borderRadius: 2, lineHeight: 1,
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#c0c0e0')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#5a5a8a')}
-                    ><CogIcon /></button>
+                <div key={type} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <ToolButton
+                    label={label}
+                    active={editMode}
+                    color={style.color}
+                    swatchBorder={`1px solid ${style.strokeEnabled ? style.strokeColor : style.color}`}
+                    shortcut={isRiver ? '1' : '2'}
+                    onSelect={() => setActiveTool(editMode ? { type: 'none' } : { type: paintType })}
+                    onSettings={(y) => handleCog(type, y)}
+                    settingsOpen={openSettings === type}
+                    cogDataAttrib="data-rivers-flyout"
+                    {...RIVER_ACCENT}
+                  />
+                  {editMode && (
+                    <ToolButton
+                      label="Select segments"
+                      active={selectMode}
+                      color={selectMode ? '#b0d8f0' : '#3a3a5a'}
+                      swatchBorder={`1px solid ${selectMode ? '#3a6a9a' : '#4a4a6a'}`}
+                      onSelect={() => setActiveTool(selectMode ? { type: paintType } : { type: selectType })}
+                      {...RIVER_ACCENT}
+                    />
                   )}
                 </div>
               )
             })}
 
-            {/* Lake */}
-            <div
-              style={{ position: 'relative' }}
-              onMouseEnter={() => setHoveredDraw('lake')}
-              onMouseLeave={() => setHoveredDraw(null)}
-            >
-              <button onClick={() => setActiveTool(lakePaintMode ? { type: 'none' } : { type: 'lake' })} style={btnStyle(lakePaintMode)}>
-                <span style={{
-                  width: 9, height: 9, borderRadius: 2, flexShrink: 0,
-                  background: lakePaintMode ? LAKE_COLOR : '#2a3a4a',
-                  border: `1px solid ${lakePaintMode ? LAKE_COLOR : '#1e2a3a'}`,
-                }} />
-                <span style={{ flex: 1 }}>Lake</span>
-              </button>
-              {hoveredDraw === 'lake' && (
-                <button
-                  data-rivers-flyout=""
-                  onClick={e => { e.stopPropagation(); handleCog('lake', e.currentTarget.getBoundingClientRect().top) }}
-                  title="Lake settings"
-                  style={{
-                    position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', color: '#5a5a8a', cursor: 'pointer',
-                    padding: '2px 3px', display: 'flex', alignItems: 'center', borderRadius: 2, lineHeight: 1,
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#c0c0e0')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#5a5a8a')}
-                ><CogIcon /></button>
-              )}
-            </div>
+            <ToolButton
+              label="Lake"
+              active={lakePaintMode}
+              color={lakePaintMode ? LAKE_COLOR : '#2a3a4a'}
+              swatchBorder={`1px solid ${lakePaintMode ? LAKE_COLOR : '#1e2a3a'}`}
+              shortcut="3"
+              onSelect={() => setActiveTool(lakePaintMode ? { type: 'none' } : { type: 'lake' })}
+              onSettings={(y) => handleCog('lake', y)}
+              settingsOpen={openSettings === 'lake'}
+              cogDataAttrib="data-rivers-flyout"
+              {...RIVER_ACCENT}
+            />
 
-            {/* Node edit */}
-            <button
-              onClick={() => setActiveTool(riverNodeEditMode ? { type: 'none' } : { type: 'river-node-edit' })}
-              style={{ ...btnStyle(riverNodeEditMode), marginTop: 4 }}
-            >
-              <span style={{
-                width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-                background: riverNodeEditMode ? '#d0ecd8' : '#3a3a5a',
-                border: `1px solid ${riverNodeEditMode ? '#5a9e6f' : '#4a4a6a'}`,
-              }} />
-              <span style={{ flex: 1 }}>Edit nodes</span>
-            </button>
+            <div style={{ marginTop: 4 }}>
+              <ToolButton
+                label="Edit nodes"
+                active={riverNodeEditMode}
+                color={riverNodeEditMode ? '#d0ecd8' : '#3a3a5a'}
+                swatchBorder={`1px solid ${riverNodeEditMode ? '#5a9e6f' : '#4a4a6a'}`}
+                shortcut="4"
+                onSelect={() => setActiveTool(riverNodeEditMode ? { type: 'none' } : { type: 'river-node-edit' })}
+              />
+            </div>
 
           </div>
           {riverEditMode && !riverSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: 6, lineHeight: 1.5 }}>Click hex edges to paint a river.</div>}

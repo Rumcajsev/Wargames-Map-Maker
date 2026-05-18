@@ -1,14 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMapStore, type SettlementTier } from '../store/mapStore'
 import { SettlementsSettingsFlyout } from './SettlementsSettingsFlyout'
 import { UrbanSettingsFlyout } from './UrbanSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
-
-const CogIcon = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.34.07-.68.07-1.08s-.03-.74-.07-1.08l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.34-.07.69-.07 1.08s.03.74.07 1.08L2.7 13.07c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65z" />
-  </svg>
-)
+import { ToolButton, CogIcon } from './ToolButton'
 
 const TIER_LABELS: Record<SettlementTier, string> = {
   1: 'Tier I',
@@ -18,7 +13,7 @@ const TIER_LABELS: Record<SettlementTier, string> = {
 }
 
 function TierIcon({ shape, size, fill, stroke, strokeWidth }: { shape: 'circle' | 'square', size: number, fill: string, stroke: string, strokeWidth: number }) {
-  const s = 18
+  const s = 14
   const c = s / 2
   const r = Math.min(size, 8)
   return (
@@ -62,7 +57,6 @@ export function SettlementsSidebar() {
   const [settingsAnchorY, setSettingsAnchorY] = useState(0)
   const [urbanFlyoutOpen, setUrbanFlyoutOpen] = useState(false)
   const [urbanFlyoutY, setUrbanFlyoutY] = useState(0)
-  const [hoveredTier, setHoveredTier] = useState<SettlementTier | null>(null)
   const [editingName, setEditingName] = useState<number | null>(null)
   const [editingNameValue, setEditingNameValue] = useState('')
 
@@ -81,9 +75,21 @@ export function SettlementsSidebar() {
   }
 
   const selectTier = (tier: SettlementTier) => {
-    setSettlementPlaceTier(tier)
+    setSettlementPlaceTier(settlementPlaceTier === tier ? null : tier)
     setSettlementMoveIndex(null)
   }
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === '1') selectTier(1)
+      else if (e.key === '2') selectTier(2)
+      else if (e.key === '3') selectTier(3)
+      else if (e.key === '4') selectTier(4)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [settlementPlaceTier])
 
   const startRename = (index: number, currentName: string) => {
     setEditingName(index)
@@ -122,46 +128,21 @@ export function SettlementsSidebar() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {([1, 2, 3, 4] as SettlementTier[]).map((tier) => {
               const ts = settlementTierStyles[tier]
-              const active = settlementPlaceTier === tier
-              const hovered = hoveredTier === tier
               return (
-                <div
+                <ToolButton
                   key={tier}
-                  style={{ position: 'relative' }}
-                  onMouseEnter={() => setHoveredTier(tier)}
-                  onMouseLeave={() => setHoveredTier(null)}
-                >
-                  <button
-                    onClick={() => selectTier(tier)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      width: '100%', padding: '5px 8px',
-                      background: active ? '#1a2a1a' : 'none',
-                      border: `1px solid ${active ? '#4a7a4a' : '#1e1f2e'}`,
-                      borderRadius: 3, color: active ? '#a0d0a0' : '#7a7a9a',
-                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, textAlign: 'left',
-                    }}
-                  >
-                    <TierIcon shape={ts.shape} size={ts.size} fill={ts.fillColor} stroke={ts.strokeColor} strokeWidth={ts.strokeWidth} />
-                    <span>{TIER_LABELS[tier]}</span>
-                  </button>
-                  {hovered && (
-                    <button
-                      data-settlements-flyout=""
-                      onClick={e => { e.stopPropagation(); handleCog(tier, e.currentTarget.getBoundingClientRect().top) }}
-                      title={`${TIER_LABELS[tier]} settings`}
-                      style={{
-                        position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', color: '#5a5a8a', cursor: 'pointer',
-                        padding: '2px 3px', display: 'flex', alignItems: 'center', borderRadius: 2, lineHeight: 1,
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#c0c0e0')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#5a5a8a')}
-                    >
-                      <CogIcon />
-                    </button>
-                  )}
-                </div>
+                  label={TIER_LABELS[tier]}
+                  active={settlementPlaceTier === tier}
+                  icon={<TierIcon shape={ts.shape} size={ts.size} fill={ts.fillColor} stroke={ts.strokeColor} strokeWidth={ts.strokeWidth} />}
+                  shortcut={String(tier)}
+                  onSelect={() => selectTier(tier)}
+                  onSettings={(y) => handleCog(tier, y)}
+                  settingsOpen={openSettings === tier}
+                  cogDataAttrib="data-settlements-flyout"
+                  accentBg="#1a2a1a"
+                  accentBorder="#4a7a4a"
+                  accentText="#a0d0a0"
+                />
               )
             })}
           </div>
