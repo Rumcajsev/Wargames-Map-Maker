@@ -1,7 +1,15 @@
-import type { MapStore, RiverStyleConfig } from '../mapStore'
+import type { MapStore, RiverStyleConfig, OsmRiverWay } from '../mapStore'
 import { DEFAULT_RIVER_STYLE, DEFAULT_CANAL_STYLE } from '../mapStore'
 
 export type RiversSlice = {
+  osmRiverWays: OsmRiverWay[]
+  riversOsmStatus: 'idle' | 'loading' | 'error' | 'done'
+  riversOsmError: string | null
+  osmRiverHighlight: 'river' | 'canal' | null
+  fetchRivers: () => Promise<void>
+  applyOsmRivers: (type: 'river' | 'canal') => void
+  setOsmRiverHighlight: (v: 'river' | 'canal' | null) => void
+  clearOsmRivers: () => void
   riverEdges: { q1: number; r1: number; q2: number; r2: number }[]
   canalEdges: { q1: number; r1: number; q2: number; r2: number }[]
   showRiverLabels: boolean
@@ -123,6 +131,11 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
   const canal = makeSegmentActions('canalSegmentProps', 'selectedCanalSegmentKeys', set, get)
 
   return {
+    osmRiverWays: [],
+    riversOsmStatus: 'idle',
+    riversOsmError: null,
+    osmRiverHighlight: null,
+
     riverEdges: [],
     canalEdges: [],
     showRiverLabels: true,
@@ -151,6 +164,82 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
     riverChainOverrides: {},
     riverHopProps: {},
     selectedHopKey: null,
+
+    setOsmRiverHighlight: (v) => set({ osmRiverHighlight: v }),
+    clearOsmRivers: () => set({ osmRiverWays: [], riversOsmStatus: 'idle', riversOsmError: null, osmRiverHighlight: null }),
+
+    fetchRivers: async () => {
+      const { generatedMetadata, hexOrientation } = get()
+      if (!generatedMetadata) return
+      set({ riversOsmStatus: 'loading', riversOsmError: null })
+      try {
+        const resp = await fetch('/api/generate/rivers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            center_lon: generatedMetadata.center[0],
+            center_lat: generatedMetadata.center[1],
+            bearing: generatedMetadata.bearing,
+            width_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0],
+            height_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1],
+            hex_orientation: hexOrientation,
+            R_m: generatedMetadata.outer_radius_m,
+            hex_size_km: generatedMetadata.hex_size_km,
+            types: ['river', 'canal'],
+          }),
+        })
+        if (!resp.ok) throw new Error(await resp.text())
+        const data = await resp.json()
+        set({ osmRiverWays: data.rivers ?? [], riversOsmStatus: 'done' })
+      } catch (e) {
+        set({ riversOsmStatus: 'error', riversOsmError: String(e) })
+      }
+    },
+
+    applyOsmRivers: (type) => {
+      get().pushUndoSnapshot()
+      const { osmRiverWays, riverEdges, canalEdges } = get()
+      const isRiver = type === 'river'
+      const existingEdges = isRiver ? riverEdges : canalEdges
+      const edgesKey = isRiver ? 'riverEdges' : 'canalEdges'
+      const propsKey = isRiver ? 'riverSegmentProps' : 'canalSegmentProps'
+
+      const existingPairs = new Set<string>()
+      for (const e of existingEdges) {
+        const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
+        existingPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`)
+      }
+
+      const edgeSet = new Set<string>()
+      const newEdges: { q1: number; r1: number; q2: number; r2: number }[] = []
+      const newProps: Record<string, { width: number }> = {}
+
+      for (const way of osmRiverWays) {
+        if (way.type !== type) continue
+        const { hexes, width_multiplier } = way
+        for (let i = 0; i < hexes.length - 1; i++) {
+          const [q1, r1] = hexes[i], [q2, r2] = hexes[i + 1]
+          const dq = q2 - q1, dr = r2 - r1
+          const adj = (dq === 1 && dr === 0) || (dq === -1 && dr === 0) ||
+                      (dq === 0 && dr === 1) || (dq === 0 && dr === -1) ||
+                      (dq === 1 && dr === -1) || (dq === -1 && dr === 1)
+          if (!adj) continue
+          const a = `${q1},${r1}`, b = `${q2},${r2}`
+          const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
+          if (existingPairs.has(pairKey) || edgeSet.has(pairKey)) continue
+          edgeSet.add(pairKey)
+          newEdges.push({ q1, r1, q2, r2 })
+          newProps[pairKey] = { width: width_multiplier }
+        }
+      }
+
+      if (newEdges.length > 0) {
+        set(s => ({
+          [edgesKey]: [...(s[edgesKey] as typeof newEdges), ...newEdges],
+          [propsKey]: { ...(s[propsKey] as Record<string, { width: number }>), ...newProps },
+        }))
+      }
+    },
 
     setShowRiverLabels: (v) => set({ showRiverLabels: v }),
     setRiverLabelColor: (v) => set({ riverLabelColor: v }),

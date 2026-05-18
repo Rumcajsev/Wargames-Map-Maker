@@ -39,8 +39,8 @@ class SettlementsConfig(BaseRegionConfig):
 
 
 class RiversConfig(BaseRegionConfig):
-    paper_size: str
-    orientation: str
+    hex_orientation: str
+    R_m: float
     types: list[str] = ["river"]
     hex_size_km: float = 10.0
 
@@ -49,6 +49,11 @@ class RoadsConfig(BaseRegionConfig):
     hex_orientation: str       # "flat" | "pointy"
     R_m: float                 # hex outer radius in metres (outer_radius_m from metadata)
     highway_types: list[str] = ["motorway", "trunk", "primary"]
+
+
+class MotorwayHexesConfig(BaseRegionConfig):
+    hex_orientation: str
+    R_m: float
 
 
 class RailsConfig(BaseRegionConfig):

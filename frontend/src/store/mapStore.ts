@@ -61,6 +61,7 @@ export type ActiveTool =
   | { type: 'canal-select' }
   | { type: 'highlight-paint'; id: string }
   | { type: 'highlight-erase'; id: string }
+  | { type: 'highlight-erase-any' }
   | { type: 'urban'; mode: 'paint' | 'erase' }
   | { type: 'road-select' }
   | { type: 'rail-node-edit' }
@@ -358,6 +359,15 @@ export interface RoadEdge {
 export function roadEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: number, tier: 0 | 1 | 2): string {
   const a = `${q1},${r1}`, b = `${q2},${r2}`
   return `${tier}:${a < b ? `${a}|${b}` : `${b}|${a}`}`
+}
+
+export interface OsmRiverWay {
+  name: string
+  type: 'river' | 'canal'
+  coords: [number, number][]
+  hexes: [number, number][]
+  tributary_count: number
+  width_multiplier: number
 }
 
 export interface RawRailWay {

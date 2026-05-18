@@ -119,6 +119,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     roadEdges, railEdges, rawRoadWays, rawRailWays, roadTierStyles, railStyle,
     showRawOsmRoads, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
     osmRailHexPaths, osmRailHighlight,
+    osmRiverWays, osmRiverHighlight,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
     railNodeEditMode,
@@ -204,6 +205,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const osmSpotlightTiersRef = useRef(osmSpotlightTiers)
   const osmRailHexPathsRef = useRef(osmRailHexPaths)
   const osmRailHighlightRef = useRef(osmRailHighlight)
+  const osmRiverWaysRef = useRef(osmRiverWays)
+  const osmRiverHighlightRef = useRef(osmRiverHighlight)
   const spotlightCursorRef = useRef<{ lx: number; ly: number } | null>(null)
   const spotlightRafRef = useRef<number | null>(null)
   const roadTierStylesRef = useRef(roadTierStyles)
@@ -371,6 +374,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const activeHighlightIdRef = useRef(activeHighlightId)
   const highlightPaintModeRef = useRef(highlightPaintMode)
   const highlightLineEraserRef = useRef(highlightLineEraser)
+  const activeToolRef = useRef(activeTool)
   const setHexHighlightRef = useRef(setHexHighlight)
   const clearHexHighlightRef = useRef(clearHexHighlight)
   const startNewLineSegmentRef = useRef(startNewLineSegment)
@@ -407,6 +411,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   osmSpotlightTiersRef.current = osmSpotlightTiers
   osmRailHexPathsRef.current = osmRailHexPaths
   osmRailHighlightRef.current = osmRailHighlight
+  osmRiverWaysRef.current = osmRiverWays
+  osmRiverHighlightRef.current = osmRiverHighlight
   roadTierStylesRef.current = roadTierStyles
   railStyleRef.current = railStyle
   roadPaintModeRef.current = roadPaintMode
@@ -432,6 +438,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   activeHighlightIdRef.current = activeHighlightId
   highlightPaintModeRef.current = highlightPaintMode
   highlightLineEraserRef.current = highlightLineEraser
+  activeToolRef.current = activeTool
   setHexHighlightRef.current = setHexHighlight
   clearHexHighlightRef.current = clearHexHighlight
   startNewLineSegmentRef.current = startNewLineSegment
@@ -1318,6 +1325,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     // Compute drag state upfront — needed for both river and road live previews below
     const isDraggingCP = Object.keys(dragLiveOverrideRef.current).length > 0
+    const isDraggingRailCP = isDraggingCP && draggingCpKindRef.current === 'rail'
     const liveDenseDrag = draggingDensePtRef.current
     const liveDensePos = dragLiveDensePosRef.current
     const isDraggingRoadDense = !!(liveDenseDrag?.kind === 'road' && liveDensePos)
@@ -1495,6 +1503,25 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           ? smoothedRoadDataV2Ref.current
           : smoothedRoadDataRef.current
 
+    const liveRailData = isDraggingRailCP
+      ? applyRailWiggle(
+          buildRailChains(
+            railEdgesRef.current,
+            roadEdgesRef.current,
+            hexIdxRef.current as Map<string, { center: [number, number] }>,
+            new Map(roadBaseDataRef.current.controlPoints.filter(cp => cp.key.startsWith('em|')).map(cp => [cp.key, cp.pos] as [string, [number, number]])),
+            new Map(roadBaseDataRef.current.controlPoints.filter(cp => cp.key.startsWith('ja|')).map(cp => [cp.key.slice(3), cp.pos] as [string, [number, number]])),
+            { ...railControlOverridesRef.current, ...dragLiveOverrideRef.current },
+            0, 0, railSmoothingRef.current,
+          ),
+          railWiggleAmpRef.current,
+          railWiggleFreqRef.current,
+          railSegmentPropsRef.current,
+          railHopPropsRef.current,
+          0,
+        )
+      : smoothedRailDataRef.current
+
     // Road chains + Rail chains — offscreen cached together
     {
       const { chains: roadChains, junctions } = liveRoadData
@@ -1507,7 +1534,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           ctx.beginPath()
           ctx.rect(px, py, pw, ph)
           ctx.clip()
-          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: smoothedRailDataRef.current.chains, tierStyles, railStyle: railStyleRef.current, project })
+          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
           ctx.restore()
         } else {
           const papW = Math.ceil(pw), papH = Math.ceil(ph)
@@ -1522,7 +1549,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             oCtx.beginPath()
             oCtx.rect(px, py, pw, ph)
             oCtx.clip()
-            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: smoothedRailDataRef.current.chains, tierStyles, railStyle: railStyleRef.current, project })
+            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
             oCtx.restore()
             roadsLayerRef.current = offscreen
             roadsDirtyRef.current = false
@@ -1533,7 +1560,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
       }
       if (isExport) {
-        _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: smoothedRailDataRef.current.chains, tierStyles, railStyle: railStyleRef.current, project })
+        _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
       }
 
       // Debug: raw OSM way overlay (screen-only, never exported)
@@ -1863,8 +1890,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const spotlight = osmSpotlightModeRef.current
     const cursor = spotlightCursorRef.current
     const railHighlight = osmRailHighlightRef.current
+    const riverHighlight = osmRiverHighlightRef.current
 
-    if (!spotlight && ht === null && !railHighlight) return
+    if (!spotlight && ht === null && !railHighlight && !riverHighlight) return
     if (spotlight && !cursor) return
 
     const zoom = zoomRef.current
@@ -1911,6 +1939,31 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    const riverOsmColors: Record<string, [string, string]> = {
+      river: ['rgba(60,140,220,0.2)', 'rgba(80,160,240,0.9)'],
+      canal: ['rgba(40,200,180,0.2)', 'rgba(60,220,200,0.9)'],
+    }
+
+    const drawRiverOsmWays = (type: 'river' | 'canal') => {
+      const ways = osmRiverWaysRef.current.filter(w => w.type === type && w.coords.length >= 2)
+      if (ways.length === 0) return
+      const colors = riverOsmColors[type]
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = colors[pass]
+        for (const way of ways) {
+          ctx.lineWidth = pass === 0 ? 5 * way.width_multiplier : 1.5
+          ctx.beginPath()
+          const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
+          ctx.moveTo(x0, y0)
+          for (let i = 1; i < way.coords.length; i++) {
+            const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
+            ctx.lineTo(xi, yi)
+          }
+          ctx.stroke()
+        }
+      }
+    }
+
     const railColors = ['rgba(0,220,220,0.25)', 'rgba(0,220,220,0.95)']
 
     const drawRailRawWays = () => {
@@ -1948,13 +2001,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       drawWays(activeTiers)
       if (showRails) drawRailRawWays()
       ctx.restore()
-    } else if (ht !== null || railHighlight) {
+    } else if (ht !== null || railHighlight || riverHighlight) {
       ctx.save()
       ctx.beginPath()
       ctx.rect(px, py, pw, ph)
       ctx.clip()
       if (ht !== null) drawWays([ht])
       if (railHighlight) drawRailRawWays()
+      if (riverHighlight) drawRiverOsmWays(riverHighlight)
       ctx.restore()
     }
 
@@ -2040,7 +2094,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Redraw when data changes
   useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
 
-  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, drawOsmHighlight])
+  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, osmRiverHighlight, drawOsmHighlight])
 
   // Load terrain textures
   useEffect(() => {
@@ -3661,20 +3715,43 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       )
       if (!hex.partial && !inMargin(verts)) continue
       if (pointInPolygon(lx, ly, verts)) {
-        if (activePanelRef.current === 'highlights' && highlightPaintModeRef.current) {
-          const hlId = activeHighlightIdRef.current
-          if (hlId) {
-            const hl = highlightsRef.current.find(h => h.id === hlId)
-            if (hl?.mode === 'area') {
-              const key = `${hex.q},${hex.r}`
-              if (highlightedHexesRef.current[key] === hlId) {
-                clearHexHighlightRef.current(hex.q, hex.r)
-              } else {
-                setHexHighlightRef.current(hex.q, hex.r, hlId)
+        if (activePanelRef.current === 'highlights') {
+          const tool = activeToolRef.current
+          if (tool.type === 'highlight-paint') {
+            const hlId = activeHighlightIdRef.current
+            if (hlId) {
+              const hl = highlightsRef.current.find(h => h.id === hlId)
+              if (hl?.mode === 'area') {
+                const key = `${hex.q},${hex.r}`
+                if (highlightedHexesRef.current[key] === hlId) {
+                  clearHexHighlightRef.current(hex.q, hex.r)
+                } else {
+                  setHexHighlightRef.current(hex.q, hex.r, hlId)
+                }
               }
             }
+            return
           }
-          return
+          if (tool.type === 'highlight-erase') {
+            const hlId = activeHighlightIdRef.current
+            if (hlId) {
+              const hl = highlightsRef.current.find(h => h.id === hlId)
+              if (hl?.mode === 'area') {
+                const key = `${hex.q},${hex.r}`
+                if (highlightedHexesRef.current[key] === hlId) {
+                  clearHexHighlightRef.current(hex.q, hex.r)
+                }
+              }
+            }
+            return
+          }
+          if (tool.type === 'highlight-erase-any') {
+            const key = `${hex.q},${hex.r}`
+            if (highlightedHexesRef.current[key]) {
+              clearHexHighlightRef.current(hex.q, hex.r)
+            }
+            return
+          }
         }
         if (activePanelRef.current === 'settlements' && urbanPaintModeRef.current !== null) {
           toggleUrbanHexRef.current(hex.q, hex.r)

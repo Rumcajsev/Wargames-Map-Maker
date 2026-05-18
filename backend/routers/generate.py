@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RailsConfig, RiversConfig, ElevationConfig, HexLookupConfig, SettlementRoadsConfig
+from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RailsConfig, RiversConfig, ElevationConfig, HexLookupConfig, SettlementRoadsConfig, MotorwayHexesConfig
 from services.hex_grid import generate_hex_grid
 from services.terrain import generate_terrain, classify_hex, terrain_stream_generator
 from services.elevation import elevation_stream_generator
@@ -67,6 +67,15 @@ async def generate_settlement_roads(config: SettlementRoadsConfig) -> dict:
     from services.roads import generate_settlement_roads as _generate_settlement_roads
     try:
         return await _generate_settlement_roads(config)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Overpass API error: {exc}")
+
+
+@router.post("/motorway-hexes")
+async def generate_motorway_hexes(config: MotorwayHexesConfig) -> dict:
+    from services.motorway_hexes import generate_motorway_hexes as _generate_motorway_hexes
+    try:
+        return await _generate_motorway_hexes(config)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Overpass API error: {exc}")
 

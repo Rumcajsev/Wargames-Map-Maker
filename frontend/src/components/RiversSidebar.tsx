@@ -207,6 +207,8 @@ export function RiversSidebar() {
     selectedHopKey, setSelectedHopKey,
     riverHopProps, setRiverHopProp, clearRiverHopProp,
     riverWiggleAmp, riverWiggleFreq,
+    osmRiverWays, riversOsmStatus, riversOsmError, osmRiverHighlight,
+    fetchRivers, applyOsmRivers, setOsmRiverHighlight, clearOsmRivers,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<'river' | 'canal' | 'lake' | null>(null)
@@ -237,6 +239,91 @@ export function RiversSidebar() {
         <RiversSettingsFlyout type={openSettings} anchorY={settingsAnchorY} onClose={() => setOpenSettings(null)} />
       )}
       <div style={sidebarStyle}>
+
+        {/* ── Fetch from OSM ── */}
+        <div style={sectionStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={labelStyle}>From OSM</div>
+            {riversOsmStatus !== 'idle' && (
+              <button
+                onClick={clearOsmRivers}
+                style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 10, padding: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+              >clear</button>
+            )}
+          </div>
+
+          {riversOsmStatus === 'done' && osmRiverWays.length > 0 && (() => {
+            const riverCount = osmRiverWays.filter(w => w.type === 'river').length
+            const canalCount = osmRiverWays.filter(w => w.type === 'canal').length
+            return (
+              <div style={{ fontSize: 10, color: '#4a6a8a', marginBottom: 6 }}>
+                {riverCount > 0 && <span>{riverCount} river{riverCount !== 1 ? 's' : ''}</span>}
+                {riverCount > 0 && canalCount > 0 && <span>, </span>}
+                {canalCount > 0 && <span>{canalCount} canal{canalCount !== 1 ? 's' : ''}</span>}
+                {' '}found
+              </div>
+            )
+          })()}
+
+          <button
+            onClick={() => fetchRivers()}
+            disabled={riversOsmStatus === 'loading'}
+            style={{
+              width: '100%', padding: '4px 0', marginBottom: 4,
+              background: 'none', border: `1px solid ${riversOsmStatus === 'loading' ? '#2a2a4a' : '#3a6a9a'}`,
+              color: riversOsmStatus === 'loading' ? '#3a3a5a' : '#5a9aba',
+              borderRadius: 3, cursor: riversOsmStatus === 'loading' ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              background: riversOsmStatus === 'done' ? '#5a9e6f' : riversOsmStatus === 'loading' ? '#a0a060' : riversOsmStatus === 'error' ? '#9e5a5a' : '#3a3a5a' }} />
+            {riversOsmStatus === 'loading' ? 'fetching…' : 'Fetch Rivers'}
+          </button>
+
+          {riversOsmStatus === 'error' && riversOsmError && (
+            <div style={{ fontSize: 10, color: '#9e5a5a', marginBottom: 4 }}>{riversOsmError}</div>
+          )}
+
+          {riversOsmStatus === 'done' && osmRiverWays.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ fontSize: 10, color: '#4a6a8a', marginBottom: 2 }}>Apply OSM to map</div>
+              {(['river', 'canal'] as const).map(type => {
+                const count = osmRiverWays.filter(w => w.type === type).length
+                if (count === 0) return null
+                const isActive = osmRiverHighlight === type
+                const color = type === 'river' ? '#5a9aba' : '#4abaa0'
+                const borderColor = type === 'river' ? '#3a6a9a' : '#2a8a7a'
+                return (
+                  <div key={type} style={{ display: 'flex', gap: 3 }}>
+                    <button
+                      onClick={() => applyOsmRivers(type)}
+                      style={{
+                        flex: 1, padding: '3px 0', background: 'none',
+                        border: `1px solid ${borderColor}`, color,
+                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                    >Apply {type === 'river' ? 'Rivers' : 'Canals'}</button>
+                    <button
+                      onClick={() => setOsmRiverHighlight(isActive ? null : type)}
+                      title="Preview on map"
+                      style={{
+                        padding: '3px 7px', background: 'none',
+                        border: `1px solid ${isActive ? borderColor : '#2a2a3a'}`,
+                        color: isActive ? color : '#4a4a6a',
+                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                      }}
+                    >👁</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {/* ── Draw tools ── */}
         <div style={sectionStyle}>
