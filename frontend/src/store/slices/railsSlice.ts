@@ -18,6 +18,7 @@ export type RailsSlice = {
   setRailsFetchTypes: (types: string[]) => void
   clearRails: () => void
   addRailEdge: (q1: number, r1: number, q2: number, r2: number) => void
+  removeRailEdge: (q1: number, r1: number, q2: number, r2: number) => void
   removeRailHexEdges: (q: number, r: number) => void
   setRailPaintEraser: (v: boolean) => void
   setRailStyle: (update: Partial<RailStyle>) => void
@@ -116,6 +117,11 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
     const key = railEdgeCanonicalKey(q1, r1, q2, r2)
     if (railEdges.some((e) => railEdgeCanonicalKey(e.q1, e.r1, e.q2, e.r2) === key)) return
     set({ railEdges: [...railEdges, { q1, r1, q2, r2, manual: true }] })
+  },
+
+  removeRailEdge: (q1, r1, q2, r2) => {
+    const key = railEdgeCanonicalKey(q1, r1, q2, r2)
+    set(s => ({ railEdges: s.railEdges.filter(e => railEdgeCanonicalKey(e.q1, e.r1, e.q2, e.r2) !== key) }))
   },
 
   removeRailHexEdges: (q, r) => {

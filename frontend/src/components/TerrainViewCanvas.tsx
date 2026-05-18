@@ -121,7 +121,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     osmRailHexPaths, osmRailHighlight,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
-    addRoadEdge, removeRoadHexEdges, removeRoadEdgeAllTiers, addRailEdge, removeRailHexEdges,
+    addRoadEdge, removeRoadHexEdges, removeRoadEdgeAllTiers, addRailEdge, removeRailEdge, removeRailHexEdges,
     activePanel,
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadSnapBindings, setRoadSnapBinding, deleteRoadSnapBinding,
@@ -208,6 +208,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const removeRoadHexEdgesRef = useRef(removeRoadHexEdges)
   const removeRoadEdgeAllTiersRef = useRef(removeRoadEdgeAllTiers)
   const addRailEdgeRef = useRef(addRailEdge)
+  const removeRailEdgeRef = useRef(removeRailEdge)
   const removeRailHexEdgesRef = useRef(removeRailHexEdges)
   const activePanelRef = useRef(activePanel)
   const roadControlOverridesRef = useRef(roadControlOverrides)
@@ -384,6 +385,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   removeRoadHexEdgesRef.current = removeRoadHexEdges
   removeRoadEdgeAllTiersRef.current = removeRoadEdgeAllTiers
   addRailEdgeRef.current = addRailEdge
+  removeRailEdgeRef.current = removeRailEdge
   removeRailHexEdgesRef.current = removeRailHexEdges
   activePanelRef.current = activePanel
   urbanHexesRef.current = urbanHexes
@@ -2199,11 +2201,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
       } else if (isRail) {
         const eraser = railPaintEraserRef.current
-        if (eraser) {
-          removeRailHexEdgesRef.current(hex.q, hex.r)
-        } else {
-          const prev = prevEdgeHexRef.current
-          if (prev && (prev.q !== hex.q || prev.r !== hex.r) && hexAdjacent(prev.q, prev.r, hex.q, hex.r)) {
+        const prev = prevEdgeHexRef.current
+        if (prev && (prev.q !== hex.q || prev.r !== hex.r) && hexAdjacent(prev.q, prev.r, hex.q, hex.r)) {
+          if (eraser) {
+            removeRailEdgeRef.current(prev.q, prev.r, hex.q, hex.r)
+          } else {
             addRailEdgeRef.current(prev.q, prev.r, hex.q, hex.r)
           }
         }

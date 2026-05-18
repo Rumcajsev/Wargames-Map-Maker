@@ -8,7 +8,7 @@ type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 export type DrawRoadsRailsParams = {
   roadChains: { tier: 0 | 1 | 2; chain: [number, number][] }[]
   junctions: { pos: [number, number]; tier: 0 | 1 | 2 }[]
-  railChains: { chain: [number, number][]; isShared: boolean }[]
+  railChains: { chain: [number, number][]; isShared: boolean; isLoop: boolean }[]
   tierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
   railStyle: RailStyle
   project: (lon: number, lat: number) => [number, number]
@@ -69,23 +69,15 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     }
 
     const rs = railStyle
-    for (const { chain, isShared } of railChains) {
-      let pts = chain.map(([lon, lat]) => project(lon, lat)) as [number, number][]
-      if (isShared) {
-        pts = offsetPolyline(pts, RAIL_OFFSET_PX)
-      } else {
-        const s = sharedOffsetEnds.get(geoKey(chain[0] as [number, number]))
-        const e = sharedOffsetEnds.get(geoKey(chain[chain.length - 1] as [number, number]))
-        if (s) pts[0] = s
-        if (e) pts[pts.length - 1] = e
-      }
-      if (pts.length < 2) continue
 
+    const drawRailPts = (pts: [number, number][], isLoop: boolean) => {
+      if (pts.length < 2) return
       if (rs.railStyle === 'cross') {
         rCtx.lineCap = 'round'; rCtx.lineJoin = 'round'
         rCtx.lineWidth = rs.thickness * 0.4; rCtx.strokeStyle = rs.outerColor
         rCtx.beginPath(); rCtx.moveTo(pts[0][0], pts[0][1])
         for (let i = 1; i < pts.length; i++) rCtx.lineTo(pts[i][0], pts[i][1])
+        if (isLoop) rCtx.closePath()
         rCtx.stroke()
         const spacing = rs.thickness * 4, halfLen = rs.thickness * 1.2
         rCtx.lineCap = 'round'; rCtx.lineWidth = rs.thickness * 0.4; rCtx.strokeStyle = rs.outerColor
@@ -109,14 +101,65 @@ export function drawRoadsAndRails(rCtx: Ctx, {
         rCtx.lineWidth = rs.thickness; rCtx.strokeStyle = rs.outerColor
         rCtx.beginPath(); rCtx.moveTo(pts[0][0], pts[0][1])
         for (let i = 1; i < pts.length; i++) rCtx.lineTo(pts[i][0], pts[i][1])
+        if (isLoop) rCtx.closePath()
         rCtx.stroke()
         rCtx.lineCap = 'butt'
         rCtx.lineWidth = rs.thickness * 0.48; rCtx.strokeStyle = rs.innerColor
         rCtx.setLineDash([7, 7])
         rCtx.beginPath(); rCtx.moveTo(pts[0][0], pts[0][1])
         for (let i = 1; i < pts.length; i++) rCtx.lineTo(pts[i][0], pts[i][1])
+        if (isLoop) rCtx.closePath()
         rCtx.stroke()
         rCtx.setLineDash([])
+      }
+    }
+
+    // Collect junction positions (chain endpoints that are shared by multiple chains)
+    const endpointCount = new Map<string, number>()
+    for (const { chain, isLoop } of railChains) {
+      if (isLoop || chain.length < 2) continue
+      const sk = geoKey(chain[0] as [number, number])
+      const ek = geoKey(chain[chain.length - 1] as [number, number])
+      endpointCount.set(sk, (endpointCount.get(sk) ?? 0) + 1)
+      endpointCount.set(ek, (endpointCount.get(ek) ?? 0) + 1)
+    }
+    const junctionPts: [number, number][] = []
+    for (const { chain, isLoop } of railChains) {
+      if (isLoop || chain.length < 2) continue
+      for (const endPt of [chain[0], chain[chain.length - 1]] as [number, number][]) {
+        if ((endpointCount.get(geoKey(endPt)) ?? 0) >= 2) {
+          const [x, y] = project(endPt[0], endPt[1])
+          junctionPts.push([x, y])
+        }
+      }
+    }
+
+    for (const { chain, isShared, isLoop } of railChains) {
+      let pts = chain.map(([lon, lat]) => project(lon, lat)) as [number, number][]
+      if (!isLoop) {
+        if (isShared) {
+          pts = offsetPolyline(pts, RAIL_OFFSET_PX)
+        } else {
+          const s = sharedOffsetEnds.get(geoKey(chain[0] as [number, number]))
+          const e = sharedOffsetEnds.get(geoKey(chain[chain.length - 1] as [number, number]))
+          if (s) pts[0] = s
+          if (e) pts[pts.length - 1] = e
+        }
+      }
+      drawRailPts(pts, isLoop)
+    }
+
+    // Draw junction caps so branches meet cleanly
+    if (junctionPts.length > 0) {
+      const r = rs.thickness * 0.7
+      for (const [x, y] of junctionPts) {
+        rCtx.beginPath(); rCtx.arc(x, y, r, 0, Math.PI * 2)
+        rCtx.fillStyle = rs.outerColor; rCtx.fill()
+      }
+      const ri = r * 0.5
+      for (const [x, y] of junctionPts) {
+        rCtx.beginPath(); rCtx.arc(x, y, ri, 0, Math.PI * 2)
+        rCtx.fillStyle = rs.innerColor; rCtx.fill()
       }
     }
   }

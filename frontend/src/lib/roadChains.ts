@@ -545,7 +545,7 @@ export function buildRailChains(
   hexIdx: Map<string, { center: [number, number] }>,
   roadEdgeMidpoints: Map<string, [number, number]>,
   roadJunctionPositions: Map<string, [number, number]>,
-): { chain: [number, number][]; isShared: boolean }[] {
+): { chain: [number, number][]; isShared: boolean; isLoop: boolean }[] {
   if (railEdges.length === 0) return []
 
   let hexScale = 0, hexScaleSamples = 0
@@ -593,7 +593,7 @@ export function buildRailChains(
 
   const walk = (startKey: string) => {
     const h0 = hexIdx.get(startKey)
-    if (!h0) return { pts: [] as [number, number][], midShared: [] as (boolean | null)[] }
+    if (!h0) return { pts: [] as [number, number][], midShared: [] as (boolean | null)[], isLoop: false }
     const startDeg = (adj.get(startKey) ?? []).length
     const pts: [number, number][] = []
     const midShared: (boolean | null)[] = []
@@ -633,7 +633,9 @@ export function buildRailChains(
       const roadJuncPos = roadJunctionPositions.get(cur)
       if (roadJuncPos) { pts.push(roadJuncPos); midShared.push(null) }
     }
-    return { pts, midShared }
+    const isLoop = cur === startKey && pts.length >= 3
+    if (isLoop) { pts.push(pts[0]); midShared.push(midShared[0]) }
+    return { pts, midShared, isLoop }
   }
 
   const segmentShared = (midShared: (boolean | null)[]): boolean[] =>
@@ -657,12 +659,12 @@ export function buildRailChains(
     return result
   }
 
-  const results: { chain: [number, number][]; isShared: boolean }[] = []
+  const results: { chain: [number, number][]; isShared: boolean; isLoop: boolean }[] = []
   const pushWalk = (startKey: string) => {
-    const { pts, midShared } = walk(startKey)
+    const { pts, midShared, isLoop } = walk(startKey)
     if (pts.length < 2) return
     for (const { pts: sub, isShared } of splitSubChains(pts, segmentShared(midShared))) {
-      if (sub.length >= 2) results.push({ chain: catmullRom(sub, 10), isShared })
+      if (sub.length >= 2) results.push({ chain: catmullRom(sub, 10), isShared, isLoop })
     }
   }
 
