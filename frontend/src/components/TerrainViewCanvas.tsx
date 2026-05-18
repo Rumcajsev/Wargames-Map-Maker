@@ -1093,7 +1093,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         oCtx.translate(-px, -py)
         oCtx.save()
         oCtx.beginPath()
-        oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        oCtx.rect(px, py, pw, ph)
         oCtx.clip()
         _drawTerrain(oCtx, terrainParams)
         oCtx.restore()
@@ -1104,10 +1104,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
-    // Draw with margin clip active (clips partial hexes at boundary)
+    // Draw with paper-edge clip active (clips content at paper boundary)
     ctx.save()
     ctx.beginPath()
-    ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+    ctx.rect(px, py, pw, ph)
     ctx.clip()
     // Blit terrain layer for screen rendering
     if (!isExport && terrainLayerRef.current) {
@@ -1178,7 +1178,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           _drawHexBorders(oCtx, projected, borderMode, edgeMode, inMargin)
           oCtx.restore()
@@ -1342,7 +1342,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isDraggingRiverDense) {
         ctx.save()
         ctx.beginPath()
-        ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        ctx.rect(px, py, pw, ph)
         ctx.clip()
         _drawRivers(ctx, liveRiverParams)
         ctx.restore()
@@ -1357,7 +1357,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           _drawRivers(oCtx, riverParams)
           oCtx.restore()
@@ -1411,7 +1411,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           _drawAllBuildings(oCtx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, hexBuildingGeoCache: hexBuildingGeoCacheRef.current, project })
           _drawAllBuildingsV2(oCtx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, project })
@@ -1505,7 +1505,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           // Bypass offscreen cache during drag — draw directly so the road bends live
           ctx.save()
           ctx.beginPath()
-          ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          ctx.rect(px, py, pw, ph)
           ctx.clip()
           _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: smoothedRailDataRef.current.chains, tierStyles, railStyle: railStyleRef.current, project })
           ctx.restore()
@@ -1520,7 +1520,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             oCtx.translate(-px, -py)
             oCtx.save()
             oCtx.beginPath()
-            oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+            oCtx.rect(px, py, pw, ph)
             oCtx.clip()
             _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: smoothedRailDataRef.current.chains, tierStyles, railStyle: railStyleRef.current, project })
             oCtx.restore()
@@ -1540,7 +1540,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!isExport && showRawOsmRoadsRef.current) {
         ctx.save()
         ctx.beginPath()
-        ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        ctx.rect(px, py, pw, ph)
         ctx.clip()
         if (showRawOsmRoadsRef.current) {
           const tierColor = ['rgba(220,50,50,0.9)', 'rgba(220,140,30,0.9)', 'rgba(180,180,30,0.85)']
@@ -1794,7 +1794,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           const activeRoadChainsS = ROAD_V2 && smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
           _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
@@ -1951,7 +1951,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     } else if (ht !== null || railHighlight) {
       ctx.save()
       ctx.beginPath()
-      ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+      ctx.rect(px, py, pw, ph)
       ctx.clip()
       if (ht !== null) drawWays([ht])
       if (railHighlight) drawRailRawWays()
