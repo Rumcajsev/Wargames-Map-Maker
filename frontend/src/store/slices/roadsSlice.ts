@@ -128,6 +128,11 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
       for (let i = 0; i < path.hexes.length - 1; i++) {
         const [q1, r1] = path.hexes[i]
         const [q2, r2] = path.hexes[i + 1]
+        const dq = q2 - q1, dr = r2 - r1
+        const adj = (dq === 1 && dr === 0) || (dq === -1 && dr === 0) ||
+                    (dq === 0 && dr === 1) || (dq === 0 && dr === -1) ||
+                    (dq === 1 && dr === -1) || (dq === -1 && dr === 1)
+        if (!adj) continue
         const a = `${q1},${r1}`, b = `${q2},${r2}`
         const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
         if (existingPairs.has(pairKey)) continue
