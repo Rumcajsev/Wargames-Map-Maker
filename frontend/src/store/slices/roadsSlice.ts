@@ -3,10 +3,11 @@ import { TIER_HIGHWAYS, HIGHWAY_TO_TIER, roadEdgeCanonicalKey, DEFAULT_ROAD_TIER
 
 export type RoadsSlice = {
   rawRoadWays: RawRoadWay[]
+  osmRoadHexes: RoadHex[]
+  osmHighlightTier: 0 | 1 | 2 | null
   roadEdges: RoadEdge[]
   roadControlOverrides: Record<string, [number, number]>
   roadsDisplayMode: 'raw' | 'per_hex'
-  roadsFetchTiers: [boolean, boolean, boolean]
   roadsVisibleTiers: [boolean, boolean, boolean]
   roadsStatus: 'idle' | 'loading' | 'error' | 'done'
   roadsError: string | null
@@ -24,8 +25,9 @@ export type RoadsSlice = {
   roadTierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
   fetchRoads: () => Promise<void>
   fetchSettlementRoads: () => Promise<void>
+  setOsmHighlightTier: (tier: 0 | 1 | 2 | null) => void
+  applyOsmTier: (tier: 0 | 1 | 2) => void
   setRoadsDisplayMode: (mode: 'raw' | 'per_hex') => void
-  setRoadsFetchTiers: (tiers: [boolean, boolean, boolean]) => void
   setRoadsVisibleTiers: (tiers: [boolean, boolean, boolean]) => void
   clearRoads: () => void
   clearManualRoads: () => void
@@ -66,16 +68,19 @@ export type RoadsSlice = {
   setRoadHopProp: (key: string, prop: { wiggleAmp?: number; wiggleFreq?: number }) => void
   clearRoadHopProp: (key: string) => void
   setSelectedRoadHopKey: (key: string | null) => void
+  roadWiggleDragging: boolean
+  setRoadWiggleDragging: (v: boolean) => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
 
 export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => ({
   rawRoadWays: [],
+  osmRoadHexes: [],
+  osmHighlightTier: null,
   roadEdges: [],
   roadControlOverrides: {},
   roadsDisplayMode: 'per_hex',
-  roadsFetchTiers: [true, true, true],
   roadsVisibleTiers: [true, true, true],
   roadsStatus: 'idle',
   roadsError: null,
@@ -101,13 +106,39 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   selectedRoadHopKey: null,
 
   clearRoads: () => set(s => ({
-    rawRoadWays: [], roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null,
+    rawRoadWays: [], osmRoadHexes: [], osmHighlightTier: null,
+    roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null,
     roadPaintMode: false, roadPaintEraser: false, roadNodeEditMode: false, roadSnapBindings: {},
     activeTool: (s.activeTool.type === 'road' || s.activeTool.type === 'node-edit') ? { type: 'none' } as ActiveTool : s.activeTool,
   })),
   clearManualRoads: () => { get().pushUndoSnapshot(); set((s) => ({ roadEdges: s.roadEdges.filter((e) => !e.manual) })) },
+  setOsmHighlightTier: (tier) => set({ osmHighlightTier: tier }),
+  applyOsmTier: (tier) => {
+    get().pushUndoSnapshot()
+    const { osmRoadHexes, roadEdges } = get()
+    const existingPairs = new Set<string>()
+    for (const e of roadEdges) {
+      const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
+      existingPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`)
+    }
+    const edgeSet = new Set<string>()
+    const newEdges: RoadEdge[] = []
+    for (const rh of osmRoadHexes) {
+      if ((HIGHWAY_TO_TIER[rh.highway] ?? 2) !== tier) continue
+      for (const conn of rh.connections) {
+        const a = `${rh.q},${rh.r}`, b = `${conn.q},${conn.r}`
+        const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
+        if (existingPairs.has(pairKey)) continue
+        const key = roadEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r, tier)
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key)
+          newEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r, tier })
+        }
+      }
+    }
+    if (newEdges.length > 0) set(s => ({ roadEdges: [...s.roadEdges, ...newEdges] }))
+  },
   setRoadsDisplayMode: (mode) => set({ roadsDisplayMode: mode }),
-  setRoadsFetchTiers: (tiers) => set({ roadsFetchTiers: tiers }),
   setRoadsVisibleTiers: (tiers) => set({ roadsVisibleTiers: tiers }),
   setRoadDensityMinChain: (v) => set({ roadDensityMinChain: v }),
   setShowRawOsmRoads: (v) => set({ showRawOsmRoads: v }),
@@ -118,8 +149,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
 
     set({ roadsStatus: 'loading', roadsError: null })
 
-    const { roadsFetchTiers } = get()
-    const highway_types = TIER_HIGHWAYS.flatMap((hw, i) => roadsFetchTiers[i] ? hw : [])
+    const highway_types = TIER_HIGHWAYS.flat()
 
     try {
       const resp = await fetch('/api/generate/roads', {
@@ -139,19 +169,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
       if (!resp.ok) throw new Error(await resp.text())
       const data = await resp.json()
 
-      const edgeSet = new Set<string>()
-      const roadEdges: RoadEdge[] = []
-      for (const rh of data.road_hexes as RoadHex[]) {
-        const tier = (HIGHWAY_TO_TIER[rh.highway] ?? 2) as 0 | 1 | 2
-        for (const conn of rh.connections) {
-          const key = roadEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r, tier)
-          if (!edgeSet.has(key)) {
-            edgeSet.add(key)
-            roadEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r, tier })
-          }
-        }
-      }
-      set({ rawRoadWays: data.raw_ways, roadEdges, roadChainOverrides: {}, roadSnapBindings: {}, roadsStatus: 'done' })
+      set({ rawRoadWays: data.raw_ways, osmRoadHexes: data.road_hexes, roadChainOverrides: {}, roadSnapBindings: {}, roadsStatus: 'done' })
     } catch (e) {
       set({ roadsStatus: 'error', roadsError: String(e) })
     }
@@ -272,4 +290,6 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setRoadHopProp: (key, prop) => set(s => ({ roadHopProps: { ...s.roadHopProps, [key]: { ...(s.roadHopProps[key] ?? {}), ...prop } } })),
   clearRoadHopProp: (key) => set(s => { const { [key]: _, ...rest } = s.roadHopProps; return { roadHopProps: rest } }),
   setSelectedRoadHopKey: (key) => set({ selectedRoadHopKey: key }),
+  roadWiggleDragging: false,
+  setRoadWiggleDragging: (v) => set({ roadWiggleDragging: v }),
 })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMapStore } from '../store/mapStore'
 import { RoadsSettingsFlyout } from './RoadsSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
@@ -143,16 +143,16 @@ export function RoadsSidebar() {
     railPaintMode, railPaintEraser,
     roadNodeEditMode,
     setActiveTool,
-    roadWiggleAmp, setRoadWiggleAmp,
+    roadWiggleAmp, setRoadWiggleAmp, setRoadWiggleDragging,
     roadWiggleFreq, setRoadWiggleFreq,
     roadSmoothing, setRoadSmoothing,
     roadPathSmoothing, setRoadPathSmoothing,
-    roadsFetchTiers, setRoadsFetchTiers,
     roadsStatus, roadsError,
     railsStatus, railsError,
     fetchRoads, fetchRails,
     clearRoads, clearRails,
     showRawOsmRoads, setShowRawOsmRoads,
+    osmRoadHexes, osmHighlightTier, setOsmHighlightTier, applyOsmTier,
     showRawOsmRails, setShowRawOsmRails,
     roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
@@ -164,6 +164,20 @@ export function RoadsSidebar() {
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
   const [hoveredRow, setHoveredRow] = useState<FlyoutKey | null>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if ((e.target as HTMLElement).tagName === 'INPUT') return
+      if (e.key === '1') selectRoadBrush(0)
+      else if (e.key === '2') selectRoadBrush(1)
+      else if (e.key === '3') selectRoadBrush(2)
+      else if (e.key === 'e' || e.key === 'E') selectRoadEraser()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roadPaintMode, roadPaintBrush, roadPaintEraser])
 
   const handleCog = (key: FlyoutKey, y: number) => {
     if (openFlyout === key) {
@@ -281,6 +295,7 @@ export function RoadsSidebar() {
                   <button onClick={() => selectRoadBrush(tier)} style={btnStyle(active)}>
                     <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: color }} />
                     <span style={{ flex: 1 }}>{label}</span>
+                    <span style={{ fontSize: 9, color: active ? '#6a9e7a' : '#3a3a5a', border: `1px solid ${active ? '#3a6a4a' : '#2a2a4a'}`, borderRadius: 2, padding: '1px 3px', lineHeight: 1.4 }}>{tier + 1}</span>
                   </button>
                   {(hoveredRow === key || openFlyout === key) && cogBtn(key, `${label} settings`)}
                 </div>
@@ -289,6 +304,7 @@ export function RoadsSidebar() {
             <button onClick={selectRoadEraser} style={btnStyle(eraserActive)}>
               <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: eraserActive ? '#9e5a5a' : '#3a3a5a', border: '1px solid #5a3a3a' }} />
               <span style={{ flex: 1 }}>Eraser</span>
+              <span style={{ fontSize: 9, color: eraserActive ? '#9e6a6a' : '#3a3a5a', border: `1px solid ${eraserActive ? '#6a3a3a' : '#2a2a4a'}`, borderRadius: 2, padding: '1px 3px', lineHeight: 1.4 }}>E</span>
             </button>
           </div>
         </div>
@@ -348,6 +364,8 @@ export function RoadsSidebar() {
           <input
             type="range" min={0} max={1} step={0.01}
             value={roadWiggleAmp}
+            onPointerDown={() => setRoadWiggleDragging(true)}
+            onPointerUp={() => setRoadWiggleDragging(false)}
             onChange={e => setRoadWiggleAmp(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
           />
@@ -416,19 +434,9 @@ export function RoadsSidebar() {
                   </button>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 5 }}>
-                {(['Motorway', 'Primary', 'Tertiary'] as const).map((label, i) => (
-                  <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
-                    <input type="checkbox" checked={roadsFetchTiers[i as 0|1|2]}
-                      onChange={e => { const t = [...roadsFetchTiers] as [boolean,boolean,boolean]; t[i as 0|1|2] = e.target.checked; setRoadsFetchTiers(t) }}
-                      style={{ cursor: 'pointer' }} />
-                    {label}
-                  </label>
-                ))}
-              </div>
               <button
                 onClick={() => fetchRoads()}
-                disabled={roadsStatus === 'loading' || !roadsFetchTiers.some(Boolean)}
+                disabled={roadsStatus === 'loading'}
                 style={{
                   width: '100%', padding: '4px 0',
                   background: 'none', border: '1px solid #2a3a2a',
@@ -442,11 +450,30 @@ export function RoadsSidebar() {
               {roadsStatus === 'error' && roadsError && (
                 <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{roadsError}</div>
               )}
-              {roadsStatus === 'done' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
-                  <input type="checkbox" checked={showRawOsmRoads} onChange={e => setShowRawOsmRoads(e.target.checked)} style={{ cursor: 'pointer' }} />
-                  Show raw OSM ways
-                </label>
+              {roadsStatus === 'done' && osmRoadHexes.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 10, color: '#6a6a8a', marginBottom: 4 }}>Apply OSM to map</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {(['Highways', 'Primary', 'Secondary'] as const).map((label, i) => (
+                      <button
+                        key={i}
+                        onClick={() => applyOsmTier(i as 0 | 1 | 2)}
+                        onMouseEnter={() => setOsmHighlightTier(i as 0 | 1 | 2)}
+                        onMouseLeave={() => setOsmHighlightTier(null)}
+                        style={{
+                          flex: 1, padding: '3px 0', background: 'none',
+                          border: `1px solid ${osmHighlightTier === i ? '#8a8a3a' : '#2a3a2a'}`,
+                          color: osmHighlightTier === i ? '#c0c050' : '#6a8a6a',
+                          borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        }}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
+                    <input type="checkbox" checked={showRawOsmRoads} onChange={e => setShowRawOsmRoads(e.target.checked)} style={{ cursor: 'pointer' }} />
+                    Show raw OSM ways
+                  </label>
+                </div>
               )}
             </div>
 

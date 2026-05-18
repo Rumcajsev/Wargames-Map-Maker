@@ -471,7 +471,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     settlementLabelOverrides: s.settlementLabelOverrides,
     roadEdges: s.roadEdges,
     roadsDisplayMode: s.roadsDisplayMode,
-    roadsFetchTiers: s.roadsFetchTiers,
+
     roadsVisibleTiers: s.roadsVisibleTiers,
     roadsStatus: s.roadsStatus,
     railEdges: s.railEdges,
@@ -577,7 +577,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 19,
+  version: 20,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))
