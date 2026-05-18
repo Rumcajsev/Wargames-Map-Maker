@@ -252,10 +252,12 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
         tier: computeTier(s.population, thresholds),
       }))
 
+      const hasHex = new Set<number>()
       for (let i = 0; i < rawSettlements.length; i++) {
         const s = rawSettlements[i]
         for (const hex of generatedHexes) {
           if (pointInPolygon(s.lon, s.lat, hex.vertices)) {
+            hasHex.add(i)
             const key = `${hex.q},${hex.r}`
             const existing = hexByCoord.get(key)
             if (!existing || s.population > existing.pop) {
@@ -272,8 +274,10 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
         }
       }
 
+      const inMapSettlements = rawSettlements.filter((_, i) => hasHex.has(i))
+
       let placed = 0
-      for (const s of rawSettlements) {
+      for (const s of inMapSettlements) {
         if (s.hex_q !== null) {
           if (placed >= settlementsAutoPlace) {
             s.hex_q = null
@@ -286,7 +290,7 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
 
       const { settlements: existing } = get()
       const customSettlements = existing.filter((s) => s.isCustom)
-      set({ settlements: [...rawSettlements, ...customSettlements], settlementsStatus: 'done' })
+      set({ settlements: [...inMapSettlements, ...customSettlements], settlementsStatus: 'done' })
     } catch (e) {
       set({ settlementsStatus: 'error', settlementsError: String(e) })
     }

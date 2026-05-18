@@ -54,6 +54,7 @@ export function SettlementsSidebar() {
     settlementsStatus, settlementsError,
     fetchSettlements, clearSettlements,
     toggleSettlementPlaced,
+    settlementsLimit, setSettlementsLimit,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<SettlementTier | null>(null)
@@ -273,6 +274,22 @@ export function SettlementsSidebar() {
                 onMouseLeave={e => (e.currentTarget.style.color = '#5a3a3a')}
               >clear</button>
             )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ color: '#5a5a7a', fontSize: 10, flexShrink: 0 }}>Limit</span>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={settlementsLimit}
+              onChange={e => setSettlementsLimit(Math.max(1, Math.min(500, Number(e.target.value))))}
+              style={{
+                width: 52, padding: '2px 4px',
+                background: '#12131e', border: '1px solid #2a2a4a',
+                borderRadius: 3, color: '#a0a0c0', fontFamily: 'inherit', fontSize: 11,
+              }}
+            />
           </div>
 
           <button
