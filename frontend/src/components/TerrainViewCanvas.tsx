@@ -11,7 +11,7 @@ import { riverChainCache, buildRiverChains, buildRiverChainsV2 } from '../lib/ri
 
 const RIVER_V2 = true
 import { drawRivers as _drawRivers } from '../lib/drawRivers'
-import { buildRoadChains, buildRailChains, spineSideCpKey } from '../lib/roadChains'
+import { buildRoadChains, buildRailChains, spineSideCpKey, applyRoadWiggle } from '../lib/roadChains'
 import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
 import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
 import { drawSettlements as _drawSettlements } from '../lib/drawSettlements'
@@ -112,7 +112,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     showRawOsmRoads, showRawOsmRails,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
-    addRoadEdge, removeRoadHexEdges, addRailEdge, removeRailHexEdges,
+    addRoadEdge, removeRoadHexEdges, removeRoadEdgeAllTiers, addRailEdge, removeRailHexEdges,
     activePanel,
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadSnapBindings, setRoadSnapBinding, deleteRoadSnapBinding,
@@ -189,6 +189,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const railPaintEraserRef = useRef(railPaintEraser)
   const addRoadEdgeRef = useRef(addRoadEdge)
   const removeRoadHexEdgesRef = useRef(removeRoadHexEdges)
+  const removeRoadEdgeAllTiersRef = useRef(removeRoadEdgeAllTiers)
   const addRailEdgeRef = useRef(addRailEdge)
   const removeRailHexEdgesRef = useRef(removeRailHexEdges)
   const activePanelRef = useRef(activePanel)
@@ -359,6 +360,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   railPaintEraserRef.current = railPaintEraser
   addRoadEdgeRef.current = addRoadEdge
   removeRoadHexEdgesRef.current = removeRoadHexEdges
+  removeRoadEdgeAllTiersRef.current = removeRoadEdgeAllTiers
   addRailEdgeRef.current = addRailEdge
   removeRailHexEdgesRef.current = removeRailHexEdges
   activePanelRef.current = activePanel
@@ -530,9 +532,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   blobComponentsByTerrainRef.current = blobComponentsByTerrain
 
 
+  const roadBaseData = useMemo(
+    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings),
+    [roadEdges, hexIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
+  )
+
   const smoothedRoadData = useMemo(
     () => {
-      const data = buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings)
+      const data = applyRoadWiggle(roadBaseData, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps)
       if (roadDensityMinChain <= 1) return data
       const chains = data.chains.filter(c => {
         if (c.id.startsWith('stub|')) return true
@@ -541,26 +548,28 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       })
       return { ...data, chains }
     },
-    [roadEdges, hexIdx, roadControlOverrides, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSegmentProps, roadHopProps, roadSnapBindings, roadDensityMinChain],
+    [roadBaseData, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, roadDensityMinChain],
   )
   const smoothedRoadDataRef = useRef(smoothedRoadData)
   smoothedRoadDataRef.current = smoothedRoadData
+  const roadBaseDataRef = useRef(roadBaseData)
+  roadBaseDataRef.current = roadBaseData
 
   const smoothedRailChains = useMemo(
     () => {
       const roadEdgeMidpoints = new Map(
-        smoothedRoadData.controlPoints
+        roadBaseData.controlPoints
           .filter(cp => cp.key.startsWith('em|'))
           .map(cp => [cp.key, cp.pos] as [string, [number, number]])
       )
       const roadJunctionPositions = new Map(
-        smoothedRoadData.controlPoints
+        roadBaseData.controlPoints
           .filter(cp => cp.key.startsWith('ja|'))
           .map(cp => [cp.key.slice(3), cp.pos] as [string, [number, number]])
       )
       return buildRailChains(railEdges, roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadEdgeMidpoints, roadJunctionPositions)
     },
-    [railEdges, roadEdges, hexIdx, smoothedRoadData],
+    [railEdges, roadEdges, hexIdx, roadBaseData],
   )
   const smoothedRailChainsRef = useRef(smoothedRailChains)
   smoothedRailChainsRef.current = smoothedRailChains
@@ -1266,13 +1275,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const currentZoom = Math.round(zoomRef.current * 10)
         const epoch = lastBuildingCacheEpochRef.current
         if (!epoch ||
-            epoch.roadData !== smoothedRoadDataRef.current ||
+            epoch.roadData !== roadBaseDataRef.current ||
             epoch.zoom !== currentZoom ||
             epoch.settlementStyles !== settlementTierStylesRef.current ||
             epoch.urbanStyle !== urbanStyleRef.current) {
           hexBuildingGeoCacheRef.current.clear()
           lastBuildingCacheEpochRef.current = {
-            roadData: smoothedRoadDataRef.current,
+            roadData: roadBaseDataRef.current,
             zoom: currentZoom,
             settlementStyles: settlementTierStylesRef.current,
             urbanStyle: urbanStyleRef.current,
@@ -1326,6 +1335,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           roadChainOverridesRef.current,
           roadSegmentPropsRef.current,
           roadHopPropsRef.current,
+          undefined,
+          0,
         )
       : isDraggingDense
         ? buildRoadChains(
@@ -1339,6 +1350,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             liveChainOverrides,
             roadSegmentPropsRef.current,
             roadHopPropsRef.current,
+            undefined,
+            0,
           )
         : smoothedRoadDataRef.current
 
@@ -1602,7 +1615,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.beginPath()
           oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
           oCtx.clip()
-          _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: smoothedRoadDataRef.current.chains, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null } })
+          _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: smoothedRoadDataRef.current.chains, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
           oCtx.restore()
           settlementsLayerRef.current = offscreen
           settlementsDirtyRef.current = false
@@ -1612,7 +1625,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.drawImage(settlementsLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: smoothedRoadDataRef.current.chains, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null } })
+        _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: smoothedRoadDataRef.current.chains, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
       }
     }
 
@@ -1711,7 +1724,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes])
   useEffect(() => { joinedHighlightsDirtyRef.current = true }, [highlights, highlightedHexes, highlightLines])
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
-  useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, smoothedRoadData])
+  useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
   useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailChains, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, showRawOsmRoads, showRawOsmRails])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailChains])
 
@@ -1981,10 +1994,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isRoad) {
         const tier = roadPaintBrushRef.current
         const eraser = roadPaintEraserRef.current
+        const prev = prevEdgeHexRef.current
         if (eraser) {
-          removeRoadHexEdgesRef.current(hex.q, hex.r, tier)
+          if (prev && (prev.q !== hex.q || prev.r !== hex.r) && hexAdjacent(prev.q, prev.r, hex.q, hex.r)) {
+            removeRoadEdgeAllTiersRef.current(prev.q, prev.r, hex.q, hex.r)
+          }
         } else {
-          const prev = prevEdgeHexRef.current
           if (prev && (prev.q !== hex.q || prev.r !== hex.r) && hexAdjacent(prev.q, prev.r, hex.q, hex.r)) {
             addRoadEdgeRef.current(prev.q, prev.r, hex.q, hex.r, tier)
           }

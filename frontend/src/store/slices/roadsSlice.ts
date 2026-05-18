@@ -32,6 +32,7 @@ export type RoadsSlice = {
   addRoadEdge: (q1: number, r1: number, q2: number, r2: number, tier: 0 | 1 | 2) => void
   removeRoadHexEdges: (q: number, r: number, tier: 0 | 1 | 2) => void
   removeAllRoadHexEdges: (q: number, r: number) => void
+  removeRoadEdgeAllTiers: (q1: number, r1: number, q2: number, r2: number) => void
   setRoadPaintBrush: (v: 0 | 1 | 2) => void
   setRoadPaintEraser: (v: boolean) => void
   setRoadNodeEditMode: (v: boolean) => void
@@ -246,6 +247,11 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   removeAllRoadHexEdges: (q, r) => {
     const { roadEdges } = get()
     set({ roadEdges: roadEdges.filter((e) => !((e.q1 === q && e.r1 === r) || (e.q2 === q && e.r2 === r))) })
+  },
+
+  removeRoadEdgeAllTiers: (q1, r1, q2, r2) => {
+    const { roadEdges } = get()
+    set({ roadEdges: roadEdges.filter((e) => !((e.q1 === q1 && e.r1 === r1 && e.q2 === q2 && e.r2 === r2) || (e.q1 === q2 && e.r1 === r2 && e.q2 === q1 && e.r2 === r1))) })
   },
 
   setRoadTierStyle: (tier, update) => set((state) => {

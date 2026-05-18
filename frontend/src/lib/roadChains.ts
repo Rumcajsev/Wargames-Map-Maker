@@ -475,7 +475,58 @@ export function buildRoadChains(
     }
   }
 
-  return { chains, junctions: Array.from(junctionMap.values()), controlPoints }
+  return { chains, junctions: Array.from(junctionMap.values()), controlPoints, interHexDist }
+}
+
+export type RoadBaseData = ReturnType<typeof buildRoadChains>
+
+export function applyRoadWiggle(
+  baseData: RoadBaseData,
+  wiggleAmpFactor: number,
+  wiggleFreqFactor: number,
+  segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
+  hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
+  chaikinPasses = 4,
+): RoadBaseData {
+  const { interHexDist } = baseData
+  const wiggleAmplitude = wiggleAmpFactor * interHexDist
+  const wiggleFreq = interHexDist > 0 ? wiggleFreqFactor / interHexDist : 0
+
+  const chains = baseData.chains.map(c => {
+    const base = c.baseChain ?? c.chain
+    const { id, hopKeys: hopKeysList = [], hopRanges = [] } = c
+    const sp = segProps[id]
+    const hasAnyOverride = (sp?.wiggleAmp !== undefined || sp?.wiggleFreq !== undefined ||
+      hopKeysList.some(k => hopProps[k]?.wiggleAmp !== undefined || hopProps[k]?.wiggleFreq !== undefined)) &&
+      hopKeysList.length > 0
+
+    let chain: [number, number][]
+    if (!hasAnyOverride) {
+      chain = wiggleChain(base, wiggleAmplitude, wiggleFreq)
+    } else {
+      const dense = [...base] as [number, number][]
+      for (let h = 0; h < hopKeysList.length; h++) {
+        const [s, e] = hopRanges[h]
+        const hp = hopProps[hopKeysList[h]]
+        const spg = segProps[id]
+        const amp = (hp?.wiggleAmp ?? spg?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+        const freq = (hp?.wiggleFreq ?? spg?.wiggleFreq ?? wiggleFreqFactor) / interHexDist
+        const slice = base.slice(s, e + 1)
+        const wiggled = wiggleChain(slice, amp, freq)
+        for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
+      }
+      chain = dense
+    }
+    const effectiveAmp = hasAnyOverride
+      ? Math.max(...hopKeysList.map(k => {
+          const hp = hopProps[k], sp2 = segProps[id]
+          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+        }))
+      : wiggleAmplitude
+    if (effectiveAmp > 0 && chaikinPasses > 0) chain = chaikin(chain, chaikinPasses, false)
+    return { ...c, chain }
+  })
+  return { ...baseData, chains }
 }
 
 export function buildRailChains(

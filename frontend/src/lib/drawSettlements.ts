@@ -12,21 +12,37 @@ export type DrawSettlementsParams = {
   railChains: { chain: [number, number][] }[]
   project: (lon: number, lat: number) => [number, number]
   hexCenterOf: (q: number, r: number) => [number, number] | null
+  hexRadiusPx: number
+}
+
+function closestPointOnSegment(
+  ax: number, ay: number, bx: number, by: number,
+  px: number, py: number
+): [number, number] {
+  const dx = bx - ax, dy = by - ay
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return [ax, ay]
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+  return [ax + t * dx, ay + t * dy]
 }
 
 export function drawSettlements(sCtx: Ctx, {
-  settlements, tierStyles, roadChains, railChains, project, hexCenterOf,
+  settlements, tierStyles, roadChains, railChains, project, hexCenterOf, hexRadiusPx,
 }: DrawSettlementsParams) {
   const placed = settlements.filter(s => s.included && s.hex_q !== null)
 
-  // Sample obstacle points from roads and rails for label placement scoring.
+  // Project all road and rail chain segments for obstacle sampling and icon snapping.
+  type Seg = { ax: number; ay: number; bx: number; by: number }
+  const allSegs: Seg[] = []
   const obstaclePts: [number, number][] = []
+
   const sampleChain = (chain: [number, number][]) => {
     if (chain.length < 1) return
     let [scx, scy] = project(chain[0][0], chain[0][1])
     obstaclePts.push([scx, scy])
     for (let i = 1; i < chain.length; i++) {
       const [nx, ny] = project(chain[i][0], chain[i][1])
+      allSegs.push({ ax: scx, ay: scy, bx: nx, by: ny })
       const segLen = Math.hypot(nx - scx, ny - scy)
       const steps = Math.max(1, Math.ceil(segLen / 6))
       for (let st = 1; st <= steps; st++) {
@@ -44,7 +60,18 @@ export function drawSettlements(sCtx: Ctx, {
   for (const s of placed) {
     const center = hexCenterOf(s.hex_q!, s.hex_r)
     if (!center) continue
-    const [cx, cy] = center
+    const [hx, hy] = center
+
+    // Snap icon to closest road/rail point within the hex.
+    let cx = hx, cy = hy
+    if (hexRadiusPx > 0 && allSegs.length > 0) {
+      let bestDist = hexRadiusPx
+      for (const { ax, ay, bx, by } of allSegs) {
+        const [px, py] = closestPointOnSegment(ax, ay, bx, by, hx, hy)
+        const d = Math.hypot(px - hx, py - hy)
+        if (d < bestDist) { bestDist = d; cx = px; cy = py }
+      }
+    }
     const tier = (s.tier ?? (s.type === 'city' ? 1 : s.type === 'town' ? 3 : 4)) as SettlementTier
     const ts = tierStyles[tier]
     const r = ts.size
