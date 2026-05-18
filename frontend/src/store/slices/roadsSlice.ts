@@ -1,9 +1,9 @@
-import type { MapStore, RawRoadWay, RoadEdge, RoadHex, RoadTierStyle, ActiveTool } from '../mapStore'
+import type { MapStore, RawRoadWay, RoadEdge, HexRoadPath, RoadTierStyle, ActiveTool } from '../mapStore'
 import { TIER_HIGHWAYS, HIGHWAY_TO_TIER, roadEdgeCanonicalKey, DEFAULT_ROAD_TIER_STYLES } from '../mapStore'
 
 export type RoadsSlice = {
   rawRoadWays: RawRoadWay[]
-  osmRoadHexes: RoadHex[]
+  osmHexPaths: HexRoadPath[]
   osmHighlightTier: 0 | 1 | 2 | null
   roadEdges: RoadEdge[]
   roadControlOverrides: Record<string, [number, number]>
@@ -76,7 +76,7 @@ type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) =
 
 export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => ({
   rawRoadWays: [],
-  osmRoadHexes: [],
+  osmHexPaths: [],
   osmHighlightTier: null,
   roadEdges: [],
   roadControlOverrides: {},
@@ -106,7 +106,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   selectedRoadHopKey: null,
 
   clearRoads: () => set(s => ({
-    rawRoadWays: [], osmRoadHexes: [], osmHighlightTier: null,
+    rawRoadWays: [], osmHexPaths: [], osmHighlightTier: null,
     roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null,
     roadPaintMode: false, roadPaintEraser: false, roadNodeEditMode: false, roadSnapBindings: {},
     activeTool: (s.activeTool.type === 'road' || s.activeTool.type === 'node-edit') ? { type: 'none' } as ActiveTool : s.activeTool,
@@ -115,7 +115,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setOsmHighlightTier: (tier) => set({ osmHighlightTier: tier }),
   applyOsmTier: (tier) => {
     get().pushUndoSnapshot()
-    const { osmRoadHexes, roadEdges } = get()
+    const { osmHexPaths, roadEdges } = get()
     const existingPairs = new Set<string>()
     for (const e of roadEdges) {
       const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
@@ -123,16 +123,18 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
     }
     const edgeSet = new Set<string>()
     const newEdges: RoadEdge[] = []
-    for (const rh of osmRoadHexes) {
-      if ((HIGHWAY_TO_TIER[rh.highway] ?? 2) !== tier) continue
-      for (const conn of rh.connections) {
-        const a = `${rh.q},${rh.r}`, b = `${conn.q},${conn.r}`
+    for (const path of osmHexPaths) {
+      if ((HIGHWAY_TO_TIER[path.highway] ?? 2) !== tier) continue
+      for (let i = 0; i < path.hexes.length - 1; i++) {
+        const [q1, r1] = path.hexes[i]
+        const [q2, r2] = path.hexes[i + 1]
+        const a = `${q1},${r1}`, b = `${q2},${r2}`
         const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
         if (existingPairs.has(pairKey)) continue
-        const key = roadEdgeCanonicalKey(rh.q, rh.r, conn.q, conn.r, tier)
+        const key = roadEdgeCanonicalKey(q1, r1, q2, r2, tier)
         if (!edgeSet.has(key)) {
           edgeSet.add(key)
-          newEdges.push({ q1: rh.q, r1: rh.r, q2: conn.q, r2: conn.r, tier })
+          newEdges.push({ q1, r1, q2, r2, tier })
         }
       }
     }
@@ -169,7 +171,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
       if (!resp.ok) throw new Error(await resp.text())
       const data = await resp.json()
 
-      set({ rawRoadWays: data.raw_ways, osmRoadHexes: data.road_hexes, roadChainOverrides: {}, roadSnapBindings: {}, roadsStatus: 'done' })
+      set({ rawRoadWays: data.raw_ways, osmHexPaths: data.hex_paths, roadChainOverrides: {}, roadSnapBindings: {}, roadsStatus: 'done' })
     } catch (e) {
       set({ roadsStatus: 'error', roadsError: String(e) })
     }

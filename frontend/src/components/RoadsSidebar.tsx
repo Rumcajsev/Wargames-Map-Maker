@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react'
 import { useMapStore } from '../store/mapStore'
 import { RoadsSettingsFlyout } from './RoadsSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
-
-const CogIcon = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.34.07-.68.07-1.08s-.03-.74-.07-1.08l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.34-.07.69-.07 1.08s.03.74.07 1.08L2.7 13.07c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65z" />
-  </svg>
-)
+import { ToolButton } from './ToolButton'
 
 const ROAD_TIERS = [
   { tier: 0 as const, label: 'Motorway', color: '#b07820' },
@@ -152,7 +147,7 @@ export function RoadsSidebar() {
     fetchRoads, fetchRails,
     clearRoads, clearRails,
     showRawOsmRoads, setShowRawOsmRoads,
-    osmRoadHexes, osmHighlightTier, setOsmHighlightTier, applyOsmTier,
+    osmHexPaths, osmHighlightTier, setOsmHighlightTier, applyOsmTier,
     showRawOsmRails, setShowRawOsmRails,
     roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
@@ -163,7 +158,6 @@ export function RoadsSidebar() {
 
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
-  const [hoveredRow, setHoveredRow] = useState<FlyoutKey | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -220,43 +214,9 @@ export function RoadsSidebar() {
     }
   }
 
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 7,
-    padding: '5px 8px',
-    background: active ? '#1a2a1a' : 'none',
-    border: `1px solid ${active ? '#4a7a5a' : '#1e1f2e'}`,
-    borderRadius: 3,
-    cursor: 'pointer',
-    fontFamily: 'ui-monospace, monospace',
-    fontSize: 11,
-    color: active ? '#d0ecd8' : '#6a6a8a',
-    textAlign: 'left',
-    width: '100%',
-  })
-
   const eraserActive = roadPaintMode && roadPaintEraser
   const railEraserActive = railPaintMode && railPaintEraser
   const railBrushActive = railPaintMode && !railPaintEraser
-
-  const cogBtn = (key: FlyoutKey, title: string) => (
-    <button
-      data-roads-flyout=""
-      onClick={e => { e.stopPropagation(); handleCog(key, e.currentTarget.getBoundingClientRect().top) }}
-      title={title}
-      style={{
-        position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
-        background: 'none', border: 'none', color: openFlyout === key ? '#c0c0e0' : '#5a5a8a',
-        cursor: 'pointer', padding: '2px 3px', display: 'flex', alignItems: 'center',
-        borderRadius: 2, lineHeight: 1,
-      }}
-      onMouseEnter={e => (e.currentTarget.style.color = '#c0c0e0')}
-      onMouseLeave={e => (e.currentTarget.style.color = openFlyout === key ? '#c0c0e0' : '#5a5a8a')}
-    >
-      <CogIcon />
-    </button>
-  )
 
   return (
     <>
@@ -282,30 +242,30 @@ export function RoadsSidebar() {
         <div style={sectionStyle}>
           <div style={labelStyle}>Roads</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {ROAD_TIERS.map(({ tier, label, color }) => {
-              const active = roadPaintMode && roadPaintBrush === tier && !roadPaintEraser
-              const key: FlyoutKey = `road-${tier}`
-              return (
-                <div
-                  key={tier}
-                  style={{ position: 'relative' }}
-                  onMouseEnter={() => setHoveredRow(key)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                >
-                  <button onClick={() => selectRoadBrush(tier)} style={btnStyle(active)}>
-                    <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: color }} />
-                    <span style={{ flex: 1 }}>{label}</span>
-                    <span style={{ fontSize: 9, color: active ? '#6a9e7a' : '#3a3a5a', border: `1px solid ${active ? '#3a6a4a' : '#2a2a4a'}`, borderRadius: 2, padding: '1px 3px', lineHeight: 1.4 }}>{tier + 1}</span>
-                  </button>
-                  {(hoveredRow === key || openFlyout === key) && cogBtn(key, `${label} settings`)}
-                </div>
-              )
-            })}
-            <button onClick={selectRoadEraser} style={btnStyle(eraserActive)}>
-              <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: eraserActive ? '#9e5a5a' : '#3a3a5a', border: '1px solid #5a3a3a' }} />
-              <span style={{ flex: 1 }}>Eraser</span>
-              <span style={{ fontSize: 9, color: eraserActive ? '#9e6a6a' : '#3a3a5a', border: `1px solid ${eraserActive ? '#6a3a3a' : '#2a2a4a'}`, borderRadius: 2, padding: '1px 3px', lineHeight: 1.4 }}>E</span>
-            </button>
+            {ROAD_TIERS.map(({ tier, label, color }) => (
+              <ToolButton
+                key={tier}
+                label={label}
+                active={roadPaintMode && roadPaintBrush === tier && !roadPaintEraser}
+                color={color}
+                shortcut={String(tier + 1)}
+                onSelect={() => selectRoadBrush(tier)}
+                onSettings={(y) => handleCog(`road-${tier}`, y)}
+                settingsOpen={openFlyout === `road-${tier}`}
+                cogDataAttrib="data-roads-flyout"
+              />
+            ))}
+            <ToolButton
+              label="Eraser"
+              active={eraserActive}
+              color={eraserActive ? '#9e5a5a' : '#3a3a5a'}
+              swatchBorder="1px solid #5a3a3a"
+              shortcut="E"
+              onSelect={selectRoadEraser}
+              accentBg="#2a1a1a"
+              accentBorder="#7a4a4a"
+              accentText="#e0b0b0"
+            />
           </div>
         </div>
 
@@ -313,49 +273,51 @@ export function RoadsSidebar() {
         <div style={sectionStyle}>
           <div style={labelStyle}>Rails</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div
-              style={{ position: 'relative' }}
-              onMouseEnter={() => setHoveredRow('rail')}
-              onMouseLeave={() => setHoveredRow(null)}
-            >
-              <button onClick={selectRailBrush} style={btnStyle(railBrushActive)}>
-                <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: railBrushActive ? '#6a8aaa' : '#2a3a4a', border: '1px solid #3a5a7a' }} />
-                <span style={{ flex: 1 }}>Rail</span>
-              </button>
-              {(hoveredRow === 'rail' || openFlyout === 'rail') && cogBtn('rail', 'Rail settings')}
-            </div>
-            <button onClick={selectRailEraser} style={btnStyle(railEraserActive)}>
-              <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: railEraserActive ? '#9e5a5a' : '#3a3a5a', border: '1px solid #5a3a3a' }} />
-              <span style={{ flex: 1 }}>Eraser</span>
-            </button>
+            <ToolButton
+              label="Rail"
+              active={railBrushActive}
+              color={railBrushActive ? '#6a8aaa' : '#2a3a4a'}
+              swatchBorder="1px solid #3a5a7a"
+              onSelect={selectRailBrush}
+              onSettings={(y) => handleCog('rail', y)}
+              settingsOpen={openFlyout === 'rail'}
+              cogDataAttrib="data-roads-flyout"
+            />
+            <ToolButton
+              label="Eraser"
+              active={railEraserActive}
+              color={railEraserActive ? '#9e5a5a' : '#3a3a5a'}
+              swatchBorder="1px solid #5a3a3a"
+              onSelect={selectRailEraser}
+              accentBg="#2a1a1a"
+              accentBorder="#7a4a4a"
+              accentText="#e0b0b0"
+            />
           </div>
         </div>
 
         {/* ── Node edit + bendiness ── */}
         <div style={sectionStyle}>
           <div style={labelStyle}>Geometry</div>
-          <button
-            onClick={() => setActiveTool(roadNodeEditMode ? { type: 'none' } : { type: 'node-edit' })}
-            style={{ ...btnStyle(roadNodeEditMode), width: '100%', marginBottom: 4 }}
-          >
-            <span style={{
-              width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-              background: roadNodeEditMode ? '#d0ecd8' : '#3a3a5a',
-              border: `1px solid ${roadNodeEditMode ? '#5a9e6f' : '#4a4a6a'}`,
-            }} />
-            <span style={{ flex: 1 }}>Edit Nodes</span>
-          </button>
-          <button
-            onClick={() => setActiveTool(roadSelectMode ? { type: 'none' } : { type: 'road-select' })}
-            style={{ ...btnStyle(roadSelectMode), marginTop: 4, marginBottom: 10 }}
-          >
-            <span style={{
-              width: 9, height: 9, borderRadius: 2, flexShrink: 0,
-              background: roadSelectMode ? '#d0c8f0' : '#3a3a5a',
-              border: `1px solid ${roadSelectMode ? '#7a6ab0' : '#4a4a6a'}`,
-            }} />
-            <span style={{ flex: 1 }}>Select segment</span>
-          </button>
+          <ToolButton
+            label="Edit Nodes"
+            active={roadNodeEditMode}
+            color={roadNodeEditMode ? '#d0ecd8' : '#3a3a5a'}
+            swatchBorder={`1px solid ${roadNodeEditMode ? '#5a9e6f' : '#4a4a6a'}`}
+            onSelect={() => setActiveTool(roadNodeEditMode ? { type: 'none' } : { type: 'node-edit' })}
+          />
+          <div style={{ marginBottom: 10, marginTop: 4 }}>
+            <ToolButton
+              label="Select segment"
+              active={roadSelectMode}
+              color={roadSelectMode ? '#d0c8f0' : '#3a3a5a'}
+              swatchBorder={`1px solid ${roadSelectMode ? '#7a6ab0' : '#4a4a6a'}`}
+              onSelect={() => setActiveTool(roadSelectMode ? { type: 'none' } : { type: 'road-select' })}
+              accentBg="#1a1a2a"
+              accentBorder="#7a6ab0"
+              accentText="#d0c8f0"
+            />
+          </div>
           {roadSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Click a road to select. Cmd+click to pick a hop. Right-click to exit.</div>}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
             <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
@@ -450,7 +412,7 @@ export function RoadsSidebar() {
               {roadsStatus === 'error' && roadsError && (
                 <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{roadsError}</div>
               )}
-              {roadsStatus === 'done' && osmRoadHexes.length > 0 && (
+              {roadsStatus === 'done' && osmHexPaths.length > 0 && (
                 <div style={{ marginTop: 6 }}>
                   <div style={{ fontSize: 10, color: '#6a6a8a', marginBottom: 4 }}>Apply OSM to map</div>
                   <div style={{ display: 'flex', gap: 4 }}>
