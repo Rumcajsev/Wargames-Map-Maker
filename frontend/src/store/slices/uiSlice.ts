@@ -407,6 +407,11 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     const tiers = s.roadsFetchTiers as [boolean, boolean, boolean] | undefined
     if (tiers) tiers[2] = true
   }
+  if (fromVersion < 21) {
+    delete s.railsDisplayMode
+    const t = s.osmSpotlightTiers as boolean[] | undefined
+    if (t && t.length === 3) (s.osmSpotlightTiers as boolean[]).push(true)
+  }
   return s
 }
 

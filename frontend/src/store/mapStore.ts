@@ -363,6 +363,11 @@ export interface RawRailWay {
   coords: [number, number][]
 }
 
+export interface HexRailPath {
+  railway: string
+  hexes: [number, number][]
+}
+
 export interface RailHex {
   q: number
   r: number
@@ -475,7 +480,6 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     roadsVisibleTiers: s.roadsVisibleTiers,
     roadsStatus: s.roadsStatus,
     railEdges: s.railEdges,
-    railsDisplayMode: s.railsDisplayMode,
     railsFetchTypes: s.railsFetchTypes,
     railsStatus: s.railsStatus,
     riverEdges: s.riverEdges,
@@ -577,7 +581,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 20,
+  version: 21,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

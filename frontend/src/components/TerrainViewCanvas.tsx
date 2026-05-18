@@ -117,7 +117,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     terrainPaintMode, terrainPaintBrush, overrideHexTerrain, addHexTerrainLayer, removeHexTerrainLayer, resetHexOverride,
     terrainLayersEnabled,
     roadEdges, railEdges, rawRoadWays, rawRailWays, roadTierStyles, railStyle,
-    showRawOsmRoads, showRawOsmRails, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
+    showRawOsmRoads, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
+    osmRailHexPaths, osmRailHighlight,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
     addRoadEdge, removeRoadHexEdges, removeRoadEdgeAllTiers, addRailEdge, removeRailHexEdges,
@@ -188,11 +189,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const rawRoadWaysRef = useRef(rawRoadWays)
   const rawRailWaysRef = useRef(rawRailWays)
   const showRawOsmRoadsRef = useRef(showRawOsmRoads)
-  const showRawOsmRailsRef = useRef(showRawOsmRails)
   const osmHighlightTierRef = useRef(osmHighlightTier)
   const osmSpotlightModeRef = useRef(osmSpotlightMode)
   const osmSpotlightRadiusRef = useRef(osmSpotlightRadius)
   const osmSpotlightTiersRef = useRef(osmSpotlightTiers)
+  const osmRailHexPathsRef = useRef(osmRailHexPaths)
+  const osmRailHighlightRef = useRef(osmRailHighlight)
   const spotlightCursorRef = useRef<{ lx: number; ly: number } | null>(null)
   const spotlightRafRef = useRef<number | null>(null)
   const roadTierStylesRef = useRef(roadTierStyles)
@@ -365,11 +367,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   rawRoadWaysRef.current = rawRoadWays
   rawRailWaysRef.current = rawRailWays
   showRawOsmRoadsRef.current = showRawOsmRoads
-  showRawOsmRailsRef.current = showRawOsmRails
   osmHighlightTierRef.current = osmHighlightTier
   osmSpotlightModeRef.current = osmSpotlightMode
   osmSpotlightRadiusRef.current = osmSpotlightRadius
   osmSpotlightTiersRef.current = osmSpotlightTiers
+  osmRailHexPathsRef.current = osmRailHexPaths
+  osmRailHighlightRef.current = osmRailHighlight
   roadTierStylesRef.current = roadTierStyles
   railStyleRef.current = railStyle
   roadPaintModeRef.current = roadPaintMode
@@ -1471,7 +1474,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
 
       // Debug: raw OSM way overlay (screen-only, never exported)
-      if (!isExport && (showRawOsmRoadsRef.current || showRawOsmRailsRef.current)) {
+      if (!isExport && showRawOsmRoadsRef.current) {
         ctx.save()
         ctx.beginPath()
         ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
@@ -1490,21 +1493,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             ctx.beginPath()
             ctx.strokeStyle = tierColor[tier]
             ctx.lineWidth = tierWidth[tier]
-            const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
-            ctx.moveTo(x0, y0)
-            for (let i = 1; i < way.coords.length; i++) {
-              const [x, y] = project(way.coords[i][0], way.coords[i][1])
-              ctx.lineTo(x, y)
-            }
-            ctx.stroke()
-          }
-        }
-        if (showRawOsmRailsRef.current) {
-          ctx.lineWidth = 1
-          for (const way of rawRailWaysRef.current) {
-            if (way.coords.length < 2) continue
-            ctx.beginPath()
-            ctx.strokeStyle = 'rgba(0, 120, 255, 0.7)'
             const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
             ctx.moveTo(x0, y0)
             for (let i = 1; i < way.coords.length; i++) {
@@ -1756,8 +1744,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const ht = osmHighlightTierRef.current
     const spotlight = osmSpotlightModeRef.current
     const cursor = spotlightCursorRef.current
+    const railHighlight = osmRailHighlightRef.current
 
-    if (!spotlight && ht === null) return
+    if (!spotlight && ht === null && !railHighlight) return
     if (spotlight && !cursor) return
 
     const zoom = zoomRef.current
@@ -1804,25 +1793,50 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    const railColors = ['rgba(0,220,220,0.25)', 'rgba(0,220,220,0.95)']
+
+    const drawRailRawWays = () => {
+      const ways = rawRailWaysRef.current
+      if (ways.length === 0) return
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = railColors[pass]
+        ctx.lineWidth = pass === 0 ? 5 : 1.5
+        for (const way of ways) {
+          if (way.coords.length < 2) continue
+          ctx.beginPath()
+          const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
+          ctx.moveTo(x0, y0)
+          for (let i = 1; i < way.coords.length; i++) {
+            const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
+            ctx.lineTo(xi, yi)
+          }
+          ctx.stroke()
+        }
+      }
+    }
+
     if (spotlight && cursor) {
       const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
       const R = meta.outer_radius_m * scalePxPerM
       const spotR = osmSpotlightRadiusRef.current * R * 2.2
       const activeTiers = osmSpotlightTiersRef.current
-        .map((on, i) => on ? i : -1).filter(i => i >= 0) as number[]
+        .slice(0, 3).map((on, i) => on ? i : -1).filter(i => i >= 0) as number[]
+      const showRails = osmSpotlightTiersRef.current[3]
 
       ctx.save()
       ctx.beginPath()
       ctx.arc(cursor.lx, cursor.ly, spotR, 0, Math.PI * 2)
       ctx.clip()
       drawWays(activeTiers)
+      if (showRails) drawRailRawWays()
       ctx.restore()
-    } else if (ht !== null) {
+    } else if (ht !== null || railHighlight) {
       ctx.save()
       ctx.beginPath()
       ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
       ctx.clip()
-      drawWays([ht])
+      if (ht !== null) drawWays([ht])
+      if (railHighlight) drawRailRawWays()
       ctx.restore()
     }
 
@@ -1902,13 +1916,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { joinedHighlightsDirtyRef.current = true }, [highlights, highlightedHexes, highlightLines])
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
-  useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailChains, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, showRawOsmRoads, showRawOsmRails])
+  useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailChains, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, showRawOsmRoads])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailChains])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailChains, showRawOsmRoads, showRawOsmRails, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
+  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailChains, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
 
-  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, drawOsmHighlight])
+  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, drawOsmHighlight])
 
   // Load terrain textures
   useEffect(() => {

@@ -150,7 +150,7 @@ export function RoadsSidebar() {
     osmHexPaths, osmHighlightTier, setOsmHighlightTier, applyOsmTier,
     osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
     setOsmSpotlightMode, setOsmSpotlightRadius, setOsmSpotlightTiers,
-    showRawOsmRails, setShowRawOsmRails,
+    osmRailHexPaths, osmRailHighlight, setOsmRailHighlight, applyOsmRails,
     roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
     selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
@@ -451,7 +451,7 @@ export function RoadsSidebar() {
                           const colors = ['#ff5050', '#ffb428', '#dcdc3c']
                           return (
                             <button key={i}
-                              onClick={() => { const t = [...osmSpotlightTiers] as [boolean,boolean,boolean]; t[i as 0|1|2] = !t[i as 0|1|2]; setOsmSpotlightTiers(t) }}
+                              onClick={() => { const t = [...osmSpotlightTiers] as [boolean,boolean,boolean,boolean]; t[i as 0|1|2] = !t[i as 0|1|2]; setOsmSpotlightTiers(t) }}
                               style={{
                                 flex: 1, padding: '3px 0', background: on ? 'rgba(0,0,0,0.3)' : 'none',
                                 border: `1px solid ${on ? colors[i] : '#2a3a2a'}`,
@@ -461,6 +461,20 @@ export function RoadsSidebar() {
                             >{label}</button>
                           )
                         })}
+                        {(() => {
+                          const on = osmSpotlightTiers[3]
+                          return (
+                            <button
+                              onClick={() => { const t = [...osmSpotlightTiers] as [boolean,boolean,boolean,boolean]; t[3] = !t[3]; setOsmSpotlightTiers(t) }}
+                              style={{
+                                flex: 1, padding: '3px 0', background: on ? 'rgba(0,0,0,0.3)' : 'none',
+                                border: `1px solid ${on ? '#00dcdc' : '#2a3a2a'}`,
+                                color: on ? '#00dcdc' : '#4a5a4a',
+                                borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                              }}
+                            >Rails</button>
+                          )
+                        })()}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontSize: 10, color: '#6a6a8a', flexShrink: 0 }}>Radius</span>
@@ -510,11 +524,21 @@ export function RoadsSidebar() {
               {railsStatus === 'error' && railsError && (
                 <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{railsError}</div>
               )}
-              {railsStatus === 'done' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, fontSize: 10, color: '#6a6a8a', cursor: 'pointer', userSelect: 'none' }}>
-                  <input type="checkbox" checked={showRawOsmRails} onChange={e => setShowRawOsmRails(e.target.checked)} style={{ cursor: 'pointer' }} />
-                  Show raw OSM ways
-                </label>
+              {railsStatus === 'done' && osmRailHexPaths.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 10, color: '#6a6a8a', marginBottom: 4 }}>Apply OSM to map</div>
+                  <button
+                    onClick={() => applyOsmRails()}
+                    onMouseEnter={() => setOsmRailHighlight(true)}
+                    onMouseLeave={() => setOsmRailHighlight(false)}
+                    style={{
+                      width: '100%', padding: '3px 0', background: 'none',
+                      border: `1px solid ${osmRailHighlight ? '#00aaaa' : '#2a2a3a'}`,
+                      color: osmRailHighlight ? '#00dcdc' : '#5a6a8a',
+                      borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                    }}
+                  >Apply Rails</button>
+                </div>
               )}
             </div>
           </div>
