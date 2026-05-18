@@ -149,11 +149,9 @@ export function RoadsSidebar() {
     roadPathSmoothing, setRoadPathSmoothing,
     roadsFetchTiers, setRoadsFetchTiers,
     roadsStatus, roadsError,
-    settlementRoadsStatus, settlementRoadsError,
     railsStatus, railsError,
-    fetchRoads, fetchSettlementRoads, fetchRails,
+    fetchRoads, fetchRails,
     clearRoads, clearRails,
-    settlements,
     showRawOsmRoads, setShowRawOsmRoads,
     showRawOsmRails, setShowRawOsmRails,
     roadDensityMinChain, setRoadDensityMinChain,
@@ -450,42 +448,6 @@ export function RoadsSidebar() {
                   Show raw OSM ways
                 </label>
               )}
-            </div>
-
-            <div>
-              {(() => {
-                const includedCount = settlements.filter(s => s.included).length
-                const canConnect = includedCount >= 2
-                const isLoading = settlementRoadsStatus === 'loading'
-                return (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        {statusDot(settlementRoadsStatus)}
-                        <span style={{ color: '#6a6a8a' }}>Road Wizard</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => fetchSettlementRoads()}
-                      disabled={isLoading || !canConnect}
-                      title={!canConnect ? 'Include at least 2 settlements first' : 'Connect included settlements via OSM roads'}
-                      style={{
-                        width: '100%', padding: '4px 0',
-                        background: 'none', border: '1px solid #2a3a2a',
-                        color: isLoading || !canConnect ? '#3a5a3a' : '#5a8a5a',
-                        borderRadius: 3, cursor: isLoading || !canConnect ? 'not-allowed' : 'pointer',
-                        fontFamily: 'inherit', fontSize: 11,
-                        opacity: canConnect ? 1 : 0.5,
-                      }}
-                    >
-                      {isLoading ? 'connecting…' : `Connect Settlements${canConnect ? ` (${includedCount})` : ''}`}
-                    </button>
-                    {settlementRoadsStatus === 'error' && settlementRoadsError && (
-                      <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{settlementRoadsError}</div>
-                    )}
-                  </>
-                )
-              })()}
             </div>
 
             <div>

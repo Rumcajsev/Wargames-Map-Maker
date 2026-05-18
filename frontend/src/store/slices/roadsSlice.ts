@@ -165,7 +165,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
       .map((s) => ({ lat: s.lat, lon: s.lon, name: s.name }))
     if (includedSettlements.length < 2) return
 
-    const highway_types = TIER_HIGHWAYS.flat()
+    const highway_types = [...TIER_HIGHWAYS[0], ...TIER_HIGHWAYS[1]]
 
     set({ settlementRoadsStatus: 'loading', settlementRoadsError: null })
 
