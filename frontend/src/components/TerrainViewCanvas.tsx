@@ -12,8 +12,13 @@ import { riverChainCache, buildRiverChains, buildRiverChainsV2 } from '../lib/ri
 const RIVER_V2 = true
 import { drawRivers as _drawRivers } from '../lib/drawRivers'
 import { buildRoadChains, buildRailChains, spineSideCpKey, applyRoadWiggle } from '../lib/roadChains'
+import { buildRoadChainsV2, applyRoadWiggleV2 } from '../lib/roadChainsV2'
 import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
 import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
+import { drawRoadsAndRailsV2 as _drawRoadsAndRailsV2 } from '../lib/drawRoadsRailsV2'
+
+/** Set to true to enable unified-tier road chains (V2). Easily reverted by flipping back. */
+const ROAD_V2 = false
 import { drawSettlements as _drawSettlements } from '../lib/drawSettlements'
 import { drawAllBuildings as _drawAllBuildings, type BuildingCmd } from '../lib/drawBuildings'
 import { drawAllBuildingsV2 as _drawAllBuildingsV2 } from '../lib/drawBuildingsV2'
@@ -580,6 +585,28 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   )
   const smoothedRailChainsRef = useRef(smoothedRailChains)
   smoothedRailChainsRef.current = smoothedRailChains
+
+  const roadBaseDataV2 = useMemo(
+    () => ROAD_V2 ? buildRoadChainsV2(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings) : null,
+    [roadEdges, hexIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
+  )
+  const smoothedRoadDataV2 = useMemo(
+    () => {
+      if (!ROAD_V2 || !roadBaseDataV2) return null
+      const chaikinPasses = (roadWiggleDragging || isRoadPainting) ? 0 : 2
+      const data = applyRoadWiggleV2(roadBaseDataV2, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, chaikinPasses)
+      if (roadDensityMinChain <= 1) return data
+      const chains = data.chains.filter(c => {
+        if (c.id.startsWith('stub|')) return true
+        const hops = c.hopKeys?.length ?? Math.max(1, (c.baseChain?.length ?? c.chain.length) - 1)
+        return hops >= roadDensityMinChain
+      })
+      return { ...data, chains }
+    },
+    [roadBaseDataV2, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, roadDensityMinChain, roadWiggleDragging, isRoadPainting],
+  )
+  const smoothedRoadDataV2Ref = useRef(smoothedRoadDataV2)
+  smoothedRoadDataV2Ref.current = smoothedRoadDataV2
 
   // Memoize paper dims, projected hex coords, and default blob geometry outside draw().
   // These are all stable across zoom/pan (which is handled by canvas transform, not coordinate recalculation),
@@ -1360,7 +1387,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             undefined,
             0,
           )
-        : smoothedRoadDataRef.current
+        : ROAD_V2 && smoothedRoadDataV2Ref.current
+          ? smoothedRoadDataV2Ref.current
+          : smoothedRoadDataRef.current
 
     // Road chains + Rail chains — offscreen cached together
     {
@@ -1623,7 +1652,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.beginPath()
           oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
           oCtx.clip()
-          _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: smoothedRoadDataRef.current.chains, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
+          const activeRoadChainsS = ROAD_V2 && smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
+          _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
           oCtx.restore()
           settlementsLayerRef.current = offscreen
           settlementsDirtyRef.current = false
@@ -1633,7 +1663,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.drawImage(settlementsLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: smoothedRoadDataRef.current.chains, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
+        const activeRoadChainsS = ROAD_V2 && smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
+        _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailChainsRef.current, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
       }
     }
 
@@ -1748,6 +1779,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     if (overlay) {
       overlay.width = frameDims.w * dpr
       overlay.height = frameDims.h * dpr
+      overlay.style.width = `${frameDims.w}px`
+      overlay.style.height = `${frameDims.h}px`
     }
     frameDimsRef.current = frameDims
     draw()
