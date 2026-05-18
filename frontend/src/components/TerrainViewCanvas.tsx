@@ -117,7 +117,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     terrainPaintMode, terrainPaintBrush, overrideHexTerrain, addHexTerrainLayer, removeHexTerrainLayer, resetHexOverride,
     terrainLayersEnabled,
     roadEdges, railEdges, rawRoadWays, rawRailWays, roadTierStyles, railStyle,
-    showRawOsmRoads, showRawOsmRails, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius,
+    showRawOsmRoads, showRawOsmRails, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
     addRoadEdge, removeRoadHexEdges, removeRoadEdgeAllTiers, addRailEdge, removeRailHexEdges,
@@ -192,6 +192,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const osmHighlightTierRef = useRef(osmHighlightTier)
   const osmSpotlightModeRef = useRef(osmSpotlightMode)
   const osmSpotlightRadiusRef = useRef(osmSpotlightRadius)
+  const osmSpotlightTiersRef = useRef(osmSpotlightTiers)
   const spotlightCursorRef = useRef<{ lx: number; ly: number } | null>(null)
   const spotlightRafRef = useRef<number | null>(null)
   const roadTierStylesRef = useRef(roadTierStyles)
@@ -368,6 +369,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   osmHighlightTierRef.current = osmHighlightTier
   osmSpotlightModeRef.current = osmSpotlightMode
   osmSpotlightRadiusRef.current = osmSpotlightRadius
+  osmSpotlightTiersRef.current = osmSpotlightTiers
   roadTierStylesRef.current = roadTierStyles
   railStyleRef.current = railStyle
   roadPaintModeRef.current = roadPaintMode
@@ -1364,35 +1366,65 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // During a CP drag, compute road geometry with the live position directly — no store update,
     // no React re-render cycle, no useMemo. On drop, the store is updated once for the full rebuild.
     const liveRoadData = isDraggingCP
-      ? buildRoadChains(
-          roadEdgesRef.current,
-          hexIdxRef.current as Map<string, { center: [number, number] }>,
-          { ...roadControlOverridesRef.current, ...dragLiveOverrideRef.current },
-          roadWiggleAmpRef.current,
-          roadWiggleFreqRef.current,
-          roadSmoothingRef.current,
-          roadPathSmoothingRef.current,
-          roadChainOverridesRef.current,
-          roadSegmentPropsRef.current,
-          roadHopPropsRef.current,
-          undefined,
-          0,
-        )
-      : isDraggingDense
-        ? buildRoadChains(
+      ? ROAD_V2
+        ? buildRoadChainsV2(
             roadEdgesRef.current,
             hexIdxRef.current as Map<string, { center: [number, number] }>,
-            roadControlOverridesRef.current,
+            { ...roadControlOverridesRef.current, ...dragLiveOverrideRef.current },
             roadWiggleAmpRef.current,
             roadWiggleFreqRef.current,
             roadSmoothingRef.current,
             roadPathSmoothingRef.current,
-            liveChainOverrides,
+            roadChainOverridesRef.current,
             roadSegmentPropsRef.current,
             roadHopPropsRef.current,
             undefined,
             0,
           )
+        : buildRoadChains(
+            roadEdgesRef.current,
+            hexIdxRef.current as Map<string, { center: [number, number] }>,
+            { ...roadControlOverridesRef.current, ...dragLiveOverrideRef.current },
+            roadWiggleAmpRef.current,
+            roadWiggleFreqRef.current,
+            roadSmoothingRef.current,
+            roadPathSmoothingRef.current,
+            roadChainOverridesRef.current,
+            roadSegmentPropsRef.current,
+            roadHopPropsRef.current,
+            undefined,
+            0,
+          )
+      : isDraggingDense
+        ? ROAD_V2
+          ? buildRoadChainsV2(
+              roadEdgesRef.current,
+              hexIdxRef.current as Map<string, { center: [number, number] }>,
+              roadControlOverridesRef.current,
+              roadWiggleAmpRef.current,
+              roadWiggleFreqRef.current,
+              roadSmoothingRef.current,
+              roadPathSmoothingRef.current,
+              liveChainOverrides,
+              roadSegmentPropsRef.current,
+              roadHopPropsRef.current,
+              undefined,
+              0,
+            )
+          : buildRoadChains(
+              roadEdgesRef.current,
+              hexIdxRef.current as Map<string, { center: [number, number] }>,
+              roadControlOverridesRef.current,
+              roadWiggleAmpRef.current,
+              roadWiggleFreqRef.current,
+              roadSmoothingRef.current,
+              roadPathSmoothingRef.current,
+              liveChainOverrides,
+              roadSegmentPropsRef.current,
+              roadHopPropsRef.current,
+              undefined,
+              0,
+            )
         : ROAD_V2 && smoothedRoadDataV2Ref.current
           ? smoothedRoadDataV2Ref.current
           : smoothedRoadDataRef.current
@@ -1776,22 +1808,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
       const R = meta.outer_radius_m * scalePxPerM
       const spotR = osmSpotlightRadiusRef.current * R * 2.2
+      const activeTiers = osmSpotlightTiersRef.current
+        .map((on, i) => on ? i : -1).filter(i => i >= 0) as number[]
 
-      // Vignette: darken everything outside the spotlight circle
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
-      ctx.arc(cursor.lx, cursor.ly, spotR, 0, Math.PI * 2, true) // CCW = hole via non-zero rule
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'
-      ctx.fill()
-      ctx.restore()
-
-      // Clip to circle and draw all tiers
       ctx.save()
       ctx.beginPath()
       ctx.arc(cursor.lx, cursor.ly, spotR, 0, Math.PI * 2)
       ctx.clip()
-      drawWays([0, 1, 2])
+      drawWays(activeTiers)
       ctx.restore()
     } else if (ht !== null) {
       ctx.save()
@@ -1884,7 +1908,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Redraw when data changes
   useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailChains, showRawOsmRoads, showRawOsmRails, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
 
-  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, drawOsmHighlight])
+  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, drawOsmHighlight])
 
   // Load terrain textures
   useEffect(() => {

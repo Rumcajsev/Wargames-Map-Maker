@@ -148,7 +148,8 @@ export function RoadsSidebar() {
     clearRoads, clearRails,
     showRawOsmRoads, setShowRawOsmRoads,
     osmHexPaths, osmHighlightTier, setOsmHighlightTier, applyOsmTier,
-    osmSpotlightMode, osmSpotlightRadius, setOsmSpotlightMode, setOsmSpotlightRadius,
+    osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
+    setOsmSpotlightMode, setOsmSpotlightRadius, setOsmSpotlightTiers,
     showRawOsmRails, setShowRawOsmRails,
     roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
@@ -443,15 +444,33 @@ export function RoadsSidebar() {
                     </label>
                   </div>
                   {osmSpotlightMode && (
-                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 10, color: '#6a6a8a', flexShrink: 0 }}>Radius</span>
-                      <input
-                        type="range" min={1} max={10} step={1}
-                        value={osmSpotlightRadius}
-                        onChange={e => setOsmSpotlightRadius(Number(e.target.value))}
-                        style={{ flex: 1, accentColor: '#c0c080', cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 10, color: '#8a8a6a', width: 12, textAlign: 'right' }}>{osmSpotlightRadius}</span>
+                    <div style={{ marginTop: 5 }}>
+                      <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                        {(['Highways', 'Primary', 'Secondary'] as const).map((label, i) => {
+                          const on = osmSpotlightTiers[i as 0|1|2]
+                          const colors = ['#ff5050', '#ffb428', '#dcdc3c']
+                          return (
+                            <button key={i}
+                              onClick={() => { const t = [...osmSpotlightTiers] as [boolean,boolean,boolean]; t[i as 0|1|2] = !t[i as 0|1|2]; setOsmSpotlightTiers(t) }}
+                              style={{
+                                flex: 1, padding: '3px 0', background: on ? 'rgba(0,0,0,0.3)' : 'none',
+                                border: `1px solid ${on ? colors[i] : '#2a3a2a'}`,
+                                color: on ? colors[i] : '#4a5a4a',
+                                borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                              }}
+                            >{label}</button>
+                          )
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 10, color: '#6a6a8a', flexShrink: 0 }}>Radius</span>
+                        <input type="range" min={1} max={10} step={1}
+                          value={osmSpotlightRadius}
+                          onChange={e => setOsmSpotlightRadius(Number(e.target.value))}
+                          style={{ flex: 1, accentColor: '#c0c080', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: 10, color: '#8a8a6a', width: 12, textAlign: 'right' }}>{osmSpotlightRadius}</span>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -7,6 +7,7 @@ export type RoadsSlice = {
   osmHighlightTier: 0 | 1 | 2 | null
   osmSpotlightMode: boolean
   osmSpotlightRadius: number
+  osmSpotlightTiers: [boolean, boolean, boolean]
   roadEdges: RoadEdge[]
   roadControlOverrides: Record<string, [number, number]>
   roadsDisplayMode: 'raw' | 'per_hex'
@@ -31,6 +32,7 @@ export type RoadsSlice = {
   applyOsmTier: (tier: 0 | 1 | 2) => void
   setOsmSpotlightMode: (v: boolean) => void
   setOsmSpotlightRadius: (v: number) => void
+  setOsmSpotlightTiers: (tiers: [boolean, boolean, boolean]) => void
   setRoadsDisplayMode: (mode: 'raw' | 'per_hex') => void
   setRoadsVisibleTiers: (tiers: [boolean, boolean, boolean]) => void
   clearRoads: () => void
@@ -84,6 +86,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   osmHighlightTier: null,
   osmSpotlightMode: false,
   osmSpotlightRadius: 3,
+  osmSpotlightTiers: [true, true, true] as [boolean, boolean, boolean],
   roadEdges: [],
   roadControlOverrides: {},
   roadsDisplayMode: 'per_hex',
@@ -121,6 +124,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setOsmHighlightTier: (tier) => set({ osmHighlightTier: tier }),
   setOsmSpotlightMode: (v) => set({ osmSpotlightMode: v }),
   setOsmSpotlightRadius: (v) => set({ osmSpotlightRadius: v }),
+  setOsmSpotlightTiers: (tiers) => set({ osmSpotlightTiers: tiers }),
   applyOsmTier: (tier) => {
     get().pushUndoSnapshot()
     const { osmHexPaths, roadEdges } = get()
