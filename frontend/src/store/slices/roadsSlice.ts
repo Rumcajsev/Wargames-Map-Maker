@@ -5,6 +5,8 @@ export type RoadsSlice = {
   rawRoadWays: RawRoadWay[]
   osmHexPaths: HexRoadPath[]
   osmHighlightTier: 0 | 1 | 2 | null
+  osmSpotlightMode: boolean
+  osmSpotlightRadius: number
   roadEdges: RoadEdge[]
   roadControlOverrides: Record<string, [number, number]>
   roadsDisplayMode: 'raw' | 'per_hex'
@@ -27,6 +29,8 @@ export type RoadsSlice = {
   fetchSettlementRoads: () => Promise<void>
   setOsmHighlightTier: (tier: 0 | 1 | 2 | null) => void
   applyOsmTier: (tier: 0 | 1 | 2) => void
+  setOsmSpotlightMode: (v: boolean) => void
+  setOsmSpotlightRadius: (v: number) => void
   setRoadsDisplayMode: (mode: 'raw' | 'per_hex') => void
   setRoadsVisibleTiers: (tiers: [boolean, boolean, boolean]) => void
   clearRoads: () => void
@@ -78,6 +82,8 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   rawRoadWays: [],
   osmHexPaths: [],
   osmHighlightTier: null,
+  osmSpotlightMode: false,
+  osmSpotlightRadius: 3,
   roadEdges: [],
   roadControlOverrides: {},
   roadsDisplayMode: 'per_hex',
@@ -106,13 +112,15 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   selectedRoadHopKey: null,
 
   clearRoads: () => set(s => ({
-    rawRoadWays: [], osmHexPaths: [], osmHighlightTier: null,
+    rawRoadWays: [], osmHexPaths: [], osmHighlightTier: null, osmSpotlightMode: false,
     roadEdges: [], roadsVisibleTiers: [true, true, true], roadsStatus: 'idle', roadsError: null,
     roadPaintMode: false, roadPaintEraser: false, roadNodeEditMode: false, roadSnapBindings: {},
     activeTool: (s.activeTool.type === 'road' || s.activeTool.type === 'node-edit') ? { type: 'none' } as ActiveTool : s.activeTool,
   })),
   clearManualRoads: () => { get().pushUndoSnapshot(); set((s) => ({ roadEdges: s.roadEdges.filter((e) => !e.manual) })) },
   setOsmHighlightTier: (tier) => set({ osmHighlightTier: tier }),
+  setOsmSpotlightMode: (v) => set({ osmSpotlightMode: v }),
+  setOsmSpotlightRadius: (v) => set({ osmSpotlightRadius: v }),
   applyOsmTier: (tier) => {
     get().pushUndoSnapshot()
     const { osmHexPaths, roadEdges } = get()

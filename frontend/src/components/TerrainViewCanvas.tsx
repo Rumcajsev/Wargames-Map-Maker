@@ -18,7 +18,7 @@ import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
 import { drawRoadsAndRailsV2 as _drawRoadsAndRailsV2 } from '../lib/drawRoadsRailsV2'
 
 /** Set to true to enable unified-tier road chains (V2). Easily reverted by flipping back. */
-const ROAD_V2 = false
+const ROAD_V2 = true
 import { drawSettlements as _drawSettlements } from '../lib/drawSettlements'
 import { drawAllBuildings as _drawAllBuildings, type BuildingCmd } from '../lib/drawBuildings'
 import { drawAllBuildingsV2 as _drawAllBuildingsV2 } from '../lib/drawBuildingsV2'
@@ -117,7 +117,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     terrainPaintMode, terrainPaintBrush, overrideHexTerrain, addHexTerrainLayer, removeHexTerrainLayer, resetHexOverride,
     terrainLayersEnabled,
     roadEdges, railEdges, rawRoadWays, rawRailWays, roadTierStyles, railStyle,
-    showRawOsmRoads, showRawOsmRails, osmHighlightTier,
+    showRawOsmRoads, showRawOsmRails, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
     addRoadEdge, removeRoadHexEdges, removeRoadEdgeAllTiers, addRailEdge, removeRailHexEdges,
@@ -190,6 +190,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const showRawOsmRoadsRef = useRef(showRawOsmRoads)
   const showRawOsmRailsRef = useRef(showRawOsmRails)
   const osmHighlightTierRef = useRef(osmHighlightTier)
+  const osmSpotlightModeRef = useRef(osmSpotlightMode)
+  const osmSpotlightRadiusRef = useRef(osmSpotlightRadius)
+  const spotlightCursorRef = useRef<{ lx: number; ly: number } | null>(null)
+  const spotlightRafRef = useRef<number | null>(null)
   const roadTierStylesRef = useRef(roadTierStyles)
   const railStyleRef = useRef(railStyle)
   const roadPaintModeRef = useRef(roadPaintMode)
@@ -362,6 +366,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   showRawOsmRoadsRef.current = showRawOsmRoads
   showRawOsmRailsRef.current = showRawOsmRails
   osmHighlightTierRef.current = osmHighlightTier
+  osmSpotlightModeRef.current = osmSpotlightMode
+  osmSpotlightRadiusRef.current = osmSpotlightRadius
   roadTierStylesRef.current = roadTierStyles
   railStyleRef.current = railStyle
   roadPaintModeRef.current = roadPaintMode
@@ -1716,7 +1722,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
 
     const ht = osmHighlightTierRef.current
-    if (ht === null) return
+    const spotlight = osmSpotlightModeRef.current
+    const cursor = spotlightCursorRef.current
+
+    if (!spotlight && ht === null) return
+    if (spotlight && !cursor) return
 
     const zoom = zoomRef.current
     const pan = panRef.current
@@ -1734,33 +1744,64 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     ctx.translate(frameCssW / 2 + pan.x, frameCssH / 2 + pan.y)
     ctx.scale(zoom, zoom)
     ctx.translate(-frameCssW / 2, -frameCssH / 2)
-    ctx.beginPath()
-    ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
-    ctx.clip()
 
     const hwTier: Record<string, number> = { motorway: 0, trunk: 0, primary: 1, secondary: 1, tertiary: 2 }
-    const colors = [
-      ['rgba(255,80,80,0.25)', 'rgba(255,80,80,0.95)'],
+    const tierColors = [
+      ['rgba(255,80,80,0.25)', 'rgba(255,100,100,0.95)'],
       ['rgba(255,180,40,0.25)', 'rgba(255,180,40,0.95)'],
       ['rgba(220,220,60,0.25)', 'rgba(220,220,60,0.95)'],
     ]
-    const ways = rawRoadWaysRef.current.filter(w => w.coords.length >= 2 && (hwTier[w.highway] ?? 2) === ht)
 
-    // Glow pass (thick, transparent) then sharp pass — avoids expensive shadowBlur
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.strokeStyle = colors[ht][pass]
-      ctx.lineWidth = pass === 0 ? 7 : 1.5
-      for (const way of ways) {
-        ctx.beginPath()
-        const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
-        ctx.moveTo(x0, y0)
-        for (let i = 1; i < way.coords.length; i++) {
-          const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
-          ctx.lineTo(xi, yi)
+    const drawWays = (tiers: number[]) => {
+      for (const tier of tiers) {
+        const ways = rawRoadWaysRef.current.filter(w => w.coords.length >= 2 && (hwTier[w.highway] ?? 2) === tier)
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.strokeStyle = tierColors[tier][pass]
+          ctx.lineWidth = pass === 0 ? 6 : 1.5
+          for (const way of ways) {
+            ctx.beginPath()
+            const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
+            ctx.moveTo(x0, y0)
+            for (let i = 1; i < way.coords.length; i++) {
+              const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
+              ctx.lineTo(xi, yi)
+            }
+            ctx.stroke()
+          }
         }
-        ctx.stroke()
       }
     }
+
+    if (spotlight && cursor) {
+      const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
+      const R = meta.outer_radius_m * scalePxPerM
+      const spotR = osmSpotlightRadiusRef.current * R * 2.2
+
+      // Vignette: darken everything outside the spotlight circle
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+      ctx.arc(cursor.lx, cursor.ly, spotR, 0, Math.PI * 2, true) // CCW = hole via non-zero rule
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'
+      ctx.fill()
+      ctx.restore()
+
+      // Clip to circle and draw all tiers
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(cursor.lx, cursor.ly, spotR, 0, Math.PI * 2)
+      ctx.clip()
+      drawWays([0, 1, 2])
+      ctx.restore()
+    } else if (ht !== null) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+      ctx.clip()
+      drawWays([ht])
+      ctx.restore()
+    }
+
     ctx.restore()
   }, [])
 
@@ -1843,7 +1884,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Redraw when data changes
   useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailChains, showRawOsmRoads, showRawOsmRails, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, draw])
 
-  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, drawOsmHighlight])
+  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, drawOsmHighlight])
 
   // Load terrain textures
   useEffect(() => {
@@ -3081,6 +3122,18 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [isEdgePaintActive])
 
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (osmSpotlightModeRef.current) {
+      const logical = clientToLogical(e.clientX, e.clientY)
+      if (logical) {
+        spotlightCursorRef.current = { lx: logical.lx, ly: logical.ly }
+        if (spotlightRafRef.current === null) {
+          spotlightRafRef.current = requestAnimationFrame(() => {
+            spotlightRafRef.current = null
+            drawOsmHighlightRef.current?.()
+          })
+        }
+      }
+    }
     if (!isEdgePaintActive()) {
       if (hoveredEdgeRef.current !== null) {
         hoveredEdgeRef.current = null
@@ -3122,6 +3175,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [isEdgePaintActive, paintEdge, draw, clientToLogical])
 
   const onMouseLeave = useCallback(() => {
+    if (osmSpotlightModeRef.current) {
+      spotlightCursorRef.current = null
+      drawOsmHighlightRef.current?.()
+    }
     if (hoveredEdgeRef.current !== null) {
       hoveredEdgeRef.current = null
       draw()
