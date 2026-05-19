@@ -14,7 +14,7 @@ import { drawRivers as _drawRivers } from '../lib/drawRivers'
 import { buildRoadChains, buildRailChains, spineSideCpKey, applyRoadWiggle, applyRailWiggle } from '../lib/roadChains'
 import { buildRoadChainsV2, applyRoadWiggleV2 } from '../lib/roadChainsV2'
 import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
-import { drawIcons as _drawIcons, drawIconShape } from '../lib/drawIcons'
+import { drawIcons as _drawIcons } from '../lib/drawIcons'
 import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
 import { drawRoadsAndRailsV2 as _drawRoadsAndRailsV2 } from '../lib/drawRoadsRailsV2'
 
@@ -3504,6 +3504,40 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
       }
     }
+    if (iconPlaceModeRef.current && activePanelRef.current === 'highlights') {
+      const logical = clientToLogical(e.clientX, e.clientY)
+      if (logical) {
+        const { lx, ly, cssW, cssH } = logical
+        const meta = metaRef.current
+        if (meta) {
+          const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+          const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
+          const R2 = meta.outer_radius_m * scalePxPerM
+          const snapRadius = R2 * 0.1
+          let best: [number, number] | null = null
+          let bestDist = snapRadius
+          for (const hex of hexesRef.current) {
+            if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
+            const [cx, cy] = projectToCanvas(hex.center[0], hex.center[1], meta, pw, ph, px, py)
+            if (Math.max(Math.abs(lx - cx), Math.abs(ly - cy)) > R2 * 1.5) continue
+            const d0 = Math.hypot(lx - cx, ly - cy)
+            if (d0 < bestDist) { bestDist = d0; best = [hex.center[0], hex.center[1]] }
+            for (const [vlon, vlat] of hex.vertices) {
+              const [vx, vy] = projectToCanvas(vlon, vlat, meta, pw, ph, px, py)
+              const mx2 = (cx + vx) / 2, my2 = (cy + vy) / 2
+              const d = Math.hypot(lx - mx2, ly - my2)
+              if (d < bestDist) {
+                bestDist = d
+                best = unprojectFromCanvas(mx2, my2, meta, pw, ph, px, py) as [number, number]
+              }
+            }
+          }
+          iconSnapRef.current = best ?? unprojectFromCanvas(lx, ly, meta, pw, ph, px, py) as [number, number]
+          draw()
+        }
+      }
+      return
+    }
     if (!isEdgePaintActive()) {
       if (hoveredEdgeRef.current !== null) {
         hoveredEdgeRef.current = null
@@ -3740,6 +3774,62 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const { hexQ, hexR, edgeI } = hoveredEdgeRef.current
       paintEdge(hexQ, hexR, edgeI)
       return
+    }
+
+    // Icon placement / erase
+    if (activePanelRef.current === 'highlights') {
+      const tool = activeToolRef.current
+      if (tool.type === 'icon-place') {
+        const overlayId = activeIconOverlayIdRef.current
+        if (overlayId) {
+          const pos = iconSnapRef.current
+          if (pos) {
+            const icons = placedIconsRef.current[overlayId] ?? []
+            const removeRadius = hexRadiusRef.current * 0.5
+            for (let i = 0; i < icons.length; i++) {
+              const [ilon, ilat] = icons[i]
+              const [ix, iy] = projectToCanvas(ilon, ilat, meta, pw, ph, px, py)
+              if (Math.hypot(lx - ix, ly - iy) < removeRadius) {
+                removeIconAtRef.current(overlayId, i)
+                return
+              }
+            }
+            placeIconRef.current(overlayId, pos[0], pos[1])
+            return
+          }
+        }
+      }
+      if (tool.type === 'icon-erase') {
+        const overlayId = activeIconOverlayIdRef.current
+        if (overlayId) {
+          const icons = placedIconsRef.current[overlayId] ?? []
+          const removeRadius = hexRadiusRef.current * 0.5
+          for (let i = 0; i < icons.length; i++) {
+            const [ilon, ilat] = icons[i]
+            const [ix, iy] = projectToCanvas(ilon, ilat, meta, pw, ph, px, py)
+            if (Math.hypot(lx - ix, ly - iy) < removeRadius) {
+              removeIconAtRef.current(overlayId, i)
+              return
+            }
+          }
+        }
+        return
+      }
+      if (tool.type === 'icon-erase-any') {
+        for (const overlay of iconOverlaysRef.current) {
+          const icons = placedIconsRef.current[overlay.id] ?? []
+          const removeRadius = hexRadiusRef.current * 0.5
+          for (let i = 0; i < icons.length; i++) {
+            const [ilon, ilat] = icons[i]
+            const [ix, iy] = projectToCanvas(ilon, ilat, meta, pw, ph, px, py)
+            if (Math.hypot(lx - ix, ly - iy) < removeRadius) {
+              removeIconAtRef.current(overlay.id, i)
+              return
+            }
+          }
+        }
+        return
+      }
     }
 
     for (const hex of hexesRef.current) {

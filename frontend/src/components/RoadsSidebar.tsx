@@ -146,6 +146,9 @@ export function RoadsSidebar() {
     railsStatus, railsError,
     fetchRoads, fetchRails,
     clearRoads, clearRails,
+    motorwayHexes, motorwayHexesStatus, motorwayHexesError,
+    motorwayHexesFast, setMotorwayHexesFast,
+    fetchMotorwayHexes, applyMotorwayHexes, clearMotorwayHexes,
     showRawOsmRoads, setShowRawOsmRoads,
     osmHexPaths, osmHighlightTier, setOsmHighlightTier, applyOsmTier,
     osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
@@ -603,6 +606,77 @@ export function RoadsSidebar() {
                       borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
                     }}
                   >Apply Rails</button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {statusDot(motorwayHexesStatus)}
+                  <span style={{ color: '#6a6a8a' }}>Motorway Hexes</span>
+                </div>
+                {motorwayHexesStatus === 'done' && (
+                  <button
+                    onClick={() => clearMotorwayHexes()}
+                    style={{ background: 'none', border: 'none', color: '#5a3a3a', cursor: 'pointer', fontSize: 10, fontFamily: 'inherit', padding: 0 }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#5a3a3a')}
+                  >clear</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                {(['Fast', 'Full'] as const).map(label => {
+                  const isFast = label === 'Fast'
+                  const active = motorwayHexesFast === isFast
+                  return (
+                    <button key={label}
+                      onClick={() => setMotorwayHexesFast(isFast)}
+                      style={{
+                        flex: 1, padding: '3px 0', fontFamily: 'inherit', fontSize: 10,
+                        background: active ? 'rgba(0,0,0,0.3)' : 'none',
+                        border: `1px solid ${active ? '#8a5a3a' : '#3a2a2a'}`,
+                        color: active ? '#c08060' : '#5a4a4a',
+                        borderRadius: 3, cursor: 'pointer',
+                      }}
+                    >{label}</button>
+                  )
+                })}
+              </div>
+              <button
+                onClick={() => fetchMotorwayHexes()}
+                disabled={motorwayHexesStatus === 'loading'}
+                style={{
+                  width: '100%', padding: '4px 0',
+                  background: 'none', border: '1px solid #3a2a2a',
+                  color: motorwayHexesStatus === 'loading' ? '#5a3a3a' : '#8a5a5a',
+                  borderRadius: 3, cursor: motorwayHexesStatus === 'loading' ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', fontSize: 11,
+                }}
+              >
+                {motorwayHexesStatus === 'loading' ? 'fetching…' : 'Fetch Motorway Hexes'}
+              </button>
+              {motorwayHexesStatus === 'error' && motorwayHexesError && (
+                <div style={{ color: '#9e5a5a', fontSize: 10, marginTop: 3 }}>{motorwayHexesError}</div>
+              )}
+              {motorwayHexesStatus === 'done' && (
+                <div style={{ marginTop: 5 }}>
+                  <div style={{ fontSize: 10, color: '#6a6a8a', marginBottom: 4 }}>
+                    {motorwayHexes.length} hex{motorwayHexes.length !== 1 ? 'es' : ''} found
+                  </div>
+                  <button
+                    onClick={() => applyMotorwayHexes()}
+                    disabled={motorwayHexes.length === 0}
+                    style={{
+                      width: '100%', padding: '3px 0',
+                      background: 'none', border: '1px solid #3a2a1a',
+                      color: motorwayHexes.length === 0 ? '#4a3a2a' : '#a07040',
+                      borderRadius: 3, cursor: motorwayHexes.length === 0 ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit', fontSize: 10,
+                    }}
+                    onMouseEnter={e => { if (motorwayHexes.length > 0) { e.currentTarget.style.borderColor = '#8a6030'; e.currentTarget.style.color = '#d0a060' } }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#3a2a1a'; e.currentTarget.style.color = motorwayHexes.length === 0 ? '#4a3a2a' : '#a07040' }}
+                  >Apply as Highways</button>
                 </div>
               )}
             </div>

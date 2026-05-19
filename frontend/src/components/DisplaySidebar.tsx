@@ -106,7 +106,7 @@ export function DisplaySidebar() {
       <div style={sectionStyle}>
         <div style={labelStyle}>Hex Borders</div>
         <div style={{ display: 'flex', gap: 4 }}>
-          {(['full', 'dots', 'none'] as const).map(mode => (
+          {(['full', 'stubs', 'none'] as const).map(mode => (
             <button
               key={mode}
               onClick={() => setHexBorderMode(mode)}

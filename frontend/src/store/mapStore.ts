@@ -9,6 +9,7 @@ import { type RoadsSlice, createRoadsSlice } from './slices/roadsSlice'
 import { type RailsSlice, createRailsSlice } from './slices/railsSlice'
 import { type RiversSlice, createRiversSlice } from './slices/riversSlice'
 import { type HighlightsSlice, createHighlightsSlice } from './slices/highlightsSlice'
+import { type IconsSlice, createIconsSlice } from './slices/iconsSlice'
 import { type UndoSlice, createUndoSlice } from './slices/undoSlice'
 import { type UiSlice, createUiSlice, migratePersisted, rehydrateState } from './slices/uiSlice'
 
@@ -62,6 +63,9 @@ export type ActiveTool =
   | { type: 'highlight-paint'; id: string }
   | { type: 'highlight-erase'; id: string }
   | { type: 'highlight-erase-any' }
+  | { type: 'icon-place'; id: string }
+  | { type: 'icon-erase'; id: string }
+  | { type: 'icon-erase-any' }
   | { type: 'urban'; mode: 'paint' | 'erase' }
   | { type: 'road-select' }
   | { type: 'rail-node-edit' }
@@ -301,6 +305,16 @@ export interface Settlement {
   tier?: SettlementTier
 }
 
+export interface IconOverlay {
+  id: string
+  name: string
+  shape: 'circle' | 'square' | 'triangle' | 'diamond' | 'star'
+  fillColor: string
+  strokeColor: string
+  strokeWidth: number
+  size: number
+}
+
 export interface HexHighlight {
   id: string
   name: string
@@ -423,6 +437,7 @@ export type MapStore =
   RailsSlice &
   RiversSlice &
   HighlightsSlice &
+  IconsSlice &
   UndoSlice &
   UiSlice
 
@@ -435,6 +450,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createRailsSlice(set, get),
   ...createRiversSlice(set, get),
   ...createHighlightsSlice(set, get),
+  ...createIconsSlice(set, get),
   ...createUndoSlice(set, get),
   ...createUiSlice(set, get),
 }), {
@@ -597,11 +613,13 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     highlightedHexes: s.highlightedHexes,
     highlightLines: s.highlightLines,
     highlightEdgePaths: s.highlightEdgePaths,
+    iconOverlays: s.iconOverlays,
+    placedIcons: s.placedIcons,
     showPaperTexture: s.showPaperTexture,
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 21,
+  version: 22,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

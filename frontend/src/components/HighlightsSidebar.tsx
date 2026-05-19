@@ -1,13 +1,144 @@
 import { useState } from 'react'
-import { useMapStore } from '../store/mapStore'
+import { useMapStore, type IconOverlay, type HexHighlight } from '../store/mapStore'
 import { HighlightSettingsFlyout } from './HighlightSettingsFlyout'
+import { IconSettingsFlyout } from './IconSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
+
+function HighlightSwatch({ h }: { h: HexHighlight }) {
+  const color = h.color
+  const isLine = h.mode !== 'area'
+
+  if (isLine) {
+    const sw = Math.max(0.8, Math.min(h.strokeWidth * 0.45, 3))
+    const lp = h.linePattern ?? 'none'
+    const lineProps = { stroke: color, strokeWidth: sw, strokeLinecap: 'round' as const }
+    const baseLine = <line x1="1" y1="9" x2="17" y2="9" {...lineProps} />
+    const tickSW = Math.max(0.8, sw * 0.8)
+
+    let decoration: React.ReactNode = null
+    if (lp === 'dotted') {
+      return (
+        <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+          <line x1="1" y1="9" x2="17" y2="9" {...lineProps} strokeDasharray="1.5 3" />
+        </svg>
+      )
+    } else if (lp === 'dashed') {
+      return (
+        <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+          <line x1="1" y1="9" x2="17" y2="9" {...lineProps} strokeLinecap="butt" strokeDasharray="5 2.5" />
+        </svg>
+      )
+    } else if (lp === 'ticks') {
+      decoration = [4, 9, 14].map(x => (
+        <line key={x} x1={x} y1="5.5" x2={x} y2="12.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
+      ))
+    } else if (lp === 'fortification') {
+      decoration = [4, 9, 14].map(x => (
+        <line key={x} x1={x} y1="9" x2={x} y2="13.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
+      ))
+    } else if (lp === 'trench') {
+      decoration = (
+        <>
+          <path d="M 2,9 A 3,3 0 0,1 8,9" fill="none" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
+          <path d="M 10,9 A 3,3 0 0,1 16,9" fill="none" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
+        </>
+      )
+    } else if (lp === 'barbed_wire') {
+      decoration = (
+        <>
+          {[5, 13].map(x => (
+            <g key={x}>
+              <line x1={x - 2} y1="6.5" x2={x + 2} y2="11.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
+              <line x1={x + 2} y1="6.5" x2={x - 2} y2="11.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
+            </g>
+          ))}
+        </>
+      )
+    } else if (lp === 'arrows') {
+      decoration = (
+        <polyline points="6,6 11,9 6,12" fill="none" stroke={color} strokeWidth={tickSW} strokeLinecap="round" strokeLinejoin="round" />
+      )
+    }
+
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+        {baseLine}
+        {decoration}
+      </svg>
+    )
+  }
+
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+      <rect x="1.5" y="1.5" width="15" height="15" rx="2"
+        fill={color} fillOpacity={h.fillEnabled ? h.fillOpacity : 0}
+        stroke={h.strokeEnabled ? color : '#3a3a5a'} strokeWidth={h.strokeEnabled ? 1.5 : 0.75}
+      />
+    </svg>
+  )
+}
+
+function IconShapeSwatch({ shape, fillColor, strokeColor, strokeWidth }: Pick<IconOverlay, 'shape' | 'fillColor' | 'strokeColor' | 'strokeWidth'>) {
+  const cx = 9, cy = 9, r = 6
+  const sw = Math.min(strokeWidth * 0.55, 2)
+  const sharedProps = { fill: fillColor, stroke: strokeWidth > 0 ? strokeColor : 'none', strokeWidth: sw }
+
+  let path: React.ReactNode
+  if (shape === 'circle') {
+    path = <circle cx={cx} cy={cy} r={r} {...sharedProps} />
+  } else if (shape === 'square') {
+    path = <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} {...sharedProps} />
+  } else if (shape === 'triangle') {
+    const s60 = r * Math.sin(Math.PI / 3)
+    const pts = `${cx},${cy - r} ${cx - s60},${cy + r * 0.5} ${cx + s60},${cy + r * 0.5}`
+    path = <polygon points={pts} {...sharedProps} />
+  } else if (shape === 'diamond') {
+    const pts = `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`
+    path = <polygon points={pts} {...sharedProps} />
+  } else {
+    const outerR = r, innerR = r * 0.38
+    const pts = Array.from({ length: 10 }, (_, i) => {
+      const angle = (i * Math.PI) / 5 - Math.PI / 2
+      const rad = i % 2 === 0 ? outerR : innerR
+      return `${cx + rad * Math.cos(angle)},${cy + rad * Math.sin(angle)}`
+    }).join(' ')
+    path = <polygon points={pts} {...sharedProps} />
+  }
+
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+      {path}
+    </svg>
+  )
+}
 
 const CogIcon = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.34.07-.68.07-1.08s-.03-.74-.07-1.08l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.34-.07.69-.07 1.08s.03.74.07 1.08L2.7 13.07c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65z" />
   </svg>
 )
+
+const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
+  <svg
+    width="9" height="9" viewBox="0 0 24 24" fill="currentColor"
+    style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
+  >
+    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+  </svg>
+)
+
+const OVERLAY_DEFAULTS = {
+  fillEnabled: true,
+  fillOpacity: 0.3,
+  strokeEnabled: true,
+  strokeOpacity: 0.9,
+  strokeWidth: 3,
+  joinNeighbors: true,
+  smoothing: 0,
+  linePattern: 'none' as const,
+  linePatternSide: 'right' as const,
+  patternSpacing: 1,
+}
 
 export function HighlightsSidebar() {
   const {
@@ -16,15 +147,27 @@ export function HighlightsSidebar() {
     highlightPaintMode,
     highlightLineEraser,
     highlightedHexes, highlightLines,
+    iconOverlays, placedIcons, addIconOverlay, deleteIconOverlay,
+    activeIconOverlayId,
+    iconPlaceMode,
     setActiveTool,
   } = useMapStore()
 
   const [openFlyoutId, setOpenFlyoutId] = useState<string | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
+  const [openIconFlyoutId, setOpenIconFlyoutId] = useState<string | null>(null)
+  const [iconFlyoutAnchorY, setIconFlyoutAnchorY] = useState(0)
+  const [areasExpanded, setAreasExpanded] = useState(true)
+  const [edgesExpanded, setEdgesExpanded] = useState(true)
+  const [linesExpanded, setLinesExpanded] = useState(true)
+  const [iconsExpanded, setIconsExpanded] = useState(true)
 
   const openHighlight = highlights.find(h => h.id === openFlyoutId) ?? null
-  const activeHighlight = highlights.find(h => h.id === activeHighlightId) ?? null
-  const activeIsLine = activeHighlight?.mode === 'line'
+  const openIconOverlay = iconOverlays.find(o => o.id === openIconFlyoutId) ?? null
+
+  const areaOverlays = highlights.filter(h => h.mode === 'area')
+  const edgeOverlays = highlights.filter(h => h.mode === 'edge')
+  const lineOverlays = highlights.filter(h => h.mode === 'line')
 
   const handleCog = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -37,31 +180,87 @@ export function HighlightsSidebar() {
   }
 
   const handleRowClick = (id: string) => {
-    if (activeHighlightId === id) {
+    if (activeHighlightId === id && highlightPaintMode) {
+      setActiveTool({ type: 'none' })
       setActiveHighlightId(null)
-      setHighlightPaintMode(false)
-      setHighlightLineEraser(false)
+    } else if (activeHighlightId === id && highlightLineEraser) {
+      setActiveTool({ type: 'highlight-paint', id })
     } else {
-      setActiveHighlightId(id)
-      setHighlightLineEraser(false)
+      setActiveTool({ type: 'highlight-paint', id })
     }
   }
 
-  const handleAddHighlight = () => {
+  const handleEraser = () => {
+    if (highlightLineEraser) {
+      if (activeHighlightId) {
+        setActiveTool({ type: 'highlight-paint', id: activeHighlightId })
+      } else {
+        setActiveTool({ type: 'none' })
+      }
+    } else {
+      if (activeHighlightId) {
+        setActiveTool({ type: 'highlight-erase', id: activeHighlightId })
+      } else {
+        setActiveTool({ type: 'highlight-erase-any' })
+      }
+    }
+  }
+
+  const handleAddArea = () => {
     addHighlight({
-      name: `Highlight ${highlights.length + 1}`,
+      name: `Area ${areaOverlays.length + 1}`,
       color: '#ffcc00',
       mode: 'area',
-      fillEnabled: true,
-      fillOpacity: 0.3,
-      strokeEnabled: true,
-      strokeOpacity: 0.9,
-      strokeWidth: 3,
-      joinNeighbors: true,
-      smoothing: 0,
-      linePattern: 'none',
-      linePatternSide: 'right' as const,
-      patternSpacing: 1,
+      ...OVERLAY_DEFAULTS,
+    })
+  }
+
+  const handleAddEdge = () => {
+    addHighlight({
+      name: `Edge ${edgeOverlays.length + 1}`,
+      color: '#44aaff',
+      mode: 'edge',
+      ...OVERLAY_DEFAULTS,
+      fillEnabled: false,
+    })
+  }
+
+  const handleAddLine = () => {
+    addHighlight({
+      name: `Line ${lineOverlays.length + 1}`,
+      color: '#ff6644',
+      mode: 'line',
+      ...OVERLAY_DEFAULTS,
+      fillEnabled: false,
+    })
+  }
+
+  const handleIconCog = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (openIconFlyoutId === id) {
+      setOpenIconFlyoutId(null)
+    } else {
+      setOpenIconFlyoutId(id)
+      setIconFlyoutAnchorY(e.currentTarget.getBoundingClientRect().top)
+    }
+  }
+
+  const handleIconRowClick = (id: string) => {
+    if (activeIconOverlayId === id && iconPlaceMode) {
+      setActiveTool({ type: 'none' })
+    } else {
+      setActiveTool({ type: 'icon-place', id })
+    }
+  }
+
+  const handleAddIcon = () => {
+    addIconOverlay({
+      name: `Icon ${iconOverlays.length + 1}`,
+      shape: 'circle',
+      fillColor: '#e05050',
+      strokeColor: '#1a1b2e',
+      strokeWidth: 1.5,
+      size: 0.35,
     })
   }
 
@@ -76,168 +275,279 @@ export function HighlightsSidebar() {
     return count > 0 ? `${count} hex${count !== 1 ? 'es' : ''}` : ''
   }
 
+  const isErasing = highlightLineEraser
+  const isPainting = highlightPaintMode && !!activeHighlightId
+
+  const renderOverlayRow = (h: typeof highlights[0]) => {
+    const isActive = activeHighlightId === h.id
+    const isActivePaint = isActive && isPainting
+    const isActiveErase = isActive && isErasing
+    const countLabel = hexCountLabel(h)
+    return (
+      <div
+        key={h.id}
+        onClick={() => handleRowClick(h.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '5px 6px',
+          marginBottom: 2,
+          borderRadius: 3,
+          background: isActiveErase ? '#2a1e1e' : isActive ? '#1e2a3a' : 'transparent',
+          border: `1px solid ${isActiveErase ? '#6a3a3a' : isActive ? '#2a4a6a' : 'transparent'}`,
+          cursor: 'pointer',
+        }}
+        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#141522' }}
+        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+      >
+        <HighlightSwatch h={h} />
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            color: isActiveErase ? '#e08080' : isActive ? '#d0ecd8' : '#a0a0c0',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {isActivePaint ? '● ' : isActiveErase ? '✕ ' : ''}{h.name}
+          </div>
+          {countLabel && (
+            <div style={{ fontSize: 10, color: '#4a6a5a' }}>{countLabel}</div>
+          )}
+        </div>
+
+        <button
+          onClick={e => handleCog(h.id, e)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: openFlyoutId === h.id ? '#a0c8b0' : '#4a4a6a',
+            cursor: 'pointer',
+            padding: 2,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#a0c8b0')}
+          onMouseLeave={e => (e.currentTarget.style.color = openFlyoutId === h.id ? '#a0c8b0' : '#4a4a6a')}
+        >
+          <CogIcon />
+        </button>
+
+        <button
+          onClick={e => { e.stopPropagation(); deleteHighlight(h.id) }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#4a4a6a',
+            cursor: 'pointer',
+            padding: 2,
+            fontSize: 13,
+            lineHeight: 1,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#e08080')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+        >×</button>
+      </div>
+    )
+  }
+
+  const renderAddButton = (label: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%',
+        padding: '5px 0',
+        marginTop: 4,
+        background: '#141522',
+        border: '1px dashed #2a2b3e',
+        borderRadius: 3,
+        color: '#5a9e6f',
+        fontFamily: 'inherit',
+        fontSize: 11,
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = '#5a9e6f')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2b3e')}
+    >
+      {label}
+    </button>
+  )
+
+  const renderCategoryHeader = (label: string, expanded: boolean, onToggle: () => void) => (
+    <div
+      onClick={onToggle}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: 'pointer',
+        marginBottom: expanded ? 6 : 0,
+        userSelect: 'none',
+      }}
+    >
+      <ChevronIcon expanded={expanded} />
+      <span style={labelStyle}>{label}</span>
+    </div>
+  )
+
   return (
     <div data-highlights-sidebar style={sidebarStyle}>
-      {/* Paint mode */}
+      {/* Eraser tool */}
       <div style={sectionStyle}>
-        <div style={labelStyle}>Paint mode</div>
         <button
-          disabled={!activeHighlightId}
-          onClick={() => {
-            if (!activeHighlightId) return
-            if (highlightPaintMode) setActiveTool({ type: 'none' })
-            else setActiveTool({ type: 'highlight-paint', id: activeHighlightId })
-          }}
+          onClick={handleEraser}
           style={{
             width: '100%',
             padding: '6px 0',
-            background: highlightPaintMode ? '#1e3a28' : '#1a1b2e',
-            border: `1px solid ${highlightPaintMode ? '#5a9e6f' : '#2a2b3e'}`,
+            background: isErasing ? '#3a1e1e' : '#1a1b2e',
+            border: `1px solid ${isErasing ? '#9e5a5a' : '#2a2b3e'}`,
             borderRadius: 3,
-            color: !activeHighlightId ? '#3a3a5a' : highlightPaintMode ? '#5a9e6f' : '#a0a0c0',
-            fontFamily: 'inherit',
-            fontSize: 11,
-            cursor: activeHighlightId ? 'pointer' : 'default',
-          }}
-        >
-          {highlightPaintMode ? '● Painting' : '○ Paint hexes'}
-        </button>
-        {!activeHighlightId && (
-          <div style={{ fontSize: 10, color: '#3a3a5a', marginTop: 4 }}>Select a highlight first</div>
-        )}
-        {activeIsLine && (
-          <button
-            onClick={() => {
-              if (!activeHighlightId) return
-              if (highlightLineEraser) setActiveTool({ type: 'none' })
-              else setActiveTool({ type: 'highlight-erase', id: activeHighlightId })
-            }}
-            style={{
-              width: '100%',
-              padding: '6px 0',
-              marginTop: 6,
-              background: highlightLineEraser ? '#3a1e1e' : '#1a1b2e',
-              border: `1px solid ${highlightLineEraser ? '#9e5a5a' : '#2a2b3e'}`,
-              borderRadius: 3,
-              color: highlightLineEraser ? '#e08080' : '#a0a0c0',
-              fontFamily: 'inherit',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            {highlightLineEraser ? '● Erasing' : '○ Eraser'}
-          </button>
-        )}
-      </div>
-
-      {/* Highlight list */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Highlights</div>
-        {highlights.length === 0 && (
-          <div style={{ fontSize: 11, color: '#3a3a5a' }}>No highlights yet</div>
-        )}
-        {highlights.map(h => {
-          const isActive = activeHighlightId === h.id
-          const countLabel = hexCountLabel(h)
-          return (
-            <div
-              key={h.id}
-              onClick={() => handleRowClick(h.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '5px 6px',
-                marginBottom: 2,
-                borderRadius: 3,
-                background: isActive ? '#1e2a3a' : 'transparent',
-                border: `1px solid ${isActive ? '#2a4a6a' : 'transparent'}`,
-                cursor: 'pointer',
-              }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#141522' }}
-              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
-            >
-              {/* Color swatch */}
-              <div style={{
-                width: 14,
-                height: 14,
-                borderRadius: 2,
-                background: h.color,
-                flexShrink: 0,
-                opacity: h.fillEnabled ? h.fillOpacity + (h.strokeEnabled ? 0.3 : 0) : 1,
-                border: h.strokeEnabled ? `2px solid ${h.color}` : '1px solid #3a3a5a',
-              }} />
-
-              {/* Name + count */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: isActive ? '#d0ecd8' : '#a0a0c0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {h.name}
-                </div>
-                {countLabel && (
-                  <div style={{ fontSize: 10, color: '#4a6a5a' }}>{countLabel}</div>
-                )}
-              </div>
-
-              {/* Cog */}
-              <button
-                onClick={e => handleCog(h.id, e)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: openFlyoutId === h.id ? '#a0c8b0' : '#4a4a6a',
-                  cursor: 'pointer',
-                  padding: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#a0c8b0')}
-                onMouseLeave={e => (e.currentTarget.style.color = openFlyoutId === h.id ? '#a0c8b0' : '#4a4a6a')}
-              >
-                <CogIcon />
-              </button>
-
-              {/* Delete */}
-              <button
-                onClick={e => { e.stopPropagation(); deleteHighlight(h.id) }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#4a4a6a',
-                  cursor: 'pointer',
-                  padding: 2,
-                  fontSize: 13,
-                  lineHeight: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#e08080')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-              >×</button>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Add button */}
-      <div style={{ padding: '10px 12px' }}>
-        <button
-          onClick={handleAddHighlight}
-          style={{
-            width: '100%',
-            padding: '6px 0',
-            background: '#141522',
-            border: '1px dashed #2a2b3e',
-            borderRadius: 3,
-            color: '#5a9e6f',
+            color: isErasing ? '#e08080' : '#a0a0c0',
             fontFamily: 'inherit',
             fontSize: 11,
             cursor: 'pointer',
           }}
-          onMouseEnter={e => (e.currentTarget.style.borderColor = '#5a9e6f')}
-          onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2b3e')}
         >
-          + Add highlight
+          {isErasing
+            ? (activeHighlightId ? '● Erasing selected' : '● Erasing all')
+            : '○ Eraser'}
         </button>
+        {!activeHighlightId && !isErasing && (
+          <div style={{ fontSize: 10, color: '#3a3a5a', marginTop: 4 }}>
+            Select an overlay to edit, or use eraser on any
+          </div>
+        )}
+      </div>
+
+      {/* Areas */}
+      <div style={sectionStyle}>
+        {renderCategoryHeader('Areas', areasExpanded, () => setAreasExpanded(v => !v))}
+        {areasExpanded && (
+          <>
+            {areaOverlays.length === 0 && (
+              <div style={{ fontSize: 11, color: '#3a3a5a', marginBottom: 4 }}>No area overlays yet</div>
+            )}
+            {areaOverlays.map(renderOverlayRow)}
+            {renderAddButton('+ Add area', handleAddArea)}
+          </>
+        )}
+      </div>
+
+      {/* Edges */}
+      <div style={sectionStyle}>
+        {renderCategoryHeader('Edges', edgesExpanded, () => setEdgesExpanded(v => !v))}
+        {edgesExpanded && (
+          <>
+            {edgeOverlays.length === 0 && (
+              <div style={{ fontSize: 11, color: '#3a3a5a', marginBottom: 4 }}>No edge overlays yet</div>
+            )}
+            {edgeOverlays.map(renderOverlayRow)}
+            {renderAddButton('+ Add edge', handleAddEdge)}
+          </>
+        )}
+      </div>
+
+      {/* Lines */}
+      <div style={sectionStyle}>
+        {renderCategoryHeader('Lines', linesExpanded, () => setLinesExpanded(v => !v))}
+        {linesExpanded && (
+          <>
+            {lineOverlays.length === 0 && (
+              <div style={{ fontSize: 11, color: '#3a3a5a', marginBottom: 4 }}>No line overlays yet</div>
+            )}
+            {lineOverlays.map(renderOverlayRow)}
+            {renderAddButton('+ Add line', handleAddLine)}
+          </>
+        )}
+      </div>
+
+      {/* Icons */}
+      <div style={sectionStyle}>
+        {renderCategoryHeader('Icons', iconsExpanded, () => setIconsExpanded(v => !v))}
+        {iconsExpanded && (
+          <>
+            {iconOverlays.length === 0 && (
+              <div style={{ fontSize: 11, color: '#3a3a5a', marginBottom: 4 }}>No icon overlays yet</div>
+            )}
+            {iconOverlays.map(overlay => {
+              const isActive = activeIconOverlayId === overlay.id
+              const isActivePaint = isActive && iconPlaceMode
+              return (
+                <div
+                  key={overlay.id}
+                  onClick={() => handleIconRowClick(overlay.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '5px 6px',
+                    marginBottom: 2,
+                    borderRadius: 3,
+                    background: isActive ? '#1e2a3a' : 'transparent',
+                    border: `1px solid ${isActive ? '#2a4a6a' : 'transparent'}`,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#141522' }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <IconShapeSwatch
+                    shape={overlay.shape}
+                    fillColor={overlay.fillColor}
+                    strokeColor={overlay.strokeColor}
+                    strokeWidth={overlay.strokeWidth}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      color: isActive ? '#d0ecd8' : '#a0a0c0',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {isActivePaint ? '● ' : ''}{overlay.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#4a6a5a' }}>
+                      {(placedIcons[overlay.id]?.length ?? 0) > 0
+                        ? `${placedIcons[overlay.id].length} icon${placedIcons[overlay.id].length !== 1 ? 's' : ''}`
+                        : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={e => handleIconCog(overlay.id, e)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: openIconFlyoutId === overlay.id ? '#a0c8b0' : '#4a4a6a',
+                      cursor: 'pointer',
+                      padding: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#a0c8b0')}
+                    onMouseLeave={e => (e.currentTarget.style.color = openIconFlyoutId === overlay.id ? '#a0c8b0' : '#4a4a6a')}
+                  >
+                    <CogIcon />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteIconOverlay(overlay.id) }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4a4a6a',
+                      cursor: 'pointer',
+                      padding: 2,
+                      fontSize: 13,
+                      lineHeight: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#e08080')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+                  >×</button>
+                </div>
+              )
+            })}
+            {renderAddButton('+ Add icon', handleAddIcon)}
+          </>
+        )}
       </div>
 
       {openHighlight && (
@@ -245,6 +555,13 @@ export function HighlightsSidebar() {
           highlight={openHighlight}
           anchorY={flyoutAnchorY}
           onClose={() => setOpenFlyoutId(null)}
+        />
+      )}
+      {openIconOverlay && (
+        <IconSettingsFlyout
+          overlay={openIconOverlay}
+          anchorY={iconFlyoutAnchorY}
+          onClose={() => setOpenIconFlyoutId(null)}
         />
       )}
     </div>

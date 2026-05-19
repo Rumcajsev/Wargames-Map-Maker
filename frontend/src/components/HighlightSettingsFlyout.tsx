@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useMapStore, type HexHighlight } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_HIGHLIGHTS } from '../palettes'
+import { useFlyoutTop } from './useFlyoutTop'
 
 interface Props {
   highlight: HexHighlight
@@ -38,14 +39,12 @@ const segBtnStyle = (active: boolean): React.CSSProperties => ({
 
 export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) {
   const { updateHighlight, clearAllHexHighlights, clearHighlightLine, clearHighlightEdgePath } = useMapStore()
-  const flyoutRef = useRef<HTMLDivElement>(null)
+  const { ref: flyoutRef, top } = useFlyoutTop(anchorY)
 
   const isArea = highlight.mode === 'area'
   const currentPattern = highlight.linePattern ?? 'none'
   const hasPattern = currentPattern !== 'none'
   const patternHasSide = hasPattern && ['ticks', 'fortification', 'trench'].includes(currentPattern)
-  const flyoutH = isArea ? 420 : 340
-  const top = Math.min(anchorY, window.innerHeight - flyoutH - 8)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -70,7 +69,8 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
         position: 'fixed',
         left: 204,
         top,
-        width: 220,
+        width: 260,
+        boxSizing: 'border-box',
         background: '#12131f',
         border: '1px solid #2a2b3e',
         borderRadius: 4,
@@ -83,7 +83,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#d0d0e8', fontWeight: 600 }}>Highlight settings</span>
+        <span style={{ color: '#d0d0e8', fontWeight: 600 }}>Overlay settings</span>
         <button
           onClick={onClose}
           style={{ background: 'none', border: 'none', color: '#6a6a8a', cursor: 'pointer', fontSize: 14, padding: 0 }}
@@ -109,18 +109,6 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
             boxSizing: 'border-box',
           }}
         />
-      </div>
-
-      {/* Mode */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={labelStyle}>Mode</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['area', 'edge', 'line'] as const).map(m => (
-            <button key={m} onClick={() => upd({ mode: m })} style={segBtnStyle(highlight.mode === m)}>
-              {m.charAt(0).toUpperCase() + m.slice(1)}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Color */}
@@ -151,7 +139,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
                   type="range" min={20} max={100} step={20}
                   value={Math.round(highlight.fillOpacity * 100 / 20) * 20}
                   onChange={e => upd({ fillOpacity: Number(e.target.value) / 100 })}
-                  style={{ flex: 1, accentColor: '#5a9e6f' }}
+                  style={{ flex: 1, minWidth: 0, accentColor: '#5a9e6f' }}
                 />
                 <span style={{ minWidth: 28, textAlign: 'right' }}>{Math.round(highlight.fillOpacity * 100 / 20) * 20}%</span>
               </div>
@@ -185,7 +173,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
                 type="range" min={20} max={100} step={20}
                 value={Math.round(highlight.strokeOpacity * 100 / 20) * 20}
                 onChange={e => upd({ strokeOpacity: Number(e.target.value) / 100 })}
-                style={{ flex: 1, accentColor: '#5a9e6f' }}
+                style={{ flex: 1, minWidth: 0, accentColor: '#5a9e6f' }}
               />
               <span style={{ minWidth: 28, textAlign: 'right' }}>{Math.round(highlight.strokeOpacity * 100 / 20) * 20}%</span>
             </div>
@@ -195,7 +183,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
                 type="range" min={1} max={20} step={0.5}
                 value={highlight.strokeWidth}
                 onChange={e => upd({ strokeWidth: Number(e.target.value) })}
-                style={{ flex: 1, accentColor: '#5a9e6f' }}
+                style={{ flex: 1, minWidth: 0, accentColor: '#5a9e6f' }}
               />
               <span style={{ minWidth: 28, textAlign: 'right' }}>{highlight.strokeWidth}</span>
             </div>
@@ -245,7 +233,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
                   else if (v < 1.4) v = 1
                   upd({ smoothing: v })
                 }}
-                style={{ width: '100%', accentColor: '#5a9e6f' }}
+                style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
                 list="smoothing-snaps"
               />
               <datalist id="smoothing-snaps">
@@ -294,7 +282,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
             type="range" min={0.2} max={4} step={0.05}
             value={highlight.patternSpacing ?? 1}
             onChange={e => upd({ patternSpacing: Number(e.target.value) })}
-            style={{ width: '100%', accentColor: '#5a9e6f' }}
+            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
           />
         </div>
       )}

@@ -54,6 +54,7 @@ class RoadsConfig(BaseRegionConfig):
 class MotorwayHexesConfig(BaseRegionConfig):
     hex_orientation: str
     R_m: float
+    fast: bool = False
 
 
 class RailsConfig(BaseRegionConfig):

@@ -19,6 +19,33 @@ from services.overpass import post_overpass
 
 RAIL_PRIORITY: list[str] = ["rail", "light_rail", "narrow_gauge", "tram"]
 
+# Types allowed per scale tier, in descending priority order.
+# Wider maps → fewer, more important types only.
+_RAIL_SCALE_TIERS: list[tuple[float, set[str]]] = [
+    (300,  {"rail", "light_rail", "narrow_gauge", "tram", "subway", "monorail"}),
+    (600,  {"rail", "light_rail", "narrow_gauge"}),
+    (float("inf"), {"rail", "narrow_gauge"}),
+]
+
+
+def _scale_filter_rail(rail_types: list[str], width_m: float) -> tuple[list[str], int, float]:
+    """Return (filtered_types, overpass_timeout_s, http_timeout_s) for the given map width."""
+    width_km = width_m / 1000
+    for max_km, allowed in _RAIL_SCALE_TIERS:
+        if width_km < max_km:
+            filtered = [t for t in rail_types if t in allowed]
+            break
+    else:
+        filtered = [t for t in rail_types if t in _RAIL_SCALE_TIERS[-1][1]]
+    if not filtered:
+        filtered = ["rail"]
+    if width_km < 300:
+        return filtered, 45, 55.0
+    elif width_km < 600:
+        return filtered, 75, 90.0
+    else:
+        return filtered, 120, 140.0
+
 
 async def _fetch_ways(
     min_lat: float,
@@ -26,15 +53,17 @@ async def _fetch_ways(
     max_lat: float,
     max_lon: float,
     rail_types: list[str],
+    overpass_timeout: int = 45,
+    http_timeout: float = 55.0,
 ) -> list[tuple[str, list[tuple[float, float]]]]:
     type_pattern = "|".join(rail_types)
     bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
     query = (
-        f'[out:json][timeout:45][maxsize:52428800];\n'
+        f'[out:json][timeout:{overpass_timeout}][maxsize:104857600];\n'
         f'way["railway"~"^({type_pattern})$"]({bbox});\n'
         f'out tags geom;\n'
     )
-    data = await post_overpass(query, timeout=55.0)
+    data = await post_overpass(query, timeout=http_timeout)
     ways = []
     for el in data.get("elements", []):
         if el.get("type") != "way":
@@ -158,6 +187,7 @@ async def generate_rail_hexes(config) -> dict:
         config.width_m, config.height_m,
     )
 
-    typed_ways = await _fetch_ways(min_lat, min_lon, max_lat, max_lon, config.rail_types)
+    filtered_types, opa_timeout, http_timeout = _scale_filter_rail(config.rail_types, config.width_m)
+    typed_ways = await _fetch_ways(min_lat, min_lon, max_lat, max_lon, filtered_types, opa_timeout, http_timeout)
     lonlat_to_hex = make_lonlat_to_hex(config, config.R_m)
     return _ways_to_hex_graph(typed_ways, lonlat_to_hex, config.R_m, cos_lat)

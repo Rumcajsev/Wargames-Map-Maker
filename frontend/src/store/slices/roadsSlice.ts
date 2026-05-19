@@ -76,6 +76,14 @@ export type RoadsSlice = {
   setSelectedRoadHopKey: (key: string | null) => void
   roadWiggleDragging: boolean
   setRoadWiggleDragging: (v: boolean) => void
+  motorwayHexes: [number, number][]
+  motorwayHexesStatus: 'idle' | 'loading' | 'error' | 'done'
+  motorwayHexesError: string | null
+  motorwayHexesFast: boolean
+  setMotorwayHexesFast: (v: boolean) => void
+  fetchMotorwayHexes: () => Promise<void>
+  applyMotorwayHexes: () => void
+  clearMotorwayHexes: () => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -113,6 +121,10 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadSelectMode: false,
   selectedRoadSegmentKeys: [],
   selectedRoadHopKey: null,
+  motorwayHexes: [],
+  motorwayHexesStatus: 'idle',
+  motorwayHexesError: null,
+  motorwayHexesFast: true,
 
   clearRoads: () => set(s => ({
     rawRoadWays: [], osmHexPaths: [], osmHighlightTier: null, osmSpotlightMode: false, osmSpotlightTiers: [true, true, true, true] as [boolean, boolean, boolean, boolean],
@@ -311,4 +323,61 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   setSelectedRoadHopKey: (key) => set({ selectedRoadHopKey: key }),
   roadWiggleDragging: false,
   setRoadWiggleDragging: (v) => set({ roadWiggleDragging: v }),
+
+  clearMotorwayHexes: () => set({ motorwayHexes: [], motorwayHexesStatus: 'idle', motorwayHexesError: null }),
+  setMotorwayHexesFast: (v) => set({ motorwayHexesFast: v }),
+
+  fetchMotorwayHexes: async () => {
+    const { generatedMetadata, hexOrientation, motorwayHexesFast } = get()
+    if (!generatedMetadata) return
+    set({ motorwayHexesStatus: 'loading', motorwayHexesError: null })
+    try {
+      const resp = await fetch('/api/generate/motorway-hexes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          center_lon: generatedMetadata.center[0],
+          center_lat: generatedMetadata.center[1],
+          bearing: generatedMetadata.bearing,
+          width_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0],
+          height_m: generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[1],
+          hex_orientation: hexOrientation,
+          R_m: generatedMetadata.outer_radius_m,
+          fast: motorwayHexesFast,
+        }),
+      })
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+      set({ motorwayHexes: data.hexes, motorwayHexesStatus: 'done' })
+    } catch (e) {
+      set({ motorwayHexesStatus: 'error', motorwayHexesError: String(e) })
+    }
+  },
+
+  applyMotorwayHexes: () => {
+    const { motorwayHexes, roadEdges } = get()
+    if (motorwayHexes.length === 0) return
+    get().pushUndoSnapshot()
+    const hexSet = new Set(motorwayHexes.map(([q, r]) => `${q},${r}`))
+    const existingPairs = new Set<string>()
+    for (const e of roadEdges) {
+      const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
+      existingPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`)
+    }
+    const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
+    const edgeSet = new Set<string>()
+    const newEdges: RoadEdge[] = []
+    for (const [q, r] of motorwayHexes) {
+      for (const [dq, dr] of dirs) {
+        const nq = q + dq, nr = r + dr
+        if (!hexSet.has(`${nq},${nr}`)) continue
+        const a = `${q},${r}`, b = `${nq},${nr}`
+        const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
+        if (existingPairs.has(pairKey) || edgeSet.has(pairKey)) continue
+        edgeSet.add(pairKey)
+        newEdges.push({ q1: q, r1: r, q2: nq, r2: nr, tier: 0 })
+      }
+    }
+    if (newEdges.length > 0) set(s => ({ roadEdges: [...s.roadEdges, ...newEdges] }))
+  },
 })

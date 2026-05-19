@@ -615,7 +615,12 @@ export function buildRailChains(
     }
     junctionPositions.set(k, valid ? [h.center[0] + ox, h.center[1] + oy] : h.center)
   }
-  const jPos = (k: string) => junctionPositions.get(k) ?? hexIdx.get(k)!.center
+  const jPos = (k: string): [number, number] => {
+    const jp = junctionPositions.get(k)
+    if (jp) return jp
+    const h = hexIdx.get(k)
+    return h ? h.center : [0, 0]
+  }
 
   const visitedPairs = new Set<string>()
   const wiggleAmplitude = wiggleAmpFactor * interHexDist

@@ -207,8 +207,9 @@ export function RiversSidebar() {
     selectedHopKey, setSelectedHopKey,
     riverHopProps, setRiverHopProp, clearRiverHopProp,
     riverWiggleAmp, riverWiggleFreq,
-    osmRiverWays, riversOsmStatus, riversOsmError, osmRiverHighlight,
-    fetchRivers, applyOsmRivers, setOsmRiverHighlight, clearOsmRivers,
+    osmRiverWays, riversOsmStatus, riversOsmError,
+    hoveredOsmRiverIdx, appliedOsmRiverIndices,
+    fetchRivers, toggleOsmRiver, setHoveredOsmRiverIdx, clearOsmRivers,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<'river' | 'canal' | 'lake' | null>(null)
@@ -254,19 +255,6 @@ export function RiversSidebar() {
             )}
           </div>
 
-          {riversOsmStatus === 'done' && osmRiverWays.length > 0 && (() => {
-            const riverCount = osmRiverWays.filter(w => w.type === 'river').length
-            const canalCount = osmRiverWays.filter(w => w.type === 'canal').length
-            return (
-              <div style={{ fontSize: 10, color: '#4a6a8a', marginBottom: 6 }}>
-                {riverCount > 0 && <span>{riverCount} river{riverCount !== 1 ? 's' : ''}</span>}
-                {riverCount > 0 && canalCount > 0 && <span>, </span>}
-                {canalCount > 0 && <span>{canalCount} canal{canalCount !== 1 ? 's' : ''}</span>}
-                {' '}found
-              </div>
-            )
-          })()}
-
           <button
             onClick={() => fetchRivers()}
             disabled={riversOsmStatus === 'loading'}
@@ -287,37 +275,41 @@ export function RiversSidebar() {
             <div style={{ fontSize: 10, color: '#9e5a5a', marginBottom: 4 }}>{riversOsmError}</div>
           )}
 
+          {riversOsmStatus === 'done' && osmRiverWays.length === 0 && (
+            <div style={{ fontSize: 10, color: '#4a4a6a' }}>No named rivers found in this area.</div>
+          )}
+
           {riversOsmStatus === 'done' && osmRiverWays.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div style={{ fontSize: 10, color: '#4a6a8a', marginBottom: 2 }}>Apply OSM to map</div>
-              {(['river', 'canal'] as const).map(type => {
-                const count = osmRiverWays.filter(w => w.type === type).length
-                if (count === 0) return null
-                const isActive = osmRiverHighlight === type
-                const color = type === 'river' ? '#5a9aba' : '#4abaa0'
-                const borderColor = type === 'river' ? '#3a6a9a' : '#2a8a7a'
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {osmRiverWays.map((way, idx) => {
+                const applied = appliedOsmRiverIndices.includes(idx)
+                const hovered = hoveredOsmRiverIdx === idx
+                const color = way.type === 'river' ? '#5a9aba' : '#4abaa0'
+                const dotColor = way.type === 'river' ? '#3a6aaa' : '#2a8a7a'
                 return (
-                  <div key={type} style={{ display: 'flex', gap: 3 }}>
-                    <button
-                      onClick={() => applyOsmRivers(type)}
-                      style={{
-                        flex: 1, padding: '3px 0', background: 'none',
-                        border: `1px solid ${borderColor}`, color,
-                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-                      onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-                    >Apply {type === 'river' ? 'Rivers' : 'Canals'}</button>
-                    <button
-                      onClick={() => setOsmRiverHighlight(isActive ? null : type)}
-                      title="Preview on map"
-                      style={{
-                        padding: '3px 7px', background: 'none',
-                        border: `1px solid ${isActive ? borderColor : '#2a2a3a'}`,
-                        color: isActive ? color : '#4a4a6a',
-                        borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
-                      }}
-                    >👁</button>
+                  <div
+                    key={idx}
+                    onMouseEnter={() => setHoveredOsmRiverIdx(idx)}
+                    onMouseLeave={() => setHoveredOsmRiverIdx(null)}
+                    onClick={() => toggleOsmRiver(idx)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '3px 5px', borderRadius: 3, cursor: 'pointer',
+                      background: hovered ? '#1a2a3a' : 'transparent',
+                      border: `1px solid ${applied ? dotColor : 'transparent'}`,
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: dotColor }} />
+                    <span style={{
+                      flex: 1, fontSize: 11,
+                      color: applied ? color : hovered ? '#8ab8d8' : '#5a7a9a',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {way.name || `(unnamed ${way.type})`}
+                    </span>
+                    {applied && (
+                      <span style={{ fontSize: 9, color: dotColor, flexShrink: 0 }}>✓</span>
+                    )}
                   </div>
                 )
               })}

@@ -22,12 +22,21 @@ export function drawHexBorders(
       bCtx.strokeStyle = 'rgba(0,0,0,0.35)'
       bCtx.lineWidth = 0.5
       bCtx.stroke()
-    } else {
-      bCtx.fillStyle = 'rgba(0,0,0,0.5)'
-      for (const [x, y] of verts) {
+    } else if (borderMode === 'stubs') {
+      bCtx.strokeStyle = 'rgba(0,0,0,0.35)'
+      bCtx.lineWidth = 0.5
+      for (let i = 0; i < verts.length; i++) {
+        const [x0, y0] = verts[i]
+        const [x1, y1] = verts[(i + 1) % verts.length]
+        const t = 0.22
         bCtx.beginPath()
-        bCtx.arc(x, y, 1, 0, Math.PI * 2)
-        bCtx.fill()
+        bCtx.moveTo(x0, y0)
+        bCtx.lineTo(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
+        bCtx.stroke()
+        bCtx.beginPath()
+        bCtx.moveTo(x1 + (x0 - x1) * t, y1 + (y0 - y1) * t)
+        bCtx.lineTo(x1, y1)
+        bCtx.stroke()
       }
     }
   }
