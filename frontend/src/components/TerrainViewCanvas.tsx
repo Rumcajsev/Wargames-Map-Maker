@@ -773,10 +773,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Keys of hexes that are TRUE sea-coast hexes: have coastline_clip AND at least one
   // pure-sea neighbor. Inland water-body hexes also get coastline_clip but have no
   // pure-sea neighbor, so they are excluded from the sea mask.
-  const prevSeaCoastKeysRef = useRef(new Set<string>())
   const seaCoastKeys = useMemo(() => {
     if (!realisticCoastline) return new Set<string>()
-    if (isTerrainPainting) return prevSeaCoastKeysRef.current
     const hexByKey = new Map<string, GeneratedHex>()
     for (const h of generatedHexes) hexByKey.set(`${h.q},${h.r}`, h)
     const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
@@ -801,19 +799,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
       if (found) keys.add(`${h.q},${h.r}`)
     }
-    prevSeaCoastKeysRef.current = keys
     return keys
-  }, [isTerrainPainting, generatedHexes, realisticCoastline])
+  }, [generatedHexes, realisticCoastline])
   const seaCoastKeysRef = useRef(seaCoastKeys)
   seaCoastKeysRef.current = seaCoastKeys
 
   // Ocean sea keys: pure-sea hexes (terrain='sea', no clip) reachable from any seaCoastKey via
   // flood-fill through connected pure-sea hexes. Inland water bodies (class 80 pixels classified
   // as 'sea') form isolated islands with no connection to the coast — they are excluded.
-  const prevOceanSeaKeysRef = useRef(new Set<string>())
   const oceanSeaKeys = useMemo(() => {
     if (!realisticCoastline) return new Set<string>()
-    if (isTerrainPainting) return prevOceanSeaKeysRef.current
     const hexByKey = new Map<string, GeneratedHex>()
     for (const h of generatedHexes) hexByKey.set(`${h.q},${h.r}`, h)
     const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
@@ -842,9 +837,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         if (!visited.has(nk)) { visited.add(nk); queue.push(nk) }
       }
     }
-    prevOceanSeaKeysRef.current = visited
     return visited
-  }, [isTerrainPainting, generatedHexes, realisticCoastline, seaCoastKeys])
+  }, [generatedHexes, realisticCoastline, seaCoastKeys])
   const oceanSeaKeysRef = useRef(oceanSeaKeys)
   oceanSeaKeysRef.current = oceanSeaKeys
 
