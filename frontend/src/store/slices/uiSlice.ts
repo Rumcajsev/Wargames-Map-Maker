@@ -7,7 +7,7 @@ export type UiSlice = {
   urbanHexes: Array<{ q: number; r: number }>
   urbanStyle: UrbanStyle
   urbanPaintMode: 'paint' | 'erase' | null
-  hexBorderMode: 'full' | 'dots' | 'none'
+  hexBorderMode: 'full' | 'stubs' | 'none'
   hexNumbersEnabled: boolean
   hexNumberStartCorner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   hexNumberEdge: number
@@ -37,7 +37,7 @@ export type UiSlice = {
   toggleUrbanHex: (q: number, r: number) => void
   setUrbanStyle: (style: Partial<UrbanStyle>) => void
   setUrbanPaintMode: (mode: 'paint' | 'erase' | null) => void
-  setHexBorderMode: (v: 'full' | 'dots' | 'none') => void
+  setHexBorderMode: (v: 'full' | 'stubs' | 'none') => void
   setHexNumbersEnabled: (v: boolean) => void
   setHexNumberStartCorner: (v: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right') => void
   setHexNumberEdge: (v: number) => void
@@ -159,16 +159,24 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     if (!updates.canalEditMode) updates.selectedCanalSegmentKeys = []
 
     updates.highlightPaintMode = tool.type === 'highlight-paint'
-    updates.highlightLineEraser = tool.type === 'highlight-erase'
+    updates.highlightLineEraser = tool.type === 'highlight-erase' || tool.type === 'highlight-erase-any'
     if (tool.type === 'highlight-paint' || tool.type === 'highlight-erase') {
       updates.activeHighlightId = tool.id
     }
+    if (tool.type === 'highlight-erase-any') {
+      updates.activeHighlightId = null
+    }
+
+    updates.iconPlaceMode = tool.type === 'icon-place'
+    updates.iconEraseMode = tool.type === 'icon-erase' || tool.type === 'icon-erase-any'
+    if (tool.type === 'icon-place' || tool.type === 'icon-erase') {
+      updates.activeIconOverlayId = tool.id
+    }
+    if (tool.type === 'icon-erase-any') {
+      updates.activeIconOverlayId = null
+    }
 
     updates.urbanPaintMode = tool.type === 'urban' ? tool.mode : null
-
-    if (tool.type === 'terrain' || tool.type === 'elevation' || tool.type === 'lake') {
-      updates.selectedHex = null
-    }
 
     set(updates as Partial<MapStore>)
   },
@@ -419,6 +427,11 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     const t = s.osmSpotlightTiers as boolean[] | undefined
     if (t && t.length === 3) (s.osmSpotlightTiers as boolean[]).push(true)
   }
+  if (fromVersion < 22) {
+    if (!s.iconOverlays) s.iconOverlays = []
+    if (!s.placedIcons) s.placedIcons = {}
+  }
+  if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
 }
 

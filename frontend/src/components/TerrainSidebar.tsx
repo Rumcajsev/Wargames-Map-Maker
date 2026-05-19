@@ -15,7 +15,6 @@ export function TerrainSidebar() {
     setActiveTool,
     thresholds, setTerrainThreshold,
     disabledTerrains, toggleTerrainDisabled,
-    selectedHex, setSelectedHex,
     terrainColors,
     terrainRenderMode, setTerrainRenderMode,
     terrainLayersEnabled, setTerrainLayersEnabled,
@@ -276,39 +275,6 @@ export function TerrainSidebar() {
               )
             })}
           </div>
-        </div>
-
-        {/* ── Selected hex ── */}
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Selected Hex</div>
-          {selectedHex ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{
-                  display: 'inline-block', width: 10, height: 10, borderRadius: 2,
-                  background: terrainColors[selectedHex.terrain] ?? TERRAIN_COLORS[selectedHex.terrain] ?? '#888', flexShrink: 0,
-                }} />
-                <span style={{ color: '#e0e0f0', textTransform: 'capitalize' }}>
-                  {terrainLabel(selectedHex.terrain)}
-                </span>
-              </div>
-              <div style={{ color: '#6a6a8a', fontSize: 11 }}>q {selectedHex.q}, r {selectedHex.r}</div>
-              <button
-                onClick={() => setSelectedHex(null)}
-                style={{
-                  marginTop: 6, background: 'none', border: '1px solid #2a2a4a',
-                  color: '#6a6a8a', padding: '2px 8px', borderRadius: 3,
-                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#6a6a8a')}
-              >
-                deselect
-              </button>
-            </>
-          ) : (
-            <div style={{ color: '#4a4a6a' }}>Click a hex to select</div>
-          )}
         </div>
 
       </div>

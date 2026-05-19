@@ -116,7 +116,7 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   setShowReliefHeatmap: (v) => set({ showReliefHeatmap: v, showElevHeatmap: v ? false : get().showElevHeatmap }),
   setShowElevHeatmap: (v) => set({ showElevHeatmap: v, showReliefHeatmap: v ? false : get().showReliefHeatmap }),
 
-  setElevationPaintMode: (v) => set({ elevationPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false, selectedHex: null } : {}) }),
+  setElevationPaintMode: (v) => set({ elevationPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false } : {}) }),
   setElevationPaintBrush: (v) => set({ elevationPaintBrush: v }),
 
   overrideHexElevation: (q, r, elevation_class) => {

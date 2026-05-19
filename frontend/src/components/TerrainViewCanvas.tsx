@@ -14,6 +14,7 @@ import { drawRivers as _drawRivers } from '../lib/drawRivers'
 import { buildRoadChains, buildRailChains, spineSideCpKey, applyRoadWiggle, applyRailWiggle } from '../lib/roadChains'
 import { buildRoadChainsV2, applyRoadWiggleV2 } from '../lib/roadChainsV2'
 import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
+import { drawIcons as _drawIcons, drawIconShape } from '../lib/drawIcons'
 import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
 import { drawRoadsAndRailsV2 as _drawRoadsAndRailsV2 } from '../lib/drawRoadsRailsV2'
 
@@ -110,7 +111,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const overlayMapRef = useRef<maplibregl.Map | null>(null)
 
   const {
-    generatedHexes, generatedMetadata, selectedHex, setSelectedHex,
+    generatedHexes, generatedMetadata,
     hexBorderMode, hexEdgeMode,
     terrainBlobSmooth, terrainBlobOffset, terrainBlobBump,
     terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection,
@@ -174,6 +175,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     setHexHighlight, clearHexHighlight, startNewLineSegment, appendHexToLine, removeLastHexFromLine, truncateHighlightLine,
     eraseHexFromLine,
     setHighlightEdgePath,
+    iconOverlays, placedIcons, activeIconOverlayId, iconPlaceMode,
+    placeIcon, removeIconAt,
     elevationPaintMode,
     activeTool,
     setActiveTool,
@@ -187,7 +190,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const orientationRef = useRef(orientation)
   const hexesRef = useRef(generatedHexes)
   const metaRef = useRef(generatedMetadata)
-  const selectedHexRef = useRef(selectedHex)
   const hexBorderModeRef = useRef(hexBorderMode)
   const hexEdgeModeRef = useRef(hexEdgeMode)
   const terrainPaintModeRef = useRef(terrainPaintMode)
@@ -386,6 +388,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const setHighlightEdgePathRef = useRef(setHighlightEdgePath)
   const hoveredEdgeRef = useRef<{ hexQ: number; hexR: number; edgeI: number } | null>(null)
   const hoverRafRef = useRef<number | null>(null)
+  const iconOverlaysRef = useRef(iconOverlays)
+  const placedIconsRef = useRef(placedIcons)
+  const activeIconOverlayIdRef = useRef(activeIconOverlayId)
+  const iconPlaceModeRef = useRef(iconPlaceMode)
+  const placeIconRef = useRef(placeIcon)
+  const removeIconAtRef = useRef(removeIconAt)
+  const iconSnapRef = useRef<[number, number] | null>(null)
 
   mapModeRef.current = mapMode
   diptychJoinRef.current = diptychJoin
@@ -393,7 +402,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   orientationRef.current = orientation
   hexesRef.current = generatedHexes
   metaRef.current = generatedMetadata
-  selectedHexRef.current = selectedHex
   hexBorderModeRef.current = hexBorderMode
   hexEdgeModeRef.current = hexEdgeMode
   terrainPaintModeRef.current = terrainPaintMode
@@ -448,6 +456,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   truncateHighlightLineRef.current = truncateHighlightLine
   eraseHexFromLineRef.current = eraseHexFromLine
   setHighlightEdgePathRef.current = setHighlightEdgePath
+  iconOverlaysRef.current = iconOverlays
+  placedIconsRef.current = placedIcons
+  activeIconOverlayIdRef.current = activeIconOverlayId
+  iconPlaceModeRef.current = iconPlaceMode
+  placeIconRef.current = placeIcon
+  removeIconAtRef.current = removeIconAt
   roadControlOverridesRef.current = roadControlOverrides
   setRoadControlOverrideRef.current = setRoadControlOverride
   roadNodeEditModeRef.current = roadNodeEditMode
@@ -1007,7 +1021,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // The main canvas zoom transform handles magnification above that level.
     const offZoom = Math.min(zoom, 4)
     const pan = isExport ? { x: 0, y: 0 } : panRef.current
-    const selected = exportTarget ? null : selectedHexRef.current
     const borderMode = hexBorderModeRef.current
     const edgeMode = hexEdgeModeRef.current
     const { pw, ph, px, py } = exportTarget
@@ -1235,21 +1248,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         edgeMode,
         inMargin,
       })
-    }
-
-    // Selected hex highlight
-    if (selected) {
-      const hex = hexes.find(h => h.q === selected.q && h.r === selected.r)
-      if (hex) {
-        const verts = hex.vertices.map(([lon, lat]) => project(lon, lat))
-        ctx.beginPath()
-        ctx.moveTo(verts[0][0], verts[0][1])
-        for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i][0], verts[i][1])
-        ctx.closePath()
-        ctx.strokeStyle = '#ff0000'
-        ctx.lineWidth = 2
-        ctx.stroke()
-      }
     }
 
     // Hex highlights — offscreen cached (joined highlights + line highlights)
@@ -1860,6 +1858,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    // Icons — drawn on top of all layers
+    {
+      const snap = !isExport && iconPlaceModeRef.current && iconSnapRef.current
+        ? { overlayId: activeIconOverlayIdRef.current!, lon: iconSnapRef.current[0], lat: iconSnapRef.current[1] }
+        : undefined
+      _drawIcons({ ctx, iconOverlays: iconOverlaysRef.current, placedIcons: placedIconsRef.current, project, R, inMargin, snapPreview: snap })
+    }
+
     ctx.restore() // clip
 
     if (!exportTarget) {
@@ -2116,7 +2122,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -3803,12 +3809,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           }
           return
         }
-        setSelectedHex(hex)
-        return
       }
     }
-    setSelectedHex(null)
-  }, [setSelectedHex, clientToLogical])
+  }, [clientToLogical])
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return

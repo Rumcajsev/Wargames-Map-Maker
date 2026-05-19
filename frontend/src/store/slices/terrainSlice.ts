@@ -11,7 +11,6 @@ import { classifyHex, classifyHexLayers } from '../../lib/terrainClassify'
 export type TerrainSlice = {
   generatedHexes: GeneratedHex[]
   generatedMetadata: GridMetadata | null
-  selectedHex: GeneratedHex | null
   generateStatus: 'idle' | 'loading' | 'error' | 'done'
   generateError: string | null
   thresholds: Record<string, number>
@@ -62,7 +61,6 @@ export type TerrainSlice = {
   lakeBlobLobeDirection: number
   lakeOverrides: Record<string, BlobOverride>
   // Actions
-  setSelectedHex: (hex: GeneratedHex | null) => void
   resetToSetup: () => void
   generateMap: () => Promise<void>
   setTerrainThreshold: (terrain: string, v: number) => void
@@ -120,7 +118,6 @@ type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) =
 export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice => ({
   generatedHexes: [],
   generatedMetadata: null,
-  selectedHex: null,
   generateStatus: 'idle',
   generateError: null,
   thresholds: { ...DEFAULT_THRESHOLDS },
@@ -172,13 +169,10 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   lakeBlobLobeDirection: 1,
   lakeOverrides: {},
 
-  setSelectedHex: (hex) => set({ selectedHex: hex }),
-
   resetToSetup: () => set({
     step: 'setup',
     generatedHexes: [],
     generatedMetadata: null,
-    selectedHex: null,
     generateStatus: 'idle',
     generateError: null,
     generateProgress: null,
@@ -193,7 +187,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     settlementEditMode: false,
     settlementPlaceTarget: null,
     settlementMoveIndex: null,
-    settlementPlaceTier: 1,
+    settlementPlaceTier: null,
     rawRoadWays: [],
     roadEdges: [],
     roadsDisplayMode: 'per_hex',
@@ -415,51 +409,42 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   },
 
   overrideHexTerrain: (q, r, terrain) => {
-    const { generatedHexes, selectedHex } = get()
+    const { generatedHexes } = get()
     const terrains = terrain === 'clear' ? [] : [terrain]
     const updated = generatedHexes.map((h) =>
       h.q === q && h.r === r ? { ...h, terrain, terrains, manual_override: true } : h
     )
-    const updatedSelected = selectedHex && selectedHex.q === q && selectedHex.r === r
-      ? { ...selectedHex, terrain, terrains, manual_override: true }
-      : selectedHex
-    set({ generatedHexes: updated, selectedHex: updatedSelected })
+    set({ generatedHexes: updated })
   },
 
   addHexTerrainLayer: (q, r, terrain) => {
     if (terrain === 'clear') return
-    const { generatedHexes, selectedHex } = get()
+    const { generatedHexes } = get()
     const updated = generatedHexes.map((h) => {
       if (h.q !== q || h.r !== r) return h
       const layers = h.terrains ?? (h.terrain === 'clear' ? [] : [h.terrain])
       if (layers.includes(terrain)) return h
       return { ...h, terrains: [...layers, terrain], manual_override: true }
     })
-    const updatedSelected = selectedHex && selectedHex.q === q && selectedHex.r === r
-      ? updated.find(h => h.q === q && h.r === r) ?? selectedHex
-      : selectedHex
-    set({ generatedHexes: updated, selectedHex: updatedSelected })
+    set({ generatedHexes: updated })
   },
 
   removeHexTerrainLayer: (q, r, terrain) => {
-    const { generatedHexes, selectedHex } = get()
+    const { generatedHexes } = get()
     const updated = generatedHexes.map((h) => {
       if (h.q !== q || h.r !== r) return h
       const layers = h.terrains ?? (h.terrain === 'clear' ? [] : [h.terrain])
       const next = layers.filter(t => t !== terrain)
       return { ...h, terrains: next, manual_override: true }
     })
-    const updatedSelected = selectedHex && selectedHex.q === q && selectedHex.r === r
-      ? updated.find(h => h.q === q && h.r === r) ?? selectedHex
-      : selectedHex
-    set({ generatedHexes: updated, selectedHex: updatedSelected })
+    set({ generatedHexes: updated })
   },
 
   setTerrainLayersEnabled: (v) => set({ terrainLayersEnabled: v }),
 
   resetHexOverride: (q, r) => {
     get().pushUndoSnapshot()
-    const { generatedHexes, selectedHex, thresholds, disabledTerrains } = get()
+    const { generatedHexes, thresholds, disabledTerrains } = get()
     const hex = generatedHexes.find((h) => h.q === q && h.r === r)
     if (!hex) return
     const terrain = classifyHex(hex.coverage ?? {}, thresholds, disabledTerrains)
@@ -467,10 +452,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     const updated = generatedHexes.map((h) =>
       h.q === q && h.r === r ? { ...h, terrain, terrains, manual_override: false } : h
     )
-    const updatedSelected = selectedHex && selectedHex.q === q && selectedHex.r === r
-      ? { ...selectedHex, terrain, terrains, manual_override: false }
-      : selectedHex
-    set({ generatedHexes: updated, selectedHex: updatedSelected })
+    set({ generatedHexes: updated })
   },
 
   setTerrainBlobSmooth: (v) => set({ terrainBlobSmooth: v }),
@@ -517,10 +499,10 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setFieldPersistence: (v) => set({ fieldPersistence: v }),
   setFieldWildness: (terrain, v) => set((s) => ({ fieldWildness: { ...s.fieldWildness, [terrain]: v } })),
 
-  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false, selectedHex: null } : {}) }),
+  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
 
-  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, selectedHex: null } : {}) }),
+  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false } : {}) }),
   setAutoLakesEnabled: (v) => {
     const { generatedHexes, lakeSensitivity } = get()
     const updated = generatedHexes.map((h) =>
@@ -537,12 +519,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   },
   overrideHexLake: (q, r, isLake) => {
     get().pushUndoSnapshot()
-    const { generatedHexes, selectedHex } = get()
+    const { generatedHexes } = get()
     const updated = generatedHexes.map((h) => h.q === q && h.r === r ? { ...h, isLake, lakeManualOverride: isLake } : h)
-    const updatedSelected = selectedHex && selectedHex.q === q && selectedHex.r === r
-      ? { ...selectedHex, isLake, lakeManualOverride: isLake }
-      : selectedHex
-    set({ generatedHexes: updated, selectedHex: updatedSelected })
+    set({ generatedHexes: updated })
   },
   setLakeBlobSmooth: (v) => set({ lakeBlobSmooth: v }),
   setLakeBlobOffset: (v) => set({ lakeBlobOffset: v }),
