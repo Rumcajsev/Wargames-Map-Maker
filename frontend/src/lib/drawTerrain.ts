@@ -45,6 +45,7 @@ export type DrawTerrainParams = {
   beachStrip: boolean
   beachColor: string
   beachWidth: number
+  isPainting?: boolean
 }
 
 function applyTextureOverlay(
@@ -91,6 +92,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     hexes, hexTerrainLayers, R,
     realisticCoastline, coastlineClips, seaCoastKeys, oceanSeaKeys,
     beachStrip, beachColor, beachWidth,
+    isPainting,
   } = params
 
   // ── 1. Clear fills ──────────────────────────────────────────────────────────
@@ -144,7 +146,29 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   }
 
   // ── 4. Blob mode ────────────────────────────────────────────────────────────
-  if (renderMode === 'blob') {
+  // During active painting, skip the expensive blob layer and draw flat per-hex
+  // fills instead so painted hexes are immediately visible. Blobs rebuild and
+  // replace this on mouse release.
+  if (renderMode === 'blob' && isPainting) {
+    const PAINT_Z: Record<string, number> = { rough: 1, marsh: 2, light_woods: 4, woods: 5, sea: 10 }
+    const terrainOrder = [...new Set(projected.map(p => p.hex.terrain).filter(t => t !== 'clear'))]
+      .sort((a, b) => (PAINT_Z[a] ?? 5) - (PAINT_Z[b] ?? 5))
+    for (const terrain of terrainOrder) {
+      tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
+      tCtx.beginPath()
+      for (const { hex, verts } of projected) {
+        if (hex.terrain !== terrain) continue
+        if (edgeMode === 'whole' && hex.partial) continue
+        if (!hex.partial && !inMargin(verts)) continue
+        tCtx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+        tCtx.closePath()
+      }
+      tCtx.fill()
+    }
+  }
+
+  if (renderMode === 'blob' && !isPainting) {
     const BLOB_Z: Record<string, number> = { rough: 1, marsh: 2, light_woods: 4, woods: 5, sea: 10 }
 
     // Build defaultBlobMap excluding lakes
@@ -287,7 +311,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const ovPolys = ovBlobs.find(b => b.terrain === 'lake')?.polys ?? []
       drawLakePolys(ovPolys, override.color ?? lakeColor)
     }
-  } // end blob mode
+  } // end blob mode (non-painting)
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
   if (realisticCoastline) {

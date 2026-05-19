@@ -104,6 +104,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   const [isRoadPainting, setIsRoadPainting] = useState(false)
   const [isTerrainPainting, setIsTerrainPainting] = useState(false)
+  const isTerrainPaintingRef = useRef(false)
   const [mapOverlay, setMapOverlay] = useState(false)
   const [overlayRect, setOverlayRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const overlayContainerRef = useRef<HTMLDivElement>(null)
@@ -1113,6 +1114,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       beachStrip: beachStripRef.current,
       beachColor: beachColorRef.current,
       beachWidth: beachWidthRef.current,
+      isPainting: isTerrainPaintingRef.current,
     }
 
     // Build offscreen terrain layer when dirty (skipped for export — always renders inline)
@@ -2344,6 +2346,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!terrainPaintModeRef.current) return
       isPaintingRef.current = true
       lastPaintedKeyRef.current = null
+      isTerrainPaintingRef.current = true
       setIsTerrainPainting(true)
       paintAtClient(e.clientX, e.clientY)
     }
@@ -2352,7 +2355,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       paintAtClient(e.clientX, e.clientY)
     }
     const onUp = () => {
-      if (isPaintingRef.current && terrainPaintModeRef.current) setIsTerrainPainting(false)
+      if (isPaintingRef.current && terrainPaintModeRef.current) {
+        isTerrainPaintingRef.current = false
+        setIsTerrainPainting(false)
+      }
       isPaintingRef.current = false
     }
     el.addEventListener('mousedown', onDown)
