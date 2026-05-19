@@ -397,6 +397,63 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
             "width_multiplier": width_multiplier,
         })
 
-    log.info("fetch_rivers: %d rivers after edge conversion", len(rivers))
-    rivers.sort(key=lambda r: _polyline_length(r["coords"]), reverse=True)
-    return rivers
+    log.info("fetch_rivers: %d river segments before merging", len(rivers))
+
+    # Merge segments that share the same (name, type) into a single entry.
+    # A river like "Labe" is stored in OSM as dozens of way segments — we want
+    # one toggle per named waterway, not one per segment.
+    # Unnamed entries are kept separate (they are genuinely distinct waterways).
+    named: dict[tuple[str, str], dict] = {}
+    unnamed: list[dict] = []
+    _unnamed_counter = 0
+
+    for r in rivers:
+        name = r["name"]
+        if not name:
+            unnamed.append(r)
+            continue
+        key = (name, r["type"])
+        if key not in named:
+            named[key] = {
+                "name": name,
+                "type": r["type"],
+                "coords": r["coords"],
+                "edges": list(r["edges"]),
+                "_edge_keys": {
+                    (min(f"{e['q1']},{e['r1']}", f"{e['q2']},{e['r2']}"),
+                     max(f"{e['q1']},{e['r1']}", f"{e['q2']},{e['r2']}"))
+                    for e in r["edges"]
+                },
+                "width_multiplier": r["width_multiplier"],
+                "_total_length": _polyline_length(r["coords"]),
+            }
+        else:
+            entry = named[key]
+            seg_len = _polyline_length(r["coords"])
+            entry["_total_length"] += seg_len
+            # Use coords from the longest individual segment for representative display
+            if seg_len > _polyline_length(entry["coords"]):
+                entry["coords"] = r["coords"]
+            # Merge edges, deduplicating
+            for e in r["edges"]:
+                ekey = (
+                    min(f"{e['q1']},{e['r1']}", f"{e['q2']},{e['r2']}"),
+                    max(f"{e['q1']},{e['r1']}", f"{e['q2']},{e['r2']}"),
+                )
+                if ekey not in entry["_edge_keys"]:
+                    entry["_edge_keys"].add(ekey)
+                    entry["edges"].append(e)
+            # Width: take the max across segments (widest measurement wins)
+            entry["width_multiplier"] = max(entry["width_multiplier"], r["width_multiplier"])
+
+    merged = list(named.values()) + unnamed
+
+    log.info("fetch_rivers: %d rivers after merging", len(merged))
+    merged.sort(key=lambda r: r.get("_total_length") or _polyline_length(r["coords"]), reverse=True)
+
+    # Strip internal bookkeeping fields before returning
+    for r in merged:
+        r.pop("_edge_keys", None)
+        r.pop("_total_length", None)
+
+    return merged
