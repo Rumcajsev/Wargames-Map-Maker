@@ -590,6 +590,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const hexIdxRef = useRef(hexIdx)
   hexIdxRef.current = hexIdx
 
+  // Hex center lookup for road/rail chain builders.
+  // Depends on generatedMetadata (not generatedHexes) because hex centers are
+  // fixed at generation time and never change when terrain is painted —
+  // this prevents road/rail chain rebuilds on every terrain paint stroke.
+  const hexCenterIdx = useMemo(
+    () => new Map(generatedHexes.map(h => [`${h.q},${h.r}`, { center: h.center as [number, number] }])),
+    [generatedMetadata], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
   const blobComponents = useMemo(
     () => computeConnectedComponents(generatedHexes.map(h => ({ q: h.q, r: h.r, terrain: h.terrain, isLake: h.isLake ?? false }))),
     [generatedHexes],
@@ -623,8 +632,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
 
   const roadBaseData = useMemo(
-    () => buildRoadChains(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings),
-    [roadEdges, hexIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
+    () => buildRoadChains(roadEdges, hexCenterIdx, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings),
+    [roadEdges, hexCenterIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
   )
 
   const smoothedRoadData = useMemo(
@@ -658,9 +667,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           .filter(cp => cp.key.startsWith('ja|'))
           .map(cp => [cp.key.slice(3), cp.pos] as [string, [number, number]])
       )
-      return buildRailChains(railEdges, roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadEdgeMidpoints, roadJunctionPositions, railControlOverrides, 0, 0, railSmoothing)
+      return buildRailChains(railEdges, roadEdges, hexCenterIdx, roadEdgeMidpoints, roadJunctionPositions, railControlOverrides, 0, 0, railSmoothing)
     },
-    [railEdges, roadEdges, hexIdx, roadBaseData, railControlOverrides, railSmoothing],
+    [railEdges, roadEdges, hexCenterIdx, roadBaseData, railControlOverrides, railSmoothing],
   )
   const smoothedRailData = useMemo(
     () => applyRailWiggle(railBaseData, railWiggleAmp, railWiggleFreq, railSegmentProps, railHopProps, railWiggleDragging ? 0 : 2),
@@ -672,8 +681,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   railBaseDataRef.current = railBaseData
 
   const roadBaseDataV2 = useMemo(
-    () => ROAD_V2 ? buildRoadChainsV2(roadEdges, hexIdx as Map<string, { center: [number, number] }>, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings) : null,
-    [roadEdges, hexIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
+    () => ROAD_V2 ? buildRoadChainsV2(roadEdges, hexCenterIdx, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings) : null,
+    [roadEdges, hexCenterIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
   )
   const smoothedRoadDataV2 = useMemo(
     () => {
