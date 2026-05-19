@@ -173,10 +173,13 @@ function drawHatched(ctx: Ctx, s: PathSampler, sw: number) {
   ctx.beginPath()
   let d = spacing * 0.3
   while (d < s.totalLen) {
-    const p1 = s.pointAt(d, sw / 2, 1)
-    const p2 = s.pointAt(d, sw / 2, -1)
-    ctx.moveTo(p1[0], p1[1])
-    ctx.lineTo(p2[0], p2[1])
+    const { ux, uy } = s.tangentAt(d)
+    const [cx, cy] = s.pointAt(d, 0, 1)
+    // Rotate tangent 45° → tick direction; scale so perpendicular reach = sw/2
+    const hx = (sw / 2) * (ux - uy)
+    const hy = (sw / 2) * (ux + uy)
+    ctx.moveTo(cx - hx, cy - hy)
+    ctx.lineTo(cx + hx, cy + hy)
     d += spacing
   }
   ctx.stroke()
