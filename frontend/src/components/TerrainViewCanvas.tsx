@@ -15,6 +15,7 @@ import { buildRoadChains, buildRailChains, spineSideCpKey, applyRoadWiggle, appl
 import { buildRoadChainsV2, applyRoadWiggleV2 } from '../lib/roadChainsV2'
 import { drawHighlights as _drawHighlights } from '../lib/drawHighlights'
 import { drawIcons as _drawIcons } from '../lib/drawIcons'
+import { drawLabels as _drawLabels, getLabelBoxBounds } from '../lib/drawLabels'
 import { drawRoadsAndRails as _drawRoadsAndRails } from '../lib/drawRoadsRails'
 import { drawRoadsAndRailsV2 as _drawRoadsAndRailsV2 } from '../lib/drawRoadsRailsV2'
 
@@ -177,6 +178,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     setHighlightEdgePath,
     iconOverlays, placedIcons, activeIconOverlayId, iconPlaceMode,
     placeIcon, removeIconAt,
+    labelOverlays, placedLabels, activeLabelOverlayId,
+    placeLabel, removeLabelAt, updateLabelText,
     elevationPaintMode,
     activeTool,
     setActiveTool,
@@ -396,6 +399,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const removeIconAtRef = useRef(removeIconAt)
   const iconSnapRef = useRef<[number, number] | null>(null)
 
+  const [editingLabel, setEditingLabel] = useState<{
+    overlayId: string; index: number; text: string
+    screenX: number; screenY: number; width: number; height: number; textSize: number
+  } | null>(null)
+  const editingLabelRef = useRef(editingLabel)
+  const labelOverlaysRef = useRef(labelOverlays)
+  const placedLabelsRef = useRef(placedLabels)
+  const activeLabelOverlayIdRef = useRef(activeLabelOverlayId)
+  const placeLabelRef = useRef(placeLabel)
+  const removeLabelAtRef = useRef(removeLabelAt)
+  const updateLabelTextRef = useRef(updateLabelText)
+  const labelSnapRef = useRef<[number, number] | null>(null)
+
   mapModeRef.current = mapMode
   diptychJoinRef.current = diptychJoin
   paperSizeRef.current = paperSize
@@ -462,6 +478,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   iconPlaceModeRef.current = iconPlaceMode
   placeIconRef.current = placeIcon
   removeIconAtRef.current = removeIconAt
+  editingLabelRef.current = editingLabel
+  labelOverlaysRef.current = labelOverlays
+  placedLabelsRef.current = placedLabels
+  activeLabelOverlayIdRef.current = activeLabelOverlayId
+  placeLabelRef.current = placeLabel
+  removeLabelAtRef.current = removeLabelAt
+  updateLabelTextRef.current = updateLabelText
   roadControlOverridesRef.current = roadControlOverrides
   setRoadControlOverrideRef.current = setRoadControlOverride
   roadNodeEditModeRef.current = roadNodeEditMode
@@ -1866,6 +1889,25 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       _drawIcons({ ctx, iconOverlays: iconOverlaysRef.current, placedIcons: placedIconsRef.current, project, R, inMargin, snapPreview: snap })
     }
 
+    // Labels — drawn on top of icons
+    {
+      const tool = activeToolRef.current
+      const labelPlaceMode = tool.type === 'label-place'
+      const snap = !isExport && labelPlaceMode && labelSnapRef.current
+        ? { overlayId: (tool as { id: string }).id, lon: labelSnapRef.current[0], lat: labelSnapRef.current[1] }
+        : null
+      const el = editingLabelRef.current
+      _drawLabels({
+        ctx,
+        labelOverlays: labelOverlaysRef.current,
+        placedLabels: placedLabelsRef.current,
+        project,
+        inMargin,
+        snapPreview: snap,
+        editingLabel: el ? { overlayId: el.overlayId, index: el.index } : null,
+      })
+    }
+
     ctx.restore() // clip
 
     if (!exportTarget) {
@@ -2122,7 +2164,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2902,6 +2944,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       segmentStarted = false
       prevHex = hexAtClient(e.clientX, e.clientY)
       lastPainted = prevHex ? `${prevHex.q},${prevHex.r}` : null
+      if (!isEraser && prevHex) {
+        const segs = highlightLinesRef.current[hlId] ?? []
+        const lastSeg = segs.length > 0 ? segs[segs.length - 1] : []
+        if (lastSeg.length > 0 && lastSeg[lastSeg.length - 1] === lastPainted) {
+          segmentStarted = true  // continue existing segment tail
+        }
+      }
       if (isEraser && prevHex) eraseHexFromLineRef.current(hlId, prevHex.q, prevHex.r)
     }
 
@@ -3538,6 +3587,40 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
       return
     }
+    if (activeToolRef.current.type === 'label-place' && activePanelRef.current === 'highlights') {
+      const logical = clientToLogical(e.clientX, e.clientY)
+      if (logical) {
+        const { lx, ly, cssW, cssH } = logical
+        const meta = metaRef.current
+        if (meta) {
+          const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+          const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
+          const R2 = meta.outer_radius_m * scalePxPerM
+          const snapRadius = R2 * 0.1
+          let best: [number, number] | null = null
+          let bestDist = snapRadius
+          for (const hex of hexesRef.current) {
+            if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
+            const [cx, cy] = projectToCanvas(hex.center[0], hex.center[1], meta, pw, ph, px, py)
+            if (Math.max(Math.abs(lx - cx), Math.abs(ly - cy)) > R2 * 1.5) continue
+            const d0 = Math.hypot(lx - cx, ly - cy)
+            if (d0 < bestDist) { bestDist = d0; best = [hex.center[0], hex.center[1]] }
+            for (const [vlon, vlat] of hex.vertices) {
+              const [vx, vy] = projectToCanvas(vlon, vlat, meta, pw, ph, px, py)
+              const mx2 = (cx + vx) / 2, my2 = (cy + vy) / 2
+              const d = Math.hypot(lx - mx2, ly - my2)
+              if (d < bestDist) {
+                bestDist = d
+                best = unprojectFromCanvas(mx2, my2, meta, pw, ph, px, py) as [number, number]
+              }
+            }
+          }
+          labelSnapRef.current = best ?? unprojectFromCanvas(lx, ly, meta, pw, ph, px, py) as [number, number]
+          draw()
+        }
+      }
+      return
+    }
     if (!isEdgePaintActive()) {
       if (hoveredEdgeRef.current !== null) {
         hoveredEdgeRef.current = null
@@ -3830,6 +3913,43 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
         return
       }
+      if (tool.type === 'label-place') {
+        const overlayId = activeLabelOverlayIdRef.current
+        if (overlayId) {
+          const pos = labelSnapRef.current
+          if (pos) {
+            const labels = placedLabelsRef.current[overlayId] ?? []
+            const removeRadius = hexRadiusRef.current * 0.5
+            for (let i = 0; i < labels.length; i++) {
+              const { lon, lat } = labels[i]
+              const [ix, iy] = projectToCanvas(lon, lat, meta, pw, ph, px, py)
+              if (Math.hypot(lx - ix, ly - iy) < removeRadius) {
+                removeLabelAtRef.current(overlayId, i)
+                return
+              }
+            }
+            const overlay = labelOverlaysRef.current.find(o => o.id === overlayId)
+            placeLabelRef.current(overlayId, pos[0], pos[1], overlay?.name ?? 'Label')
+            return
+          }
+        }
+      }
+      if (tool.type === 'label-erase') {
+        const overlayId = activeLabelOverlayIdRef.current
+        if (overlayId) {
+          const labels = placedLabelsRef.current[overlayId] ?? []
+          const removeRadius = hexRadiusRef.current * 0.5
+          for (let i = 0; i < labels.length; i++) {
+            const { lon, lat } = labels[i]
+            const [ix, iy] = projectToCanvas(lon, lat, meta, pw, ph, px, py)
+            if (Math.hypot(lx - ix, ly - iy) < removeRadius) {
+              removeLabelAtRef.current(overlayId, i)
+              return
+            }
+          }
+        }
+        return
+      }
     }
 
     for (const hex of hexesRef.current) {
@@ -3902,6 +4022,45 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
   }, [clientToLogical])
+
+  const onDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const logical = clientToLogical(e.clientX, e.clientY)
+    if (!logical) return
+    const { lx, ly, cssW, cssH } = logical
+    const meta = metaRef.current
+    const canvas = canvasRef.current
+    if (!meta || !canvas) return
+    const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    const rect = canvas.getBoundingClientRect()
+    const zoom = zoomRef.current, pan = panRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    for (const overlay of labelOverlaysRef.current) {
+      const labels = placedLabelsRef.current[overlay.id] ?? []
+      for (let i = 0; i < labels.length; i++) {
+        const { lon, lat, text } = labels[i]
+        const [canvX, canvY] = projectToCanvas(lon, lat, meta, pw, ph, px, py)
+        const { bx, by, bw, bh } = getLabelBoxBounds(ctx, canvX, canvY, text || overlay.name, overlay)
+        if (lx >= bx && lx <= bx + bw && ly >= by && ly <= by + bh) {
+          const screenX = rect.left + (canvX - cssW / 2) * zoom + cssW / 2 + pan.x
+          const screenY = rect.top + (canvY - cssH / 2) * zoom + cssH / 2 + pan.y
+          setEditingLabel({
+            overlayId: overlay.id,
+            index: i,
+            text: text,
+            screenX,
+            screenY,
+            width: Math.max(80, bw * zoom),
+            height: bh * zoom,
+            textSize: overlay.textSize,
+          })
+          draw()
+          return
+        }
+      }
+    }
+  }, [clientToLogical, draw])
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return
@@ -3977,6 +4136,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       <canvas
         ref={canvasRef}
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
@@ -4039,6 +4199,52 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       >
         map peek
       </button>
+      {editingLabel && (() => {
+        const overlay = labelOverlays.find(o => o.id === editingLabel.overlayId)
+        return (
+          <input
+            key={`${editingLabel.overlayId}-${editingLabel.index}`}
+            autoFocus
+            value={editingLabel.text}
+            onChange={e => setEditingLabel(prev => prev ? { ...prev, text: e.target.value } : null)}
+            onBlur={() => {
+              updateLabelTextRef.current(editingLabel.overlayId, editingLabel.index, editingLabel.text)
+              setEditingLabel(null)
+              draw()
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                updateLabelTextRef.current(editingLabel.overlayId, editingLabel.index, editingLabel.text)
+                setEditingLabel(null)
+                draw()
+              }
+              if (e.key === 'Escape') {
+                setEditingLabel(null)
+                draw()
+              }
+            }}
+            style={{
+              position: 'fixed',
+              left: editingLabel.screenX - editingLabel.width / 2,
+              top: editingLabel.screenY - editingLabel.height / 2,
+              width: editingLabel.width,
+              height: editingLabel.height,
+              background: overlay?.bgColor === 'transparent' ? 'rgba(0,0,20,0.85)' : (overlay?.bgColor ?? '#aa1111'),
+              border: '2px solid #5a9e6f',
+              borderRadius: 2,
+              color: overlay?.textColor ?? '#ffffff',
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: editingLabel.textSize * (zoomRef.current),
+              fontWeight: 'bold',
+              textAlign: 'center',
+              outline: 'none',
+              zIndex: 50,
+              padding: 0,
+              boxSizing: 'border-box',
+            }}
+          />
+        )
+      })()}
       {blobFlyout && (
         <BlobOverrideFlyout
           type={blobFlyout.type}
