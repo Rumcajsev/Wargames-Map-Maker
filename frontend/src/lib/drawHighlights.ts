@@ -165,33 +165,48 @@ function drawDashed(ctx: Ctx, s: PathSampler, sw: number) {
 }
 
 function drawHatched(ctx: Ctx, pts: [number, number][], sw: number, closed: boolean) {
-  const spacing = Math.max(3, sw * 1.0)
-  const s = Math.ceil(spacing)
-  const tile = new OffscreenCanvas(s, s)
-  const tCtx = tile.getContext('2d')!
-  tCtx.strokeStyle = ctx.strokeStyle as string
-  tCtx.lineWidth = 1
-  tCtx.beginPath()
-  tCtx.moveTo(0, s); tCtx.lineTo(s, 0)
-  tCtx.moveTo(-s, s); tCtx.lineTo(0, 0)
-  tCtx.moveTo(s, s); tCtx.lineTo(s * 2, 0)
-  tCtx.stroke()
-  const pattern = ctx.createPattern(tile, 'repeat')
-  if (!pattern) return
-  const prevStyle = ctx.strokeStyle
-  const prevCap = ctx.lineCap
-  const prevJoin = ctx.lineJoin
-  ctx.strokeStyle = pattern
-  ctx.lineCap = 'butt'
-  ctx.lineJoin = 'miter'
-  ctx.beginPath()
-  ctx.moveTo(pts[0][0], pts[0][1])
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
-  if (closed) ctx.closePath()
-  ctx.stroke()
-  ctx.strokeStyle = prevStyle
-  ctx.lineCap = prevCap
-  ctx.lineJoin = prevJoin
+  if (pts.length < 2) return
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const [x, y] of pts) {
+    if (x < minX) minX = x; if (y < minY) minY = y
+    if (x > maxX) maxX = x; if (y > maxY) maxY = y
+  }
+  minX -= sw; minY -= sw; maxX += sw; maxY += sw
+  const cw = maxX - minX, ch = maxY - minY
+  if (cw < 1 || ch < 1) return
+
+  const color = ctx.strokeStyle as string
+  const dpr = Math.abs(ctx.getTransform().a) || 1
+  const tmp = new OffscreenCanvas(Math.ceil(cw * dpr), Math.ceil(ch * dpr))
+  const tc = tmp.getContext('2d')!
+  tc.scale(dpr, dpr)
+  tc.translate(-minX, -minY)
+
+  // Draw stroke shape as white mask
+  tc.strokeStyle = '#ffffff'
+  tc.lineWidth = sw
+  tc.lineCap = ctx.lineCap
+  tc.lineJoin = ctx.lineJoin
+  tc.beginPath()
+  tc.moveTo(pts[0][0], pts[0][1])
+  for (let i = 1; i < pts.length; i++) tc.lineTo(pts[i][0], pts[i][1])
+  if (closed) tc.closePath()
+  tc.stroke()
+
+  // Draw 45° diagonal lines clipped to the mask
+  tc.globalCompositeOperation = 'source-in'
+  tc.strokeStyle = color
+  const spacing = Math.max(2.5, sw * 0.6)
+  tc.lineWidth = Math.max(0.5, spacing * 0.45)
+  tc.lineCap = 'butt'
+  tc.beginPath()
+  for (let offset = -(cw + sw); offset <= ch + sw; offset += spacing) {
+    tc.moveTo(minX, minY + offset)
+    tc.lineTo(maxX, minY + offset + cw)
+  }
+  tc.stroke()
+
+  ctx.drawImage(tmp, minX, minY, cw, ch)
 }
 
 export function drawPatternAlongPath(
