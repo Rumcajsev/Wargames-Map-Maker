@@ -234,7 +234,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
           {highlight.fillOpacity > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ ...labelStyle, marginBottom: 6 }}>Fill style</div>
-              <div style={{ display: 'flex', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: (highlight.fillPattern ?? 'none') === 'hatched' ? 8 : 0 }}>
                 {(['none', 'hatched'] as const).map(fp => (
                   <button
                     key={fp}
@@ -246,6 +246,16 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
                   </button>
                 ))}
               </div>
+              {(highlight.fillPattern ?? 'none') === 'hatched' && (
+                <SliderRow label="Spacing" value={`×${(highlight.patternSpacing ?? 1).toFixed(1)}`}>
+                  <input
+                    type="range" min={0.3} max={3} step={0.1}
+                    value={highlight.patternSpacing ?? 1}
+                    onChange={e => upd({ patternSpacing: Number(e.target.value) })}
+                    style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
+                  />
+                </SliderRow>
+              )}
             </div>
           )}
         </>
