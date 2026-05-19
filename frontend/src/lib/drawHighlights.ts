@@ -139,8 +139,8 @@ export function gaussianSmoothOpen(pts: [number, number][], sigma: number): [num
 
 // ── Pattern renderers ─────────────────────────────────────────────────────────
 
-function drawDotted(ctx: Ctx, s: PathSampler, sw: number) {
-  const r = sw * 0.65, spacing = sw * 2.2
+function drawDotted(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
+  const r = sw * 0.65, spacing = sw * 2.2 * sm
   ctx.fillStyle = ctx.strokeStyle as string
   let d = spacing * 0.5
   while (d < s.totalLen) {
@@ -150,8 +150,8 @@ function drawDotted(ctx: Ctx, s: PathSampler, sw: number) {
   }
 }
 
-function drawDashed(ctx: Ctx, s: PathSampler, sw: number) {
-  const dashLen = sw * 2.5, gapLen = sw * 2.5, period = dashLen + gapLen
+function drawDashed(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
+  const dashLen = sw * 2.5, gapLen = sw * 2.5 * sm, period = dashLen + gapLen
   const prevCap = ctx.lineCap; ctx.lineCap = 'butt'
   ctx.beginPath()
   let d = 0
@@ -164,10 +164,10 @@ function drawDashed(ctx: Ctx, s: PathSampler, sw: number) {
   ctx.stroke(); ctx.lineCap = prevCap
 }
 
-function drawDashDot(ctx: Ctx, s: PathSampler, sw: number) {
+function drawDashDot(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
   const dashLen = sw * 2.5
   const dotR = Math.max(0.5, sw * 0.5)
-  const gap = sw * 1.0
+  const gap = sw * 1.0 * sm
   const period = dashLen + gap + dotR * 2 + gap
 
   const prevCap = ctx.lineCap
@@ -198,13 +198,14 @@ export function drawPatternAlongPath(
   pattern: LinePattern,
   strokeWidth: number,
   closed: boolean,
+  spacingMult: number,
 ) {
   const s = buildPathSampler(pts, closed)
   if (!s) return
   switch (pattern) {
-    case 'dotted':  return drawDotted(ctx, s, strokeWidth)
-    case 'dashed':  return drawDashed(ctx, s, strokeWidth)
-    case 'dashdot': return drawDashDot(ctx, s, strokeWidth)
+    case 'dotted':  return drawDotted(ctx, s, strokeWidth, spacingMult)
+    case 'dashed':  return drawDashed(ctx, s, strokeWidth, spacingMult)
+    case 'dashdot': return drawDashDot(ctx, s, strokeWidth, spacingMult)
   }
 }
 
@@ -368,7 +369,7 @@ export function drawHighlights(
       hCtx.lineCap = 'round'
       hCtx.lineJoin = 'round'
       for (const poly of smoothed) {
-        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth, true)
+        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth, true, hl.patternSpacing ?? 1)
       }
       hCtx.globalAlpha = 1
       hCtx.restore()
@@ -426,7 +427,7 @@ export function drawHighlights(
         const pts = buildLinePts(raw, s)
         const suppressBackbone = ['dashed', 'dotted', 'dashdot'].includes(pattern)
         if (!suppressBackbone) drawLinePath(pts)
-        if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, hl.strokeWidth, false)
+        if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, hl.strokeWidth, false, hl.patternSpacing ?? 1)
       }
 
       if (hl.mode === 'edge') {

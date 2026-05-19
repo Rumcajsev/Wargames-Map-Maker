@@ -282,7 +282,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
         )
       })()}
 
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: currentPattern !== 'none' ? 0 : 10 }}>
         <div style={{ ...labelStyle, marginBottom: 6 }}>Pattern</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {PATTERNS.map(([p]) => (
@@ -297,6 +297,17 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
           ))}
         </div>
       </div>
+
+      {currentPattern !== 'none' && (
+        <SliderRow label="Spacing" value={`×${(highlight.patternSpacing ?? 1).toFixed(1)}`}>
+          <input
+            type="range" min={0.3} max={3} step={0.1}
+            value={highlight.patternSpacing ?? 1}
+            onChange={e => upd({ patternSpacing: Number(e.target.value) })}
+            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
+          />
+        </SliderRow>
+      )}
 
       <button
         onClick={() => {
