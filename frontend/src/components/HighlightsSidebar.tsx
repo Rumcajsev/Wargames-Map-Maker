@@ -15,50 +15,38 @@ function HighlightSwatch({ h }: { h: HexHighlight }) {
     const baseLine = <line x1="1" y1="9" x2="17" y2="9" {...lineProps} />
     const tickSW = Math.max(0.8, sw * 0.8)
 
-    let decoration: React.ReactNode = null
     if (lp === 'dotted') {
       return (
         <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-          <line x1="1" y1="9" x2="17" y2="9" {...lineProps} strokeDasharray="1.5 3" />
+          <line x1="1" y1="9" x2="17" y2="9" {...lineProps} strokeDasharray="1.5 3.5" />
         </svg>
       )
-    } else if (lp === 'dashed') {
+    }
+    if (lp === 'dashed') {
       return (
         <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
           <line x1="1" y1="9" x2="17" y2="9" {...lineProps} strokeLinecap="butt" strokeDasharray="5 2.5" />
         </svg>
       )
-    } else if (lp === 'ticks') {
-      decoration = [4, 9, 14].map(x => (
-        <line key={x} x1={x} y1="5.5" x2={x} y2="12.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
-      ))
-    } else if (lp === 'fortification') {
-      decoration = [4, 9, 14].map(x => (
-        <line key={x} x1={x} y1="9" x2={x} y2="13.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
-      ))
-    } else if (lp === 'trench') {
-      decoration = (
-        <>
-          <path d="M 2,9 A 3,3 0 0,1 8,9" fill="none" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
-          <path d="M 10,9 A 3,3 0 0,1 16,9" fill="none" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
-        </>
-      )
-    } else if (lp === 'barbed_wire') {
-      decoration = (
-        <>
-          {[5, 13].map(x => (
-            <g key={x}>
-              <line x1={x - 2} y1="6.5" x2={x + 2} y2="11.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
-              <line x1={x + 2} y1="6.5" x2={x - 2} y2="11.5" stroke={color} strokeWidth={tickSW} strokeLinecap="round" />
-            </g>
-          ))}
-        </>
-      )
-    } else if (lp === 'arrows') {
-      decoration = (
-        <polyline points="6,6 11,9 6,12" fill="none" stroke={color} strokeWidth={tickSW} strokeLinecap="round" strokeLinejoin="round" />
+    }
+    if (lp === 'hatched') {
+      return (
+        <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+          <defs>
+            <pattern id={`hatch-sw-${color.replace('#','')}`} patternUnits="userSpaceOnUse" width="3" height="3" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="3" stroke={color} strokeWidth={sw} />
+            </pattern>
+            <clipPath id={`hatch-clip-${color.replace('#','')}`}>
+              <rect x="1" y={9 - sw * 1.5} width="16" height={sw * 3} />
+            </clipPath>
+          </defs>
+          <rect x="1" y={9 - sw * 1.5} width="16" height={sw * 3}
+            fill={`url(#hatch-sw-${color.replace('#','')})`}
+            clipPath={`url(#hatch-clip-${color.replace('#','')})`} />
+        </svg>
       )
     }
+    const decoration: React.ReactNode = null
 
     return (
       <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>

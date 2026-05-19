@@ -43,8 +43,8 @@ const vizBtnStyle = (active: boolean): React.CSSProperties => ({
   flexShrink: 0,
 })
 
-const SliderRow = ({ label, value, children }: { label: string; value: string; children: React.ReactNode }) => (
-  <div style={{ marginBottom: 10 }}>
+const SliderRow = ({ label, value, children, dim }: { label: string; value: string; children: React.ReactNode; dim?: boolean }) => (
+  <div style={{ marginBottom: 10, opacity: dim ? 0.35 : 1, transition: 'opacity 0.15s' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
       <span style={labelStyle}>{label}</span>
       <span style={{ fontSize: 10, color: '#6a6a8a' }}>{value}</span>
@@ -79,7 +79,6 @@ const PREVIEW_TICK = '#7a7a9a'
 function PatternPreview({ pattern }: { pattern: string }) {
   const sw = 1.5
   const lineProps = { stroke: PREVIEW_STROKE, strokeWidth: sw, strokeLinecap: 'round' as const }
-  const tickSW = 1.2
 
   if (pattern === 'none') {
     return (
@@ -91,7 +90,7 @@ function PatternPreview({ pattern }: { pattern: string }) {
   if (pattern === 'dotted') {
     return (
       <svg width="28" height="18" viewBox="0 0 28 18">
-        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} strokeDasharray="1.5 3" />
+        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} strokeDasharray="1.5 3.5" />
       </svg>
     )
   }
@@ -102,79 +101,29 @@ function PatternPreview({ pattern }: { pattern: string }) {
       </svg>
     )
   }
-  if (pattern === 'ticks') {
+  if (pattern === 'hatched') {
     return (
       <svg width="28" height="18" viewBox="0 0 28 18">
-        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} />
-        {[8, 14, 20].map(x => (
-          <line key={x} x1={x} y1="5" x2={x} y2="13" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" />
-        ))}
-      </svg>
-    )
-  }
-  if (pattern === 'fortification') {
-    return (
-      <svg width="28" height="18" viewBox="0 0 28 18">
-        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} />
-        {[8, 14, 20].map(x => (
-          <line key={x} x1={x} y1="9" x2={x} y2="14" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" />
-        ))}
-      </svg>
-    )
-  }
-  if (pattern === 'trench') {
-    return (
-      <svg width="28" height="18" viewBox="0 0 28 18">
-        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} />
-        <path d="M 5,9 A 3,3 0 0,1 11,9" fill="none" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" />
-        <path d="M 16,9 A 3,3 0 0,1 22,9" fill="none" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" />
-      </svg>
-    )
-  }
-  if (pattern === 'barbed_wire') {
-    return (
-      <svg width="28" height="18" viewBox="0 0 28 18">
-        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} />
-        {[9, 19].map(x => (
-          <g key={x}>
-            <line x1={x - 2} y1="6.5" x2={x + 2} y2="11.5" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" />
-            <line x1={x + 2} y1="6.5" x2={x - 2} y2="11.5" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" />
-          </g>
-        ))}
-      </svg>
-    )
-  }
-  if (pattern === 'arrows') {
-    return (
-      <svg width="28" height="18" viewBox="0 0 28 18">
-        <line x1="2" y1="9" x2="26" y2="9" {...lineProps} />
-        <polyline points="8,6 13,9 8,12" fill="none" stroke={PREVIEW_TICK} strokeWidth={tickSW} strokeLinecap="round" strokeLinejoin="round" />
+        <defs>
+          <pattern id="hatch-prev" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="4" stroke={PREVIEW_STROKE} strokeWidth="1.5" />
+          </pattern>
+          <clipPath id="hatch-clip">
+            <rect x="2" y="6" width="24" height="6" />
+          </clipPath>
+        </defs>
+        <rect x="2" y="6" width="24" height="6" fill="url(#hatch-prev)" clipPath="url(#hatch-clip)" />
       </svg>
     )
   }
   return null
 }
 
-function SidePreview({ side }: { side: 'left' | 'right' | 'center' }) {
-  return (
-    <svg width="24" height="18" viewBox="0 0 24 18">
-      <line x1="2" y1="9" x2="22" y2="9" stroke={PREVIEW_STROKE} strokeWidth={1.5} strokeLinecap="round" />
-      {side === 'left' && <line x1="8" y1="9" x2="6" y2="14" stroke={PREVIEW_TICK} strokeWidth={1.2} strokeLinecap="round" />}
-      {side === 'right' && <line x1="16" y1="9" x2="18" y2="14" stroke={PREVIEW_TICK} strokeWidth={1.2} strokeLinecap="round" />}
-      {side === 'center' && <line x1="12" y1="9" x2="12" y2="14" stroke={PREVIEW_TICK} strokeWidth={1.2} strokeLinecap="round" />}
-    </svg>
-  )
-}
-
 const PATTERNS: Array<[string, string]> = [
-  ['none', 'None'],
-  ['ticks', 'Ticks'],
-  ['fortification', 'Fortif.'],
-  ['trench', 'Trench'],
-  ['barbed_wire', 'Barbed'],
+  ['none', 'Straight'],
   ['dotted', 'Dotted'],
   ['dashed', 'Dashed'],
-  ['arrows', 'Arrows'],
+  ['hatched', 'Hatched'],
 ]
 
 export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) {
@@ -183,8 +132,6 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
 
   const isArea = highlight.mode === 'area'
   const currentPattern = highlight.linePattern ?? 'none'
-  const hasPattern = currentPattern !== 'none'
-  const patternHasSide = hasPattern && ['ticks', 'fortification', 'trench'].includes(currentPattern)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -209,7 +156,7 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
         position: 'fixed',
         left: 204,
         top,
-        width: 260,
+        width: 195,
         boxSizing: 'border-box',
         background: '#12131f',
         border: '1px solid #2a2b3e',
@@ -256,55 +203,40 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
       </div>
 
       {isArea && (
-        <div style={{ marginBottom: 10 }}>
-          <PillToggle
-            enabled={highlight.fillEnabled}
-            label="FILL"
-            onToggle={() => upd({ fillEnabled: !highlight.fillEnabled })}
+        <SliderRow label="Fill" value={highlight.fillOpacity === 0 ? 'off' : `${Math.round(highlight.fillOpacity * 100)}%`} dim={highlight.fillOpacity === 0}>
+          <input
+            type="range" min={0} max={100} step={10}
+            value={Math.round(highlight.fillOpacity * 100)}
+            onChange={e => {
+              const v = Number(e.target.value)
+              upd({ fillOpacity: v / 100, fillEnabled: v > 0 })
+            }}
+            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
           />
-          {highlight.fillEnabled && (
-            <SliderRow label="Opacity" value={`${Math.round(highlight.fillOpacity * 100 / 20) * 20}%`}>
-              <input
-                type="range" min={20} max={100} step={20}
-                value={Math.round(highlight.fillOpacity * 100 / 20) * 20}
-                onChange={e => upd({ fillOpacity: Number(e.target.value) / 100 })}
-                style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
-              />
-            </SliderRow>
-          )}
-        </div>
+        </SliderRow>
       )}
 
-      <div style={{ marginBottom: 10 }}>
-        {isArea ? (
-          <PillToggle
-            enabled={highlight.strokeEnabled}
-            label="STROKE"
-            onToggle={() => upd({ strokeEnabled: !highlight.strokeEnabled })}
+      <div style={{ marginBottom: 0 }}>
+        {!isArea && <div style={{ ...labelStyle, marginBottom: 6 }}>Stroke</div>}
+        <SliderRow label={isArea ? 'Stroke' : 'Opacity'} value={highlight.strokeOpacity === 0 ? 'off' : `${Math.round(highlight.strokeOpacity * 100)}%`} dim={highlight.strokeOpacity === 0}>
+          <input
+            type="range" min={0} max={100} step={10}
+            value={Math.round(highlight.strokeOpacity * 100)}
+            onChange={e => {
+              const v = Number(e.target.value)
+              upd({ strokeOpacity: v / 100, strokeEnabled: v > 0 })
+            }}
+            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
           />
-        ) : (
-          <div style={{ ...labelStyle, marginBottom: 6 }}>Stroke</div>
-        )}
-        {(!isArea || highlight.strokeEnabled) && (
-          <>
-            <SliderRow label="Opacity" value={`${Math.round(highlight.strokeOpacity * 100 / 20) * 20}%`}>
-              <input
-                type="range" min={20} max={100} step={20}
-                value={Math.round(highlight.strokeOpacity * 100 / 20) * 20}
-                onChange={e => upd({ strokeOpacity: Number(e.target.value) / 100 })}
-                style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
-              />
-            </SliderRow>
-            <SliderRow label="Width" value={`${highlight.strokeWidth}`}>
-              <input
-                type="range" min={1} max={20} step={0.5}
-                value={highlight.strokeWidth}
-                onChange={e => upd({ strokeWidth: Number(e.target.value) })}
-                style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
-              />
-            </SliderRow>
-          </>
-        )}
+        </SliderRow>
+        <SliderRow label="Width" value={`${highlight.strokeWidth}`} dim={highlight.strokeOpacity === 0}>
+          <input
+            type="range" min={1} max={20} step={0.5}
+            value={highlight.strokeWidth}
+            onChange={e => upd({ strokeWidth: Number(e.target.value) })}
+            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
+          />
+        </SliderRow>
       </div>
 
       {isArea && (
@@ -371,35 +303,6 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
           ))}
         </div>
       </div>
-
-      {hasPattern && (
-        <SliderRow label="Spacing" value={`×${(highlight.patternSpacing ?? 1).toFixed(2)}`}>
-          <input
-            type="range" min={0.2} max={4} step={0.05}
-            value={highlight.patternSpacing ?? 1}
-            onChange={e => upd({ patternSpacing: Number(e.target.value) })}
-            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
-          />
-        </SliderRow>
-      )}
-
-      {patternHasSide && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ ...labelStyle, marginBottom: 6 }}>Side</div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['left', 'right', 'center'] as const).map(side => (
-              <button
-                key={side}
-                onClick={() => upd({ linePatternSide: side })}
-                style={vizBtnStyle((highlight.linePatternSide ?? 'right') === side)}
-                title={side}
-              >
-                <SidePreview side={side} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <button
         onClick={() => {

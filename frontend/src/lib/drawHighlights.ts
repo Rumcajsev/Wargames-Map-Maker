@@ -4,8 +4,7 @@
 import type { HexHighlight, GeneratedHex } from '../store/mapStore'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
-type LinePattern = 'ticks' | 'fortification' | 'trench' | 'barbed_wire' | 'dotted' | 'dashed' | 'arrows'
-type LineSide = 'left' | 'right' | 'center'
+type LinePattern = 'dotted' | 'dashed' | 'hatched'
 
 // ── Path sampler ─────────────────────────────────────────────────────────────
 
@@ -140,99 +139,8 @@ export function gaussianSmoothOpen(pts: [number, number][], sigma: number): [num
 
 // ── Pattern renderers ─────────────────────────────────────────────────────────
 
-const sideSign = (side: LineSide): 1 | -1 => (side === 'left' ? -1 : 1)
-
-export function drawTicks(ctx: Ctx, s: PathSampler, sw: number, side: LineSide, sm: number) {
-  const tickLen = sw * 2.2, tickSpacing = sw * 3.2 * sm
-  ctx.beginPath()
-  let d = tickSpacing * 0.5
-  while (d < s.totalLen) {
-    const signs: number[] = side === 'center' ? [1, -1] : [sideSign(side)]
-    for (const sign of signs) {
-      const base = s.pointAt(d, 0, sign), tip = s.pointAt(d, tickLen, sign)
-      ctx.moveTo(base[0], base[1]); ctx.lineTo(tip[0], tip[1])
-    }
-    d += tickSpacing
-  }
-  ctx.stroke()
-}
-
-export function drawFortification(ctx: Ctx, s: PathSampler, sw: number, side: LineSide, sm: number, openPath = false) {
-  const sampleStep = Math.max(0.5, sw * 0.15)
-  if (!openPath) ctx.lineJoin = 'miter'
-  if (!openPath) ctx.beginPath()
-  let first = true
-  const addPt = (p: [number, number]) => {
-    if (first) { ctx.moveTo(p[0], p[1]); first = false } else ctx.lineTo(p[0], p[1])
-  }
-  if (side === 'center') {
-    const peakH = sw * 1.8, period = sw * 3.2 * sm
-    for (let d = 0; d <= s.totalLen; d += sampleStep) {
-      const phase = (d % period) / period
-      const t = phase < 0.5 ? phase * 2 : 2 - phase * 2
-      const sign: 1 | -1 = phase < 0.5 ? 1 : -1
-      addPt(s.pointAt(d, t * peakH, sign))
-    }
-    addPt(s.pointAt(s.totalLen, 0, 1))
-  } else {
-    const sign = sideSign(side)
-    const peakH = sw * 2.0, toothW = sw * 2.4, gapW = sw * 0.8 * sm, period = toothW + gapW
-    const toothFrac = toothW / period
-    for (let d = 0; d <= s.totalLen; d += sampleStep) {
-      const phase = (d % period) / period
-      let offset: number
-      if (phase < toothFrac) {
-        const tp = phase / toothFrac
-        offset = (tp < 0.5 ? tp * 2 : 2 - tp * 2) * peakH
-      } else {
-        offset = 0
-      }
-      addPt(s.pointAt(d, offset, sign))
-    }
-    addPt(s.pointAt(s.totalLen, 0, sign))
-  }
-  if (!openPath) { ctx.stroke(); ctx.lineJoin = 'round' }
-}
-
-export function drawTrench(ctx: Ctx, s: PathSampler, sw: number, side: LineSide, sm: number, openPath = false) {
-  const sign = side === 'center' ? 1 : sideSign(side)
-  const amp = sw * 1.6, halfPeriod = sw * 1.3 * sm
-  const sampleStep = Math.max(0.5, sw * 0.2)
-  if (!openPath) ctx.beginPath()
-  let first = true
-  let d = 0, high = false
-  const add = (p: [number, number]) => {
-    if (first) { ctx.moveTo(p[0], p[1]); first = false } else ctx.lineTo(p[0], p[1])
-  }
-  while (d < s.totalLen) {
-    const offset = high ? amp : 0
-    const dEnd = Math.min(d + halfPeriod, s.totalLen)
-    const steps = Math.max(1, Math.ceil((dEnd - d) / sampleStep))
-    for (let k = 0; k <= steps; k++) add(s.pointAt(d + (dEnd - d) * k / steps, offset, sign))
-    if (dEnd < s.totalLen) add(s.pointAt(dEnd, high ? 0 : amp, sign))
-    high = !high; d = dEnd
-  }
-  add(s.pointAt(s.totalLen, 0, sign))
-  if (!openPath) ctx.stroke()
-}
-
-export function drawBarbedWire(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
-  const barbLen = sw * 1.6, spacing = sw * 4.0 * sm, lead = sw * 0.6
-  const prevWidth = ctx.lineWidth; ctx.lineWidth = sw * 0.7
-  ctx.beginPath()
-  let d = spacing * 0.5
-  while (d < s.totalLen) {
-    const p1a = s.pointAt(d - lead, barbLen, 1),  p1b = s.pointAt(d + lead, barbLen, -1)
-    const p2a = s.pointAt(d - lead, barbLen, -1), p2b = s.pointAt(d + lead, barbLen,  1)
-    ctx.moveTo(p1a[0], p1a[1]); ctx.lineTo(p1b[0], p1b[1])
-    ctx.moveTo(p2a[0], p2a[1]); ctx.lineTo(p2b[0], p2b[1])
-    d += spacing
-  }
-  ctx.stroke(); ctx.lineWidth = prevWidth
-}
-
-export function drawDotted(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
-  const r = sw * 0.65, spacing = sw * 1.8 * sm
+function drawDotted(ctx: Ctx, s: PathSampler, sw: number) {
+  const r = sw * 0.65, spacing = sw * 2.2
   ctx.fillStyle = ctx.strokeStyle as string
   let d = spacing * 0.5
   while (d < s.totalLen) {
@@ -242,8 +150,8 @@ export function drawDotted(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
   }
 }
 
-export function drawDashed(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
-  const dashLen = sw * 2.5, gapLen = sw * 3.0 * sm, period = dashLen + gapLen
+function drawDashed(ctx: Ctx, s: PathSampler, sw: number) {
+  const dashLen = sw * 2.5, gapLen = sw * 2.5, period = dashLen + gapLen
   const prevCap = ctx.lineCap; ctx.lineCap = 'butt'
   ctx.beginPath()
   let d = 0
@@ -256,70 +164,49 @@ export function drawDashed(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
   ctx.stroke(); ctx.lineCap = prevCap
 }
 
-export function drawArrows(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
-  const armLen = sw * 2.2, spacing = sw * 5.5 * sm, armW = armLen * 0.8
+function drawHatched(ctx: Ctx, pts: [number, number][], sw: number, closed: boolean) {
+  const spacing = Math.max(3, sw * 1.0)
+  const s = Math.ceil(spacing)
+  const tile = new OffscreenCanvas(s, s)
+  const tCtx = tile.getContext('2d')!
+  tCtx.strokeStyle = ctx.strokeStyle as string
+  tCtx.lineWidth = 1
+  tCtx.beginPath()
+  tCtx.moveTo(0, s); tCtx.lineTo(s, 0)
+  tCtx.moveTo(-s, s); tCtx.lineTo(0, 0)
+  tCtx.moveTo(s, s); tCtx.lineTo(s * 2, 0)
+  tCtx.stroke()
+  const pattern = ctx.createPattern(tile, 'repeat')
+  if (!pattern) return
+  const prevStyle = ctx.strokeStyle
+  const prevCap = ctx.lineCap
+  const prevJoin = ctx.lineJoin
+  ctx.strokeStyle = pattern
+  ctx.lineCap = 'butt'
   ctx.lineJoin = 'miter'
   ctx.beginPath()
-  let d = spacing * 0.7
-  while (d < s.totalLen) {
-    const tip = s.pointAt(d, 0, 1)
-    const { ux, uy } = s.tangentAt(d)
-    const bx = tip[0] - ux * armLen, by = tip[1] - uy * armLen
-    ctx.moveTo(bx + (-uy) * armW, by + ux * armW)
-    ctx.lineTo(tip[0], tip[1])
-    ctx.lineTo(bx - (-uy) * armW, by - ux * armW)
-    d += spacing
-  }
-  ctx.stroke(); ctx.lineJoin = 'round'
+  ctx.moveTo(pts[0][0], pts[0][1])
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+  if (closed) ctx.closePath()
+  ctx.stroke()
+  ctx.strokeStyle = prevStyle
+  ctx.lineCap = prevCap
+  ctx.lineJoin = prevJoin
 }
 
 export function drawPatternAlongPath(
   ctx: Ctx,
   pts: [number, number][],
   pattern: LinePattern,
-  side: LineSide,
   strokeWidth: number,
   closed: boolean,
-  spacingMult: number,
 ) {
+  if (pattern === 'hatched') { drawHatched(ctx, pts, strokeWidth, closed); return }
   const s = buildPathSampler(pts, closed)
   if (!s) return
-  const sm = spacingMult
-
-  const SHARP_COS = Math.cos(Math.PI * 25 / 180)
-  let hasSharpCorner = false
-  if (!closed && (pattern === 'trench' || pattern === 'fortification') && pts.length >= 3) {
-    for (let i = 1; i < pts.length - 1; i++) {
-      const ax = pts[i][0] - pts[i-1][0], ay = pts[i][1] - pts[i-1][1]
-      const bx = pts[i+1][0] - pts[i][0],  by = pts[i+1][1] - pts[i][1]
-      const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by)
-      if (la >= 1e-6 && lb >= 1e-6 && (ax*bx + ay*by) / (la*lb) < SHARP_COS) {
-        hasSharpCorner = true; break
-      }
-    }
-  }
-  if (hasSharpCorner) {
-    ctx.lineJoin = 'miter'
-    ctx.beginPath()
-    for (let i = 0; i < pts.length - 1; i++) {
-      const seg = buildPathSampler([pts[i], pts[i + 1]], false)
-      if (!seg) continue
-      if (pattern === 'trench') drawTrench(ctx, seg, strokeWidth, side, sm, true)
-      else drawFortification(ctx, seg, strokeWidth, side, sm, true)
-    }
-    ctx.stroke()
-    ctx.lineJoin = 'round'
-    return
-  }
-
   switch (pattern) {
-    case 'ticks':         return drawTicks(ctx, s, strokeWidth, side, sm)
-    case 'fortification': return drawFortification(ctx, s, strokeWidth, side, sm)
-    case 'trench':        return drawTrench(ctx, s, strokeWidth, side, sm)
-    case 'barbed_wire':   return drawBarbedWire(ctx, s, strokeWidth, sm)
-    case 'dotted':        return drawDotted(ctx, s, strokeWidth, sm)
-    case 'dashed':        return drawDashed(ctx, s, strokeWidth, sm)
-    case 'arrows':        return drawArrows(ctx, s, strokeWidth, sm)
+    case 'dotted': return drawDotted(ctx, s, strokeWidth)
+    case 'dashed': return drawDashed(ctx, s, strokeWidth)
   }
 }
 
@@ -444,7 +331,7 @@ export function drawHighlights(
       return gaussianSmoothClosed(resampled, Math.max(1, sigma))
     })
 
-    const _areaPatternSuppresses = ['dashed', 'dotted', 'fortification', 'trench'].includes(hl.linePattern ?? 'none')
+    const _areaPatternSuppresses = ['dashed', 'dotted', 'hatched'].includes(hl.linePattern ?? 'none')
     if (!_areaPatternSuppresses) {
       hCtx.save()
       hCtx.beginPath()
@@ -483,7 +370,7 @@ export function drawHighlights(
       hCtx.lineCap = 'round'
       hCtx.lineJoin = 'round'
       for (const poly of smoothed) {
-        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, (hl.linePatternSide ?? 'right') as LineSide, hl.strokeWidth, true, hl.patternSpacing ?? 1)
+        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth, true)
       }
       hCtx.globalAlpha = 1
       hCtx.restore()
@@ -534,15 +421,14 @@ export function drawHighlights(
       hCtx.lineCap = s < 0.5 ? 'butt' : 'round'
 
       const pattern = hl.linePattern ?? 'none'
-      const patSide = hl.linePatternSide ?? 'right'
       hCtx.fillStyle = hl.color
 
       const renderLinePts = (raw: [number, number][]) => {
         if (raw.length < 2) return
         const pts = buildLinePts(raw, s)
-        const suppressBackbone = ['dashed', 'dotted', 'fortification', 'trench'].includes(pattern)
+        const suppressBackbone = ['dashed', 'dotted', 'hatched'].includes(pattern)
         if (!suppressBackbone) drawLinePath(pts)
-        if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, patSide as LineSide, hl.strokeWidth, false, hl.patternSpacing ?? 1)
+        if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, hl.strokeWidth, false)
       }
 
       if (hl.mode === 'edge') {

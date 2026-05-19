@@ -431,6 +431,15 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.iconOverlays) s.iconOverlays = []
     if (!s.placedIcons) s.placedIcons = {}
   }
+  if (fromVersion < 23) {
+    const validPatterns = new Set(['none', 'dotted', 'dashed', 'hatched'])
+    const highlights = s.highlights as Array<Record<string, unknown>> | undefined
+    if (highlights) {
+      for (const h of highlights) {
+        if (!validPatterns.has(h.linePattern as string)) h.linePattern = 'none'
+      }
+    }
+  }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
 }

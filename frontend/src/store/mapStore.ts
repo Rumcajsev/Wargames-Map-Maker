@@ -327,7 +327,7 @@ export interface HexHighlight {
   strokeWidth: number
   joinNeighbors: boolean
   smoothing: number
-  linePattern: 'none' | 'ticks' | 'fortification' | 'trench' | 'barbed_wire' | 'dotted' | 'dashed' | 'arrows'
+  linePattern: 'none' | 'dotted' | 'dashed' | 'hatched'
   linePatternSide: 'left' | 'right' | 'center'
   patternSpacing: number
 }
@@ -619,7 +619,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 22,
+  version: 23,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))
