@@ -101,18 +101,12 @@ function PatternPreview({ pattern }: { pattern: string }) {
       </svg>
     )
   }
-  if (pattern === 'hatched') {
+  if (pattern === 'dashdot') {
     return (
       <svg width="28" height="18" viewBox="0 0 28 18">
-        <defs>
-          <pattern id="hatch-prev" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="4" stroke={PREVIEW_STROKE} strokeWidth="1.5" />
-          </pattern>
-          <clipPath id="hatch-clip">
-            <rect x="2" y="6" width="24" height="6" />
-          </clipPath>
-        </defs>
-        <rect x="2" y="6" width="24" height="6" fill="url(#hatch-prev)" clipPath="url(#hatch-clip)" />
+        <line x1="2" y1="9" x2="10" y2="9" {...lineProps} strokeLinecap="butt" />
+        <circle cx="13.5" cy="9" r="1.5" fill={PREVIEW_STROKE} />
+        <line x1="17" y1="9" x2="25" y2="9" {...lineProps} strokeLinecap="butt" />
       </svg>
     )
   }
@@ -123,7 +117,7 @@ const PATTERNS: Array<[string, string]> = [
   ['none', 'Straight'],
   ['dotted', 'Dotted'],
   ['dashed', 'Dashed'],
-  ['hatched', 'Hatched'],
+  ['dashdot', 'Dash-dot'],
 ]
 
 export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) {

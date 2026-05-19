@@ -10,6 +10,7 @@ import { type RailsSlice, createRailsSlice } from './slices/railsSlice'
 import { type RiversSlice, createRiversSlice } from './slices/riversSlice'
 import { type HighlightsSlice, createHighlightsSlice } from './slices/highlightsSlice'
 import { type IconsSlice, createIconsSlice } from './slices/iconsSlice'
+import { type LabelsSlice, createLabelsSlice } from './slices/labelsSlice'
 import { type UndoSlice, createUndoSlice } from './slices/undoSlice'
 import { type UiSlice, createUiSlice, migratePersisted, rehydrateState } from './slices/uiSlice'
 
@@ -66,6 +67,8 @@ export type ActiveTool =
   | { type: 'icon-place'; id: string }
   | { type: 'icon-erase'; id: string }
   | { type: 'icon-erase-any' }
+  | { type: 'label-place'; id: string }
+  | { type: 'label-erase'; id: string }
   | { type: 'urban'; mode: 'paint' | 'erase' }
   | { type: 'road-select' }
   | { type: 'rail-node-edit' }
@@ -315,6 +318,16 @@ export interface IconOverlay {
   size: number
 }
 
+export interface LabelOverlay {
+  id: string
+  name: string
+  textColor: string
+  bgColor: string
+  strokeColor: string
+  strokeWidth: number
+  textSize: number
+}
+
 export interface HexHighlight {
   id: string
   name: string
@@ -327,7 +340,7 @@ export interface HexHighlight {
   strokeWidth: number
   joinNeighbors: boolean
   smoothing: number
-  linePattern: 'none' | 'dotted' | 'dashed' | 'hatched'
+  linePattern: 'none' | 'dotted' | 'dashed' | 'dashdot'
   linePatternSide: 'left' | 'right' | 'center'
   patternSpacing: number
 }
@@ -438,6 +451,7 @@ export type MapStore =
   RiversSlice &
   HighlightsSlice &
   IconsSlice &
+  LabelsSlice &
   UndoSlice &
   UiSlice
 
@@ -451,6 +465,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createRiversSlice(set, get),
   ...createHighlightsSlice(set, get),
   ...createIconsSlice(set, get),
+  ...createLabelsSlice(set, get),
   ...createUndoSlice(set, get),
   ...createUiSlice(set, get),
 }), {
@@ -615,11 +630,13 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     highlightEdgePaths: s.highlightEdgePaths,
     iconOverlays: s.iconOverlays,
     placedIcons: s.placedIcons,
+    labelOverlays: s.labelOverlays,
+    placedLabels: s.placedLabels,
     showPaperTexture: s.showPaperTexture,
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 23,
+  version: 24,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

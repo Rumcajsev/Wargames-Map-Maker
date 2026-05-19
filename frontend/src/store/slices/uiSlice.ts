@@ -176,6 +176,16 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
       updates.activeIconOverlayId = null
     }
 
+    if (tool.type === 'label-place' || tool.type === 'label-erase') {
+      updates.activeLabelOverlayId = tool.id
+    }
+    if (tool.type !== 'label-place' && tool.type !== 'label-erase') {
+      // only clear when switching away from label tools
+      if (get().activeTool.type === 'label-place' || get().activeTool.type === 'label-erase') {
+        updates.activeLabelOverlayId = null
+      }
+    }
+
     updates.urbanPaintMode = tool.type === 'urban' ? tool.mode : null
 
     set(updates as Partial<MapStore>)
@@ -437,6 +447,14 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (highlights) {
       for (const h of highlights) {
         if (!validPatterns.has(h.linePattern as string)) h.linePattern = 'none'
+      }
+    }
+  }
+  if (fromVersion < 24) {
+    const highlights = s.highlights as Array<Record<string, unknown>> | undefined
+    if (highlights) {
+      for (const h of highlights) {
+        if (h.linePattern === 'hatched') h.linePattern = 'none'
       }
     }
   }

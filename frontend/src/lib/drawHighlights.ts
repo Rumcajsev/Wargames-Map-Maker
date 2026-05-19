@@ -4,7 +4,7 @@
 import type { HexHighlight, GeneratedHex } from '../store/mapStore'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
-type LinePattern = 'dotted' | 'dashed' | 'hatched'
+type LinePattern = 'dotted' | 'dashed' | 'dashdot'
 
 // ── Path sampler ─────────────────────────────────────────────────────────────
 
@@ -164,27 +164,32 @@ function drawDashed(ctx: Ctx, s: PathSampler, sw: number) {
   ctx.stroke(); ctx.lineCap = prevCap
 }
 
-function drawHatched(ctx: Ctx, s: PathSampler, sw: number) {
-  const spacing = Math.max(1.5, sw * 0.65)
+function drawDashDot(ctx: Ctx, s: PathSampler, sw: number) {
+  const dashLen = sw * 2.5
+  const dotR = Math.max(0.5, sw * 0.5)
+  const gap = sw * 1.0
+  const period = dashLen + gap + dotR * 2 + gap
+
   const prevCap = ctx.lineCap
-  const prevWidth = ctx.lineWidth
   ctx.lineCap = 'butt'
-  ctx.lineWidth = Math.max(0.5, spacing * 0.5)
   ctx.beginPath()
-  let d = spacing * 0.3
+  let d = 0
   while (d < s.totalLen) {
-    const { ux, uy } = s.tangentAt(d)
-    const [cx, cy] = s.pointAt(d, 0, 1)
-    // Rotate tangent 45° → tick direction; scale so perpendicular reach = sw/2
-    const hx = (sw / 2) * (ux - uy)
-    const hy = (sw / 2) * (ux + uy)
-    ctx.moveTo(cx - hx, cy - hy)
-    ctx.lineTo(cx + hx, cy + hy)
-    d += spacing
+    const dashEnd = Math.min(d + dashLen, s.totalLen)
+    const a = s.pointAt(d, 0, 1), b = s.pointAt(dashEnd, 0, 1)
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+    d += period
   }
   ctx.stroke()
   ctx.lineCap = prevCap
-  ctx.lineWidth = prevWidth
+
+  ctx.fillStyle = ctx.strokeStyle as string
+  d = dashLen + gap + dotR
+  while (d < s.totalLen) {
+    const p = s.pointAt(d, 0, 1)
+    ctx.beginPath(); ctx.arc(p[0], p[1], dotR, 0, Math.PI * 2); ctx.fill()
+    d += period
+  }
 }
 
 export function drawPatternAlongPath(
@@ -199,7 +204,7 @@ export function drawPatternAlongPath(
   switch (pattern) {
     case 'dotted':  return drawDotted(ctx, s, strokeWidth)
     case 'dashed':  return drawDashed(ctx, s, strokeWidth)
-    case 'hatched': return drawHatched(ctx, s, strokeWidth)
+    case 'dashdot': return drawDashDot(ctx, s, strokeWidth)
   }
 }
 
@@ -324,7 +329,7 @@ export function drawHighlights(
       return gaussianSmoothClosed(resampled, Math.max(1, sigma))
     })
 
-    const _areaPatternSuppresses = ['dashed', 'dotted', 'hatched'].includes(hl.linePattern ?? 'none')
+    const _areaPatternSuppresses = ['dashed', 'dotted', 'dashdot'].includes(hl.linePattern ?? 'none')
     if (!_areaPatternSuppresses) {
       hCtx.save()
       hCtx.beginPath()
@@ -419,7 +424,7 @@ export function drawHighlights(
       const renderLinePts = (raw: [number, number][]) => {
         if (raw.length < 2) return
         const pts = buildLinePts(raw, s)
-        const suppressBackbone = ['dashed', 'dotted', 'hatched'].includes(pattern)
+        const suppressBackbone = ['dashed', 'dotted', 'dashdot'].includes(pattern)
         if (!suppressBackbone) drawLinePath(pts)
         if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, hl.strokeWidth, false)
       }

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useMapStore, type IconOverlay, type HexHighlight } from '../store/mapStore'
+import { useMapStore, type IconOverlay, type LabelOverlay, type HexHighlight } from '../store/mapStore'
 import { HighlightSettingsFlyout } from './HighlightSettingsFlyout'
 import { IconSettingsFlyout } from './IconSettingsFlyout'
+import { LabelSettingsFlyout } from './LabelSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
 
 function HighlightSwatch({ h }: { h: HexHighlight }) {
@@ -29,20 +30,12 @@ function HighlightSwatch({ h }: { h: HexHighlight }) {
         </svg>
       )
     }
-    if (lp === 'hatched') {
+    if (lp === 'dashdot') {
       return (
         <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-          <defs>
-            <pattern id={`hatch-sw-${color.replace('#','')}`} patternUnits="userSpaceOnUse" width="3" height="3" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="3" stroke={color} strokeWidth={sw} />
-            </pattern>
-            <clipPath id={`hatch-clip-${color.replace('#','')}`}>
-              <rect x="1" y={9 - sw * 1.5} width="16" height={sw * 3} />
-            </clipPath>
-          </defs>
-          <rect x="1" y={9 - sw * 1.5} width="16" height={sw * 3}
-            fill={`url(#hatch-sw-${color.replace('#','')})`}
-            clipPath={`url(#hatch-clip-${color.replace('#','')})`} />
+          <line x1="1" y1="9" x2="7" y2="9" stroke={color} strokeWidth={sw} strokeLinecap="butt" />
+          <circle cx="10" cy="9" r={Math.max(0.8, sw * 0.55)} fill={color} />
+          <line x1="13" y1="9" x2="17" y2="9" stroke={color} strokeWidth={sw} strokeLinecap="butt" />
         </svg>
       )
     }
@@ -100,6 +93,21 @@ function IconShapeSwatch({ shape, fillColor, strokeColor, strokeWidth }: Pick<Ic
   )
 }
 
+function LabelSwatch({ textColor, bgColor, strokeColor }: Pick<LabelOverlay, 'textColor' | 'bgColor' | 'strokeColor'>) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+      <rect x="1.5" y="4" width="15" height="10" rx="1"
+        fill={bgColor === 'transparent' ? 'none' : bgColor}
+        stroke={strokeColor}
+        strokeWidth="1.2"
+      />
+      <text x="9" y="9.5" textAnchor="middle" dominantBaseline="middle"
+        fill={textColor} fontSize="6" fontFamily="monospace" fontWeight="bold"
+      >Aa</text>
+    </svg>
+  )
+}
+
 const CogIcon = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.34.07-.68.07-1.08s-.03-.74-.07-1.08l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.34-.07.69-.07 1.08s.03.74.07 1.08L2.7 13.07c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65z" />
@@ -138,6 +146,8 @@ export function HighlightsSidebar() {
     iconOverlays, placedIcons, addIconOverlay, deleteIconOverlay,
     activeIconOverlayId,
     iconPlaceMode,
+    labelOverlays, placedLabels, addLabelOverlay, deleteLabelOverlay,
+    activeLabelOverlayId,
     setActiveTool,
   } = useMapStore()
 
@@ -145,13 +155,17 @@ export function HighlightsSidebar() {
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
   const [openIconFlyoutId, setOpenIconFlyoutId] = useState<string | null>(null)
   const [iconFlyoutAnchorY, setIconFlyoutAnchorY] = useState(0)
+  const [openLabelFlyoutId, setOpenLabelFlyoutId] = useState<string | null>(null)
+  const [labelFlyoutAnchorY, setLabelFlyoutAnchorY] = useState(0)
   const [areasExpanded, setAreasExpanded] = useState(true)
   const [edgesExpanded, setEdgesExpanded] = useState(true)
   const [linesExpanded, setLinesExpanded] = useState(true)
   const [iconsExpanded, setIconsExpanded] = useState(true)
+  const [labelsExpanded, setLabelsExpanded] = useState(true)
 
   const openHighlight = highlights.find(h => h.id === openFlyoutId) ?? null
   const openIconOverlay = iconOverlays.find(o => o.id === openIconFlyoutId) ?? null
+  const openLabelOverlay = labelOverlays.find(o => o.id === openLabelFlyoutId) ?? null
 
   const areaOverlays = highlights.filter(h => h.mode === 'area')
   const edgeOverlays = highlights.filter(h => h.mode === 'edge')
@@ -249,6 +263,36 @@ export function HighlightsSidebar() {
       strokeColor: '#1a1b2e',
       strokeWidth: 1.5,
       size: 0.35,
+    })
+  }
+
+  const handleLabelCog = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (openLabelFlyoutId === id) {
+      setOpenLabelFlyoutId(null)
+    } else {
+      setOpenLabelFlyoutId(id)
+      setLabelFlyoutAnchorY(e.currentTarget.getBoundingClientRect().top)
+    }
+  }
+
+  const handleLabelRowClick = (id: string) => {
+    const tool = useMapStore.getState().activeTool
+    if (activeLabelOverlayId === id && tool.type === 'label-place') {
+      setActiveTool({ type: 'none' })
+    } else {
+      setActiveTool({ type: 'label-place', id })
+    }
+  }
+
+  const handleAddLabel = () => {
+    addLabelOverlay({
+      name: `Label ${labelOverlays.length + 1}`,
+      textColor: '#ffffff',
+      bgColor: '#aa1111',
+      strokeColor: '#000000',
+      strokeWidth: 1,
+      textSize: 14,
     })
   }
 
@@ -538,6 +582,93 @@ export function HighlightsSidebar() {
         )}
       </div>
 
+      {/* Labels */}
+      <div style={sectionStyle}>
+        {renderCategoryHeader('Labels', labelsExpanded, () => setLabelsExpanded(v => !v))}
+        {labelsExpanded && (
+          <>
+            {labelOverlays.length === 0 && (
+              <div style={{ fontSize: 11, color: '#3a3a5a', marginBottom: 4 }}>No label overlays yet</div>
+            )}
+            {labelOverlays.map(overlay => {
+              const isActive = activeLabelOverlayId === overlay.id
+              const tool = useMapStore.getState().activeTool
+              const isActivePaint = isActive && tool.type === 'label-place'
+              const count = placedLabels[overlay.id]?.length ?? 0
+              return (
+                <div
+                  key={overlay.id}
+                  onClick={() => handleLabelRowClick(overlay.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '5px 6px',
+                    marginBottom: 2,
+                    borderRadius: 3,
+                    background: isActive ? '#1e2a3a' : 'transparent',
+                    border: `1px solid ${isActive ? '#2a4a6a' : 'transparent'}`,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#141522' }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <LabelSwatch
+                    textColor={overlay.textColor}
+                    bgColor={overlay.bgColor}
+                    strokeColor={overlay.strokeColor}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      color: isActive ? '#d0ecd8' : '#a0a0c0',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {isActivePaint ? '● ' : ''}{overlay.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#4a6a5a' }}>
+                      {count > 0 ? `${count} label${count !== 1 ? 's' : ''}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={e => handleLabelCog(overlay.id, e)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: openLabelFlyoutId === overlay.id ? '#a0c8b0' : '#4a4a6a',
+                      cursor: 'pointer',
+                      padding: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#a0c8b0')}
+                    onMouseLeave={e => (e.currentTarget.style.color = openLabelFlyoutId === overlay.id ? '#a0c8b0' : '#4a4a6a')}
+                  >
+                    <CogIcon />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteLabelOverlay(overlay.id) }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4a4a6a',
+                      cursor: 'pointer',
+                      padding: 2,
+                      fontSize: 13,
+                      lineHeight: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#e08080')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+                  >×</button>
+                </div>
+              )
+            })}
+            {renderAddButton('+ Add label', handleAddLabel)}
+          </>
+        )}
+      </div>
+
       {openHighlight && (
         <HighlightSettingsFlyout
           highlight={openHighlight}
@@ -550,6 +681,13 @@ export function HighlightsSidebar() {
           overlay={openIconOverlay}
           anchorY={iconFlyoutAnchorY}
           onClose={() => setOpenIconFlyoutId(null)}
+        />
+      )}
+      {openLabelOverlay && (
+        <LabelSettingsFlyout
+          overlay={openLabelOverlay}
+          anchorY={labelFlyoutAnchorY}
+          onClose={() => setOpenLabelFlyoutId(null)}
         />
       )}
     </div>
