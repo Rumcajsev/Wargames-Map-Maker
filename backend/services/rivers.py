@@ -1,8 +1,11 @@
+import logging
 import math
 
 from models import RiversConfig
 from services.geometry import compute_bbox, make_lonlat_to_hex, METERS_PER_DEGREE
 from services.overpass import post_overpass
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -143,14 +146,15 @@ def _make_hex_geometry(config: RiversConfig, R_m: float):
             verts.append((round(lon, 6), round(lat, 6)))
         return verts
 
-    return hex_vertices_lonlat, lonlat_to_paper_m, cos_lat
+    return hex_vertices_lonlat, lonlat_to_paper_m, paper_m_to_lonlat, cos_lat
 
 
 # ---------------------------------------------------------------------------
 # Vertex-snapping conversion: polyline → hex edges
 # ---------------------------------------------------------------------------
 
-_HEX_NEIGHBOR_DIRS = [(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]
+# Center hex + all 6 neighbors
+_HEX_NEIGHBOR_DIRS = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
 
 
 def _nearest_hex_vertex(
@@ -173,62 +177,6 @@ def _nearest_hex_vertex(
                 best_d2 = d2
                 best_v = (vlon, vlat)
     return best_v
-
-
-def _hex_edge_from_vertex_pair(
-    vA: tuple[float, float],
-    vB: tuple[float, float],
-    lonlat_to_hex,
-    lonlat_to_paper_m,
-    R_m: float,
-) -> tuple[tuple[int, int], tuple[int, int]] | None:
-    """Find the two hexes sharing the edge between two adjacent hex vertices.
-
-    Projects both vertices to paper-space, computes the perpendicular at the
-    midpoint, then probes R_m*0.3 to either side to identify the two hexes.
-    """
-    pAx, pAy = lonlat_to_paper_m(*vA)
-    pBx, pBy = lonlat_to_paper_m(*vB)
-    mx, my = (pAx + pBx) / 2, (pAy + pBy) / 2
-
-    dx, dy = pBx - pAx, pBy - pAy
-    elen = math.hypot(dx, dy)
-    if elen < 1e-9:
-        return None
-
-    # Unit perpendicular to the edge, in paper-space
-    px, py = -dy / elen, dx / elen
-    eps = R_m * 0.3
-
-    def probe(sign: float) -> tuple[int, int]:
-        # Perturb midpoint in paper-space, then convert back to lon/lat → hex
-        from services.geometry import _round_hex  # type: ignore
-        # We need to convert paper-space point to lon/lat.
-        # Use the same rotation that lonlat_to_paper_m inverts.
-        # Since lonlat_to_paper_m is a closure, we call the overpass route
-        # via a temporary inline computation using the parent closure's cos_β/sin_β.
-        # Instead: just call lonlat_to_hex on the perturbed lon/lat.
-        # lonlat_to_paper_m converts (lon,lat) → (px,py).
-        # To invert: we need paper_m_to_lonlat. Since we're inside a module,
-        # capture via the vertices we already have.
-        # Simpler: perturb in lon/lat space directly using the paper-space direction.
-        # paper-space (ppx, ppy) → E_m = ppx*cos_β + ppy*sin_β (from paper_m_to_lonlat)
-        # We don't have cos_β here. Use the shortcut:
-        # paper-space dx,dy already computed above. Their geographic equivalent
-        # is the direction of the vertex edge in paper-space. We already have
-        # the perturbed paper coords (mx+px*eps*sign, my+py*eps*sign). We need
-        # to convert that to lon/lat to call lonlat_to_hex.
-        #
-        # Because lonlat_to_paper_m is a closure from _make_hex_geometry that
-        # encapsulates cos_β and sin_β, we can't directly invert it here.
-        # Instead we rely on: both vA and vB are known lon/lat, so we can
-        # reconstruct the inverse by linearly interpolating or by using the
-        # affine structure.
-        #
-        # The cleanest solution: pass in a paper_m_to_lonlat closure too.
-        # We'll do that by restructuring the call.
-        pass
-    return None  # placeholder — see below
 
 
 def _polyline_to_hex_edges(
@@ -263,7 +211,7 @@ def _polyline_to_hex_edges(
             t = j / (n - 1)
             samples.append((lon1 + t * (lon2 - lon1), lat1 + t * (lat2 - lat1)))
 
-    # Step 2: snap to nearest hex vertex, deduplicate
+    # Step 2: snap to nearest hex vertex, deduplicate consecutive
     vertex_path: list[tuple[float, float]] = []
     prev_key: tuple[int, int] | None = None
     for lon, lat in samples:
@@ -276,11 +224,14 @@ def _polyline_to_hex_edges(
             prev_key = key
 
     if len(vertex_path) < 2:
+        log.debug("vertex_path too short (%d vertices)", len(vertex_path))
         return []
 
     # Step 3 + 4: vertex pairs → hex edges
     edges: list[dict] = []
     seen: set[tuple[str, str]] = set()
+    skipped_same = 0
+    skipped_nonadj = 0
 
     for i in range(len(vertex_path) - 1):
         vA, vB = vertex_path[i], vertex_path[i + 1]
@@ -295,20 +246,26 @@ def _polyline_to_hex_edges(
         if elen < 1e-9:
             continue
 
+        # Skip vertex pairs that are too far apart to be adjacent hex vertices
+        # Adjacent hex vertex distance is exactly R_m; allow 20% tolerance
+        if elen > R_m * 1.2:
+            continue
+
         # Unit perpendicular in paper-space
         perp_x, perp_y = -dy / elen, dx / elen
-        eps = R_m * 0.3
+        eps = R_m * 0.35
 
-        def probe_hex(sign: float) -> tuple[int, int]:
-            ppx = mx + perp_x * eps * sign
-            ppy = my + perp_y * eps * sign
+        def _probe(sign: float, _mx=mx, _my=my, _perp_x=perp_x, _perp_y=perp_y, _eps=eps) -> tuple[int, int]:
+            ppx = _mx + _perp_x * _eps * sign
+            ppy = _my + _perp_y * _eps * sign
             lon_p, lat_p = paper_m_to_lonlat(ppx, ppy)
             return lonlat_to_hex(lon_p, lat_p)
 
-        h1 = probe_hex(1.0)
-        h2 = probe_hex(-1.0)
+        h1 = _probe(1.0)
+        h2 = _probe(-1.0)
 
         if h1 == h2:
+            skipped_same += 1
             continue
 
         q1, r1 = h1
@@ -317,6 +274,7 @@ def _polyline_to_hex_edges(
         # Validate adjacency: |dq| + |dr| + |ds| must be exactly 2
         dq, dr = q2 - q1, r2 - r1
         if abs(dq) + abs(dr) + abs(dq + dr) != 2:
+            skipped_nonadj += 1
             continue
 
         # Canonical edge key for deduplication
@@ -327,6 +285,12 @@ def _polyline_to_hex_edges(
         seen.add(ekey)
 
         edges.append({"q1": q1, "r1": r1, "q2": q2, "r2": r2})
+
+    if skipped_same or skipped_nonadj:
+        log.debug(
+            "_polyline_to_hex_edges: %d edges ok, %d same-hex probes, %d non-adjacent",
+            len(edges), skipped_same, skipped_nonadj,
+        )
 
     return edges
 
@@ -370,40 +334,43 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
     type_pattern = "|".join(active_types)
     bbox = f"{min_lat},{min_lon},{max_lat},{max_lon}"
 
+    # Fetch both relations (named river systems) and individual ways
     query = (
         f'[out:json][timeout:45][maxsize:52428800];\n'
-        f'relation["waterway"~"^({type_pattern})$"]{name_filter}({bbox});\n'
+        f'(\n'
+        f'  relation["waterway"~"^({type_pattern})$"]{name_filter}({bbox});\n'
+        f'  way["waterway"~"^({type_pattern})$"]{name_filter}({bbox});\n'
+        f');\n'
         f'out tags geom;\n'
     )
 
     data = await post_overpass(query, timeout=55.0)
+    elements = data.get("elements", [])
+    log.info("fetch_rivers: %d OSM elements returned", len(elements))
 
     # Build geometry helpers
     lonlat_to_hex = make_lonlat_to_hex(config, config.R_m)
-    hex_vertices_lonlat, lonlat_to_paper_m, cos_lat = _make_hex_geometry(config, config.R_m)
-
-    # We need paper_m_to_lonlat as a standalone closure — extract from _make_hex_geometry
-    β = math.radians(config.bearing)
-    cos_β, sin_β = math.cos(β), math.sin(β)
-    cos_lat2 = math.cos(math.radians(config.center_lat))
-
-    def paper_m_to_lonlat(px: float, py: float) -> tuple[float, float]:
-        E_m = px * cos_β + py * sin_β
-        N_m = -px * sin_β + py * cos_β
-        return (
-            config.center_lon + E_m / (cos_lat2 * METERS_PER_DEGREE),
-            config.center_lat + N_m / METERS_PER_DEGREE,
-        )
+    hex_vertices_lonlat, lonlat_to_paper_m, paper_m_to_lonlat, cos_lat = _make_hex_geometry(config, config.R_m)
 
     rivers = []
-    for el in data.get("elements", []):
-        if el.get("type") != "relation":
-            continue
+    for el in elements:
+        el_type = el.get("type")
         tags = el.get("tags", {})
-        ways = _extract_ways(el.get("members", []))
-        if not ways:
+        wtype = tags.get("waterway", "river")
+
+        if el_type == "relation":
+            ways = _extract_ways(el.get("members", []))
+            if not ways:
+                continue
+            coords = _chain_ways(ways)
+        elif el_type == "way":
+            geom = el.get("geometry", [])
+            if len(geom) < 2:
+                continue
+            coords = [(p["lon"], p["lat"]) for p in geom]
+        else:
             continue
-        coords = _chain_ways(ways)
+
         coords = _clip_to_paper(coords, config)
         if len(coords) < 2:
             continue
@@ -413,21 +380,23 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
             lonlat_to_paper_m, paper_m_to_lonlat, cos_lat, config.R_m,
         )
         if not edges:
+            log.debug("skip %r (%s): no edges from %d coords", tags.get("name", ""), wtype, len(coords))
             continue
 
         osm_width = _parse_width(tags.get("width"))
         if osm_width is not None:
             width_multiplier = round(max(0.2, min(4.0, osm_width / 40.0)), 3)
         else:
-            width_multiplier = 1.0 if tags.get("waterway") == "river" else 0.6
+            width_multiplier = 1.0 if wtype == "river" else 0.6
 
         rivers.append({
             "name": tags.get("name", ""),
-            "type": tags.get("waterway", "river"),
+            "type": wtype,
             "coords": [[lon, lat] for lon, lat in coords],
             "edges": edges,
             "width_multiplier": width_multiplier,
         })
 
+    log.info("fetch_rivers: %d rivers after edge conversion", len(rivers))
     rivers.sort(key=lambda r: _polyline_length(r["coords"]), reverse=True)
     return rivers
