@@ -164,49 +164,24 @@ function drawDashed(ctx: Ctx, s: PathSampler, sw: number) {
   ctx.stroke(); ctx.lineCap = prevCap
 }
 
-function drawHatched(ctx: Ctx, pts: [number, number][], sw: number, closed: boolean) {
-  if (pts.length < 2) return
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const [x, y] of pts) {
-    if (x < minX) minX = x; if (y < minY) minY = y
-    if (x > maxX) maxX = x; if (y > maxY) maxY = y
+function drawHatched(ctx: Ctx, s: PathSampler, sw: number) {
+  const spacing = Math.max(1.5, sw * 0.65)
+  const prevCap = ctx.lineCap
+  const prevWidth = ctx.lineWidth
+  ctx.lineCap = 'butt'
+  ctx.lineWidth = Math.max(0.5, spacing * 0.5)
+  ctx.beginPath()
+  let d = spacing * 0.3
+  while (d < s.totalLen) {
+    const p1 = s.pointAt(d, sw / 2, 1)
+    const p2 = s.pointAt(d, sw / 2, -1)
+    ctx.moveTo(p1[0], p1[1])
+    ctx.lineTo(p2[0], p2[1])
+    d += spacing
   }
-  minX -= sw; minY -= sw; maxX += sw; maxY += sw
-  const cw = maxX - minX, ch = maxY - minY
-  if (cw < 1 || ch < 1) return
-
-  const color = ctx.strokeStyle as string
-  const dpr = Math.abs(ctx.getTransform().a) || 1
-  const tmp = new OffscreenCanvas(Math.ceil(cw * dpr), Math.ceil(ch * dpr))
-  const tc = tmp.getContext('2d')!
-  tc.scale(dpr, dpr)
-  tc.translate(-minX, -minY)
-
-  // Draw stroke shape as white mask
-  tc.strokeStyle = '#ffffff'
-  tc.lineWidth = sw
-  tc.lineCap = ctx.lineCap
-  tc.lineJoin = ctx.lineJoin
-  tc.beginPath()
-  tc.moveTo(pts[0][0], pts[0][1])
-  for (let i = 1; i < pts.length; i++) tc.lineTo(pts[i][0], pts[i][1])
-  if (closed) tc.closePath()
-  tc.stroke()
-
-  // Draw 45° diagonal lines clipped to the mask
-  tc.globalCompositeOperation = 'source-in'
-  tc.strokeStyle = color
-  const spacing = Math.max(2.5, sw * 0.6)
-  tc.lineWidth = Math.max(0.5, spacing * 0.45)
-  tc.lineCap = 'butt'
-  tc.beginPath()
-  for (let offset = -(cw + sw); offset <= ch + sw; offset += spacing) {
-    tc.moveTo(minX, minY + offset)
-    tc.lineTo(maxX, minY + offset + cw)
-  }
-  tc.stroke()
-
-  ctx.drawImage(tmp, minX, minY, cw, ch)
+  ctx.stroke()
+  ctx.lineCap = prevCap
+  ctx.lineWidth = prevWidth
 }
 
 export function drawPatternAlongPath(
@@ -216,12 +191,12 @@ export function drawPatternAlongPath(
   strokeWidth: number,
   closed: boolean,
 ) {
-  if (pattern === 'hatched') { drawHatched(ctx, pts, strokeWidth, closed); return }
   const s = buildPathSampler(pts, closed)
   if (!s) return
   switch (pattern) {
-    case 'dotted': return drawDotted(ctx, s, strokeWidth)
-    case 'dashed': return drawDashed(ctx, s, strokeWidth)
+    case 'dotted':  return drawDotted(ctx, s, strokeWidth)
+    case 'dashed':  return drawDashed(ctx, s, strokeWidth)
+    case 'hatched': return drawHatched(ctx, s, strokeWidth)
   }
 }
 
