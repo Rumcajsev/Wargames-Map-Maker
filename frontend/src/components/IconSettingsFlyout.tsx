@@ -15,14 +15,6 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: 1,
   color: '#4a4a6a',
   textTransform: 'uppercase',
-  marginBottom: 4,
-}
-
-const rowStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 8,
 }
 
 const segBtnStyle = (active: boolean): React.CSSProperties => ({
@@ -36,6 +28,81 @@ const segBtnStyle = (active: boolean): React.CSSProperties => ({
   fontSize: 11,
   cursor: 'pointer',
 })
+
+const vizBtnStyle = (active: boolean): React.CSSProperties => ({
+  width: 36,
+  height: 36,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: active ? '#1e3a28' : '#1a1b2e',
+  border: `1px solid ${active ? '#5a9e6f' : '#2a2b3e'}`,
+  borderRadius: 3,
+  cursor: 'pointer',
+  padding: 0,
+  flexShrink: 0,
+})
+
+const SliderRow = ({ label, value, children }: { label: string; value: string; children: React.ReactNode }) => (
+  <div style={{ marginBottom: 10 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+      <span style={labelStyle}>{label}</span>
+      <span style={{ fontSize: 10, color: '#6a6a8a' }}>{value}</span>
+    </div>
+    {children}
+  </div>
+)
+
+const PREVIEW_FILL = '#a0a0c0'
+const PREVIEW_STROKE = '#6a6a8a'
+
+function ShapePreview({ shape }: { shape: IconOverlay['shape'] }) {
+  const cx = 18, cy = 18, r = 11
+  const sharedProps = { fill: PREVIEW_FILL, stroke: PREVIEW_STROKE, strokeWidth: 1.5 }
+
+  if (shape === 'circle') {
+    return (
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <circle cx={cx} cy={cy} r={r} {...sharedProps} />
+      </svg>
+    )
+  }
+  if (shape === 'square') {
+    return (
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} {...sharedProps} />
+      </svg>
+    )
+  }
+  if (shape === 'triangle') {
+    const s60 = r * Math.sin(Math.PI / 3)
+    const pts = `${cx},${cy - r} ${cx - s60},${cy + r * 0.5} ${cx + s60},${cy + r * 0.5}`
+    return (
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <polygon points={pts} {...sharedProps} />
+      </svg>
+    )
+  }
+  if (shape === 'diamond') {
+    const pts = `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`
+    return (
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <polygon points={pts} {...sharedProps} />
+      </svg>
+    )
+  }
+  const outerR = r, innerR = r * 0.38
+  const pts = Array.from({ length: 10 }, (_, i) => {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2
+    const rad = i % 2 === 0 ? outerR : innerR
+    return `${cx + rad * Math.cos(angle)},${cy + rad * Math.sin(angle)}`
+  }).join(' ')
+  return (
+    <svg width="36" height="36" viewBox="0 0 36 36">
+      <polygon points={pts} {...sharedProps} />
+    </svg>
+  )
+}
 
 export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
   const { updateIconOverlay, clearIconOverlay } = useMapStore()
@@ -85,9 +152,8 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
         >×</button>
       </div>
 
-      {/* Name */}
       <div style={{ marginBottom: 10 }}>
-        <div style={labelStyle}>Name</div>
+        <div style={{ ...labelStyle, marginBottom: 4 }}>Name</div>
         <input
           type="text"
           value={overlay.name}
@@ -106,63 +172,50 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
         />
       </div>
 
-      {/* Shape */}
       <div style={{ marginBottom: 10 }}>
-        <div style={labelStyle}>Shape</div>
+        <div style={{ ...labelStyle, marginBottom: 6 }}>Shape</div>
         <div style={{ display: 'flex', gap: 4 }}>
           {(['circle', 'square', 'triangle', 'diamond', 'star'] as const).map(shape => (
             <button
               key={shape}
               onClick={() => upd({ shape })}
-              style={segBtnStyle(overlay.shape === shape)}
+              style={vizBtnStyle(overlay.shape === shape)}
+              title={shape.charAt(0).toUpperCase() + shape.slice(1)}
             >
-              {shape.charAt(0).toUpperCase() + shape.slice(1)}
+              <ShapePreview shape={shape} />
             </button>
           ))}
         </div>
       </div>
 
-      {/* Fill color */}
       <div style={{ marginBottom: 10 }}>
-        <div style={labelStyle}>Fill color</div>
+        <div style={{ ...labelStyle, marginBottom: 4 }}>Fill color</div>
         <ColorSwatch value={overlay.fillColor} onChange={v => upd({ fillColor: v })} palette={PALETTE_HIGHLIGHTS} />
       </div>
 
-      {/* Stroke color */}
       <div style={{ marginBottom: 10 }}>
-        <div style={labelStyle}>Stroke color</div>
+        <div style={{ ...labelStyle, marginBottom: 4 }}>Stroke color</div>
         <ColorSwatch value={overlay.strokeColor} onChange={v => upd({ strokeColor: v })} palette={PALETTE_HIGHLIGHTS} />
       </div>
 
-      {/* Stroke width */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-          <div style={labelStyle}>Stroke width</div>
-          <span style={{ fontSize: 10, color: '#6a6a8a' }}>{overlay.strokeWidth}</span>
-        </div>
+      <SliderRow label="Stroke width" value={`${overlay.strokeWidth}`}>
         <input
           type="range" min={0} max={8} step={0.5}
           value={overlay.strokeWidth}
           onChange={e => upd({ strokeWidth: Number(e.target.value) })}
           style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
         />
-      </div>
+      </SliderRow>
 
-      {/* Size */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-          <div style={labelStyle}>Size</div>
-          <span style={{ fontSize: 10, color: '#6a6a8a' }}>{Math.round(overlay.size * 100)}% of hex</span>
-        </div>
+      <SliderRow label="Size" value={`${Math.round(overlay.size * 100)}% of hex`}>
         <input
           type="range" min={0.1} max={0.7} step={0.05}
           value={overlay.size}
           onChange={e => upd({ size: Number(e.target.value) })}
           style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
         />
-      </div>
+      </SliderRow>
 
-      {/* Clear all */}
       <button
         onClick={() => clearIconOverlay(overlay.id)}
         style={{
