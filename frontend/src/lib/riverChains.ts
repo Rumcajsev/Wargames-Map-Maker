@@ -360,6 +360,7 @@ export function buildRiverChainsV2(
   smoothing = 10,
   hopProps: Record<string, HopProps> = {},
   segProps: SegWiggleProps = {},
+  pathSmoothing = 0,
 ): RiverChainV2[] {
   const hexMap = new Map<string, GeneratedHex>()
   for (const h of hexes) hexMap.set(`${h.q},${h.r}`, h)
@@ -447,7 +448,19 @@ export function buildRiverChainsV2(
 
   return rawSparse.map(({ pts, segKey }) => {
     const ctrlPts = overrides[segKey] ?? pts
-    const baseChain = catmullRom(ctrlPts, steps)
+    const relaxed = ctrlPts.slice() as [number, number][]
+    const laplacianIters = Math.round(pathSmoothing)
+    for (let it = 0; it < laplacianIters; it++) {
+      for (let i = 1; i < relaxed.length - 1; i++) {
+        const avgX = (relaxed[i - 1][0] + relaxed[i + 1][0]) / 2
+        const avgY = (relaxed[i - 1][1] + relaxed[i + 1][1]) / 2
+        relaxed[i] = [
+          relaxed[i][0] + 0.1 * (avgX - relaxed[i][0]),
+          relaxed[i][1] + 0.1 * (avgY - relaxed[i][1]),
+        ]
+      }
+    }
+    const baseChain = catmullRom(relaxed, steps)
 
     const hopCount = ctrlPts.length - 1
     const hopKeysList: string[] = []

@@ -73,6 +73,7 @@ export type ActiveTool =
   | { type: 'road-select' }
   | { type: 'rail-node-edit' }
   | { type: 'rail-select' }
+  | { type: 'hex-mask'; mode: 'exclude' | 'include' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -342,6 +343,7 @@ export interface HexHighlight {
   joinNeighbors: boolean
   smoothing: number
   fillPattern: 'none' | 'hatched'
+  fillPatternSpacing: number
   linePattern: 'none' | 'dotted' | 'dashed' | 'dashdot'
   linePatternSide: 'left' | 'right' | 'center'
   patternSpacing: number
@@ -638,7 +640,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 25,
+  version: 28,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

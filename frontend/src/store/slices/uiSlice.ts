@@ -32,6 +32,12 @@ export type UiSlice = {
   urbanNoise: number
   urbanBuildingCount: number
   urbanBuildingSize: number
+  mapBgColor: string
+  mapBorderEnabled: boolean
+  mapBorderColor: string
+  mapBorderWidth: number
+  clipToHexGrid: boolean
+  excludedHexKeys: string[]
   setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style') => void
   setActiveTool: (tool: ActiveTool) => void
   toggleUrbanHex: (q: number, r: number) => void
@@ -62,6 +68,13 @@ export type UiSlice = {
   setUrbanNoise: (v: number) => void
   setUrbanBuildingCount: (v: number) => void
   setUrbanBuildingSize: (v: number) => void
+  setMapBgColor: (v: string) => void
+  setMapBorderEnabled: (v: boolean) => void
+  setMapBorderColor: (v: string) => void
+  setMapBorderWidth: (v: number) => void
+  setClipToHexGrid: (v: boolean) => void
+  toggleExcludedHex: (key: string, mode: 'exclude' | 'include') => void
+  resetExcludedHexes: () => void
   applyMapPreset: (preset: 'default') => void
   saveProject: () => void
   restoreProject: (data: unknown) => void
@@ -100,6 +113,12 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanNoise: 0.12,
   urbanBuildingCount: 8,
   urbanBuildingSize: 0.12,
+  mapBgColor: '#ffffff',
+  mapBorderEnabled: false,
+  mapBorderColor: '#000000',
+  mapBorderWidth: 1.5,
+  clipToHexGrid: false,
+  excludedHexKeys: [],
 
   setActivePanel: (panel) => {
     get().setActiveTool({ type: 'none' })
@@ -228,6 +247,20 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   setUrbanNoise: (v) => set({ urbanNoise: v }),
   setUrbanBuildingCount: (v) => set({ urbanBuildingCount: v }),
   setUrbanBuildingSize: (v) => set({ urbanBuildingSize: v }),
+  setMapBgColor: (v) => set({ mapBgColor: v }),
+  setMapBorderEnabled: (v) => set({ mapBorderEnabled: v }),
+  setMapBorderColor: (v) => set({ mapBorderColor: v }),
+  setMapBorderWidth: (v) => set({ mapBorderWidth: v }),
+  setClipToHexGrid: (v) => set({ clipToHexGrid: v }),
+  toggleExcludedHex: (key, mode) => set(s => {
+    const cur = s.excludedHexKeys
+    if (mode === 'exclude') {
+      return cur.includes(key) ? {} : { excludedHexKeys: [...cur, key] }
+    } else {
+      return { excludedHexKeys: cur.filter(k => k !== key) }
+    }
+  }),
+  resetExcludedHexes: () => set({ excludedHexKeys: [] }),
 
   applyMapPreset: (preset) => {
     const presets = {
@@ -316,6 +349,9 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         lakeOverrides: s.lakeOverrides,
         showPaperTexture: s.showPaperTexture, paperTextureOpacity: s.paperTextureOpacity,
         showPaperVignette: s.showPaperVignette,
+        mapBgColor: s.mapBgColor, mapBorderEnabled: s.mapBorderEnabled,
+        mapBorderColor: s.mapBorderColor, mapBorderWidth: s.mapBorderWidth,
+        clipToHexGrid: s.clipToHexGrid, excludedHexKeys: s.excludedHexKeys,
         highlights: s.highlights, highlightedHexes: s.highlightedHexes,
         highlightLines: s.highlightLines, highlightEdgePaths: s.highlightEdgePaths,
       },
@@ -465,6 +501,25 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
         if (!h.fillPattern) h.fillPattern = 'none'
       }
     }
+  }
+  if (fromVersion < 26) {
+    const highlights = s.highlights as Array<Record<string, unknown>> | undefined
+    if (highlights) {
+      for (const h of highlights) {
+        if (h.fillPatternSpacing == null) h.fillPatternSpacing = h.patternSpacing ?? 1
+      }
+    }
+  }
+  if (fromVersion < 27) {
+    if (s.mapBgColor === undefined) s.mapBgColor = '#ffffff'
+    if (s.mapBorderEnabled === undefined) s.mapBorderEnabled = false
+    if (s.mapBorderColor === undefined) s.mapBorderColor = '#000000'
+    if (s.mapBorderWidth === undefined) s.mapBorderWidth = 1.5
+    if (s.clipToHexGrid === undefined) s.clipToHexGrid = false
+    if (s.excludedHexKeys === undefined) s.excludedHexKeys = []
+  }
+  if (fromVersion < 28) {
+    if (s.riverPathSmoothing === undefined) s.riverPathSmoothing = 0
   }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s

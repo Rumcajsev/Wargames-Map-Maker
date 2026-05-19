@@ -32,6 +32,7 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
     riverWiggleFreq, setRiverWiggleFreq,
     riverWiggleAmp, setRiverWiggleAmp,
     riverSmoothing, setRiverSmoothing,
+    riverPathSmoothing, setRiverPathSmoothing,
     riverStyle, setRiverStyle,
     canalStyle, setCanalStyle,
     lakeBlobSmooth, setLakeBlobSmooth,
@@ -135,6 +136,13 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
               <input type="range" min={2} max={30} step={1}
                 value={riverSmoothing}
                 onChange={e => setRiverSmoothing(Number(e.target.value))}
+                style={inputStyle}
+              />
+            </Row>
+            <Row label="Path smooth" value={String(riverPathSmoothing)}>
+              <input type="range" min={0} max={50} step={1}
+                value={riverPathSmoothing}
+                onChange={e => setRiverPathSmoothing(Number(e.target.value))}
                 style={inputStyle}
               />
             </Row>

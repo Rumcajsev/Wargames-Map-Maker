@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState, useMemo, forwardRef, useImperativeHandle, type CSSProperties } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, TERRAIN_COLORS, LAKE_COLOR, TERRAIN_PRIORITY, hexTerrainLayers, paperDimsMm, combinedDimsMm, type GeneratedHex } from '../store/mapStore'
+import { useMapStore, TERRAIN_COLORS, LAKE_COLOR, TERRAIN_PRIORITY, hexTerrainLayers, paperDimsMm, combinedDimsMm, type GeneratedHex, type RoadTierStyle } from '../store/mapStore'
 import { BlobOverrideFlyout } from './BlobOverrideFlyout'
 import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon } from '../lib/geometry'
 import { mulberry32, makePermutation } from '../lib/noise'
@@ -24,7 +24,7 @@ const ROAD_V2 = true
 import { drawSettlements as _drawSettlements } from '../lib/drawSettlements'
 import { drawAllBuildings as _drawAllBuildings, type BuildingCmd } from '../lib/drawBuildings'
 import { drawAllBuildingsV2 as _drawAllBuildingsV2 } from '../lib/drawBuildingsV2'
-import { drawHexBorders as _drawHexBorders } from '../lib/drawHexBorders'
+import { drawHexBorders as _drawHexBorders, drawMapBoundary as _drawMapBoundary, drawHexGridMask as _drawHexGridMask, drawExcludedHexOverlay as _drawExcludedHexOverlay } from '../lib/drawHexBorders'
 import { drawTerrain as _drawTerrain } from '../lib/drawTerrain'
 import { drawHexNumbers as _drawHexNumbers, buildHexNumberMap } from '../lib/drawHexNumbers'
 import { getToolCursor } from '../lib/cursors'
@@ -161,7 +161,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     lakeBlobSmooth, lakeBlobOffset, lakeBlobBump,
     lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection,
     riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail,
-    riverWiggleFreq, riverWiggleAmp, riverSmoothing,
+    riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing,
     terrainBlobOverrides, setTerrainBlobOverride,
     terrainTypeBlobStyles,
     lakeOverrides, setLakeOverride,
@@ -179,13 +179,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     iconOverlays, placedIcons, activeIconOverlayId, iconPlaceMode,
     placeIcon, removeIconAt,
     labelOverlays, placedLabels, activeLabelOverlayId,
-    placeLabel, removeLabelAt, updateLabelText,
+    placeLabel, removeLabelAt, updateLabelText, moveLabelTo,
     elevationPaintMode,
     activeTool,
     setActiveTool,
     mapMode, diptychJoin, paperSize, orientation,
     hexOrientation,
     hexNumbersEnabled, hexNumberStartCorner, hexNumberEdge, hexNumberColor, hexNumberFontScale,
+    mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
+    excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
   } = useMapStore()
   const mapModeRef = useRef(mapMode)
   const diptychJoinRef = useRef(diptychJoin)
@@ -325,6 +327,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const riverWiggleFreqRef = useRef(riverWiggleFreq)
   const riverWiggleAmpRef = useRef(riverWiggleAmp)
   const riverSmoothingRef = useRef(riverSmoothing)
+  const riverPathSmoothingRef = useRef(riverPathSmoothing)
   const setRiverSegmentPropRef = useRef(setRiverSegmentProp)
   const clearRiverSegmentPropRef = useRef(clearRiverSegmentProp)
   const roadSelectModeRef = useRef(roadSelectMode)
@@ -410,7 +413,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const placeLabelRef = useRef(placeLabel)
   const removeLabelAtRef = useRef(removeLabelAt)
   const updateLabelTextRef = useRef(updateLabelText)
+  const moveLabelToRef = useRef(moveLabelTo)
   const labelSnapRef = useRef<[number, number] | null>(null)
+  const draggingLabelRef = useRef<{ overlayId: string; index: number } | null>(null)
 
   mapModeRef.current = mapMode
   diptychJoinRef.current = diptychJoin
@@ -485,6 +490,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   placeLabelRef.current = placeLabel
   removeLabelAtRef.current = removeLabelAt
   updateLabelTextRef.current = updateLabelText
+  moveLabelToRef.current = moveLabelTo
   roadControlOverridesRef.current = roadControlOverrides
   setRoadControlOverrideRef.current = setRoadControlOverride
   roadNodeEditModeRef.current = roadNodeEditMode
@@ -548,6 +554,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   riverWiggleFreqRef.current = riverWiggleFreq
   riverWiggleAmpRef.current = riverWiggleAmp
   riverSmoothingRef.current = riverSmoothing
+  riverPathSmoothingRef.current = riverPathSmoothing
   setRiverSegmentPropRef.current = setRiverSegmentProp
   clearRiverSegmentPropRef.current = clearRiverSegmentProp
   roadSelectModeRef.current = roadSelectMode
@@ -765,6 +772,22 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const hexNumberFontScaleRef = useRef(hexNumberFontScale)
   hexNumberFontScaleRef.current = hexNumberFontScale
 
+  const mapBgColorRef = useRef(mapBgColor)
+  mapBgColorRef.current = mapBgColor
+  const mapBorderEnabledRef = useRef(mapBorderEnabled)
+  mapBorderEnabledRef.current = mapBorderEnabled
+  const mapBorderColorRef = useRef(mapBorderColor)
+  mapBorderColorRef.current = mapBorderColor
+  const mapBorderWidthRef = useRef(mapBorderWidth)
+  mapBorderWidthRef.current = mapBorderWidth
+  const clipToHexGridRef = useRef(clipToHexGrid)
+  clipToHexGridRef.current = clipToHexGrid
+
+  const excludedHexKeysRef = useRef(excludedHexKeys)
+  excludedHexKeysRef.current = excludedHexKeys
+  const toggleExcludedHexRef = useRef(toggleExcludedHex)
+  toggleExcludedHexRef.current = toggleExcludedHex
+
   const hexNumberMap = useMemo(
     () => hexNumbersEnabled && generatedHexes.length > 0
       ? buildHexNumberMap(generatedHexes, hexOrientation, hexNumberStartCorner)
@@ -954,6 +977,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const defaultLakeBlobsRef = useRef(defaultLakeBlobs)
   defaultLakeBlobsRef.current = defaultLakeBlobs
 
+  const screenPwRef = useRef(0)
+
   // Compute the paper's screen rect and (lazily) init/update the overlay map
   const snapOverlay = useCallback(() => {
     const meta = metaRef.current
@@ -1046,9 +1071,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const pan = isExport ? { x: 0, y: 0 } : panRef.current
     const borderMode = hexBorderModeRef.current
     const edgeMode = hexEdgeModeRef.current
+    const excludedSet = new Set(excludedHexKeysRef.current)
     const { pw, ph, px, py } = exportTarget
       ? { pw: exportTarget.pw, ph: exportTarget.ph, px: 0, py: 0 }
       : computePaper(frameCssW, frameCssH, meta)
+    if (!isExport) screenPwRef.current = pw
+    const lineScale = isExport && screenPwRef.current > 0 ? pw / screenPwRef.current : 1
     const cssW = exportTarget ? pw : frameCssW
     const cssH = exportTarget ? ph : frameCssH
 
@@ -1072,7 +1100,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // Paper shadow
     ctx.shadowColor = 'rgba(0,0,0,0.5)'
     ctx.shadowBlur = 16
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = mapBgColorRef.current
     ctx.fillRect(px, py, pw, ph)
     ctx.shadowBlur = 0
     ctx.shadowColor = 'transparent'
@@ -1244,7 +1272,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.beginPath()
           oCtx.rect(px, py, pw, ph)
           oCtx.clip()
-          _drawHexBorders(oCtx, projected, borderMode, edgeMode, inMargin)
+          _drawHexBorders(oCtx, projected, borderMode, edgeMode, inMargin, 1, excludedSet)
           oCtx.restore()
           hexBorderLayerRef.current = offscreen
           hexBorderDirtyRef.current = false
@@ -1254,7 +1282,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.drawImage(hexBorderLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin)
+        _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin, lineScale, excludedSet)
       }
     }
 
@@ -1294,7 +1322,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.drawImage(joinedHighlightsLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        _drawHighlights(ctx, { highlights: highlightsRef.current, highlightedHexes: highlightedHexesRef.current, highlightLines: highlightLinesRef.current, highlightEdgePaths: highlightEdgePathsRef.current, projected, edgeMode, R, project, inMargin })
+        _drawHighlights(ctx, { highlights: highlightsRef.current, highlightedHexes: highlightedHexesRef.current, highlightLines: highlightLinesRef.current, highlightEdgePaths: highlightEdgePathsRef.current, projected, edgeMode, R, project, inMargin, lineScale })
       }
 
       // Hover preview for edge-paint mode — drawn directly on ctx, not cached
@@ -1331,10 +1359,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     let riverChainData, canalChainData
     if (RIVER_V2) {
-      const rv2 = buildRiverChainsV2(riverEdgesRef.current, hexesRef.current, riverChainOverridesRef.current, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, riverHopPropsRef.current, riverSegmentPropsRef.current)
+      const rv2 = buildRiverChainsV2(riverEdgesRef.current, hexesRef.current, riverChainOverridesRef.current, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, riverHopPropsRef.current, riverSegmentPropsRef.current, riverPathSmoothingRef.current)
       riverChainsV2Ref.current = rv2
       riverChainData = rv2.map(c => ({ vertices: c.chain, segKey: c.segKey, hopKeys: c.hopKeys, hopRanges: c.hopRanges }))
-      canalChainData = buildRiverChainsV2(canalEdgesRef.current, hexesRef.current, riverChainOverridesRef.current, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current).map(c => ({ vertices: c.chain, segKey: c.segKey }))
+      canalChainData = buildRiverChainsV2(canalEdgesRef.current, hexesRef.current, riverChainOverridesRef.current, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, {}, {}, riverPathSmoothingRef.current).map(c => ({ vertices: c.chain, segKey: c.segKey }))
     } else {
       riverChainsV2Ref.current = []
       riverChainData = buildRiverChains(riverEdgesRef.current, hexesRef.current)
@@ -1353,8 +1381,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       canalStyle: canalStyleRef.current,
       selectedRiverKeys: new Set(selectedSegmentKeysRef.current),
       selectedCanalKeys: new Set(selectedCanalSegmentKeysRef.current),
-      riverBaseHW: 1.4 * riverWidthScaleRef.current,
-      canalBaseHW: 1.4 * canalWidthScaleRef.current,
+      riverBaseHW: 1.4 * riverWidthScaleRef.current * lineScale,
+      canalBaseHW: 1.4 * canalWidthScaleRef.current * lineScale,
       lakeProjCenters,
       smoothPasses: RIVER_V2 ? 0 : riverCurveStepsRef.current,
       wobbleBroad: RIVER_V2 ? 0 : riverWobbleRef.current * R * 0.5,
@@ -1384,7 +1412,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ...riverChainOverridesRef.current,
         [liveDenseDrag.id]: liveDenseDrag.handles.map((p, i) => i === liveDenseDrag.handleIdx ? liveDensePos : p) as [number, number][],
       }
-      const liveRv2 = buildRiverChainsV2(riverEdgesRef.current, hexesRef.current, liveRiverOverrides, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, riverHopPropsRef.current, riverSegmentPropsRef.current)
+      const liveRv2 = buildRiverChainsV2(riverEdgesRef.current, hexesRef.current, liveRiverOverrides, riverWiggleFreqRef.current, riverWiggleAmpRef.current, riverSmoothingRef.current, riverHopPropsRef.current, riverSegmentPropsRef.current, riverPathSmoothingRef.current)
       liveRiverParams = { ...riverParams, riverChainData: liveRv2.map(c => ({ vertices: c.chain, segKey: c.segKey })) }
     }
 
@@ -1602,7 +1630,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
       }
       if (isExport) {
-        _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
+        const scaledTierStyles = tierStyles.map(s => ({ ...s, outerW: s.outerW * lineScale })) as [RoadTierStyle, RoadTierStyle, RoadTierStyle]
+        const scaledRailStyle = { ...railStyleRef.current, thickness: railStyleRef.current.thickness * lineScale }
+        _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles: scaledTierStyles, railStyle: scaledRailStyle, project })
       }
 
       // Debug: raw OSM way overlay (screen-only, never exported)
@@ -1897,18 +1927,43 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ? { overlayId: (tool as { id: string }).id, lon: labelSnapRef.current[0], lat: labelSnapRef.current[1] }
         : null
       const el = editingLabelRef.current
+      const dl = draggingLabelRef.current
+      const dragSnap = dl && labelSnapRef.current
+        ? { overlayId: dl.overlayId, index: dl.index, lon: labelSnapRef.current[0], lat: labelSnapRef.current[1] }
+        : null
       _drawLabels({
         ctx,
         labelOverlays: labelOverlaysRef.current,
         placedLabels: placedLabelsRef.current,
         project,
         inMargin,
-        snapPreview: snap,
+        snapPreview: !dl && !isExport ? snap : null,
         editingLabel: el ? { overlayId: el.overlayId, index: el.index } : null,
+        draggingLabel: dragSnap,
       })
     }
 
+    // Cover excluded hexes with background color (on top of all content, inside paper clip)
+    if (excludedSet.size > 0) {
+      _drawExcludedHexOverlay(ctx, projected, excludedSet, mapBgColorRef.current)
+    }
+
     ctx.restore() // clip
+
+    // Hex grid mask — covers margin area (paper minus hex polygons) with background color
+    if (clipToHexGridRef.current && projected.length > 0) {
+      _drawHexGridMask(ctx, projected, edgeMode, inMargin, px, py, pw, ph, mapBgColorRef.current, excludedSet)
+    }
+
+    // Map border — stroke along the outer boundary of the hex grid
+    if (mapBorderEnabledRef.current && projected.length > 0) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(px, py, pw, ph)
+      ctx.clip()
+      _drawMapBoundary(ctx, projected, edgeMode, inMargin, mapBorderColorRef.current, mapBorderWidthRef.current, lineScale, excludedSet)
+      ctx.restore()
+    }
 
     if (!exportTarget) {
       // Margin indicator — dashed inset rectangle (screen only)
@@ -2156,15 +2211,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, beachStrip, beachColor, beachWidth])
 
   // Mark other layer caches dirty when their relevant data changes
-  useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes])
+  useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes, excludedHexKeys])
   useEffect(() => { joinedHighlightsDirtyRef.current = true }, [highlights, highlightedHexes, highlightLines])
-  useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
+  useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
   useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailData, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railControlOverrides, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, railSelectMode, showRawOsmRoads])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -3680,6 +3735,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [draw])
 
   const onClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (editingLabelRef.current) return
     if (draggedRef.current) return
     const meta = metaRef.current
     if (!meta) return
@@ -4071,7 +4127,48 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return
+    if (editingLabelRef.current) return
     draggedRef.current = false
+
+    // Label drag — detect if mousedown is over a placed label in label-place mode
+    if (activeToolRef.current.type === 'label-place' && activePanelRef.current === 'highlights') {
+      const logical = clientToLogicalRef.current(e.clientX, e.clientY)
+      if (logical) {
+        const { lx, ly, cssW, cssH } = logical
+        const meta = metaRef.current
+        const canvas = canvasRef.current
+        if (meta && canvas) {
+          const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            for (const overlay of labelOverlaysRef.current) {
+              const labels = placedLabelsRef.current[overlay.id] ?? []
+              for (let i = 0; i < labels.length; i++) {
+                const { lon, lat, text } = labels[i]
+                const [cx, cy] = projectToCanvas(lon, lat, meta, pw, ph, px, py)
+                const { bx, by, bw, bh } = getLabelBoxBounds(ctx, cx, cy, text || overlay.name, overlay)
+                if (lx >= bx && lx <= bx + bw && ly >= by && ly <= by + bh) {
+                  draggingLabelRef.current = { overlayId: overlay.id, index: i }
+                  draggedRef.current = true  // suppress click placement
+                  const onUp = () => {
+                    const snap = labelSnapRef.current
+                    const dl = draggingLabelRef.current
+                    if (dl && snap) {
+                      moveLabelToRef.current(dl.overlayId, dl.index, snap[0], snap[1])
+                    }
+                    draggingLabelRef.current = null
+                    draw()
+                    window.removeEventListener('mouseup', onUp)
+                  }
+                  window.addEventListener('mouseup', onUp)
+                  return
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Start an edge drag stroke if we're in edge-paint mode with a hovered edge
     if (isEdgePaintActive() && hoveredEdgeRef.current) {
@@ -4208,48 +4305,58 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       </button>
       {editingLabel && (() => {
         const overlay = labelOverlays.find(o => o.id === editingLabel.overlayId)
+        const commit = () => {
+          updateLabelTextRef.current(editingLabel.overlayId, editingLabel.index, editingLabel.text)
+          setEditingLabel(null)
+          draw()
+        }
+        const cancel = () => { setEditingLabel(null); draw() }
+        const fontSize = editingLabel.textSize * zoomRef.current
+        const lineH = fontSize * 1.25
+        const lineCount = (editingLabel.text.match(/\n/g)?.length ?? 0) + 1
+        const computedH = lineH * lineCount + fontSize * 0.9
         return (
-          <input
-            key={`${editingLabel.overlayId}-${editingLabel.index}`}
-            autoFocus
-            value={editingLabel.text}
-            onChange={e => setEditingLabel(prev => prev ? { ...prev, text: e.target.value } : null)}
-            onBlur={() => {
-              updateLabelTextRef.current(editingLabel.overlayId, editingLabel.index, editingLabel.text)
-              setEditingLabel(null)
-              draw()
-            }}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                updateLabelTextRef.current(editingLabel.overlayId, editingLabel.index, editingLabel.text)
-                setEditingLabel(null)
-                draw()
-              }
-              if (e.key === 'Escape') {
-                setEditingLabel(null)
-                draw()
-              }
-            }}
-            style={{
-              position: 'fixed',
-              left: editingLabel.screenX - editingLabel.width / 2,
-              top: editingLabel.screenY - editingLabel.height / 2,
-              width: editingLabel.width,
-              height: editingLabel.height,
-              background: overlay?.bgColor === 'transparent' ? 'rgba(0,0,20,0.85)' : (overlay?.bgColor ?? '#aa1111'),
-              border: '2px solid #5a9e6f',
-              borderRadius: 2,
-              color: overlay?.textColor ?? '#ffffff',
-              fontFamily: 'ui-monospace, monospace',
-              fontSize: editingLabel.textSize * (zoomRef.current),
-              fontWeight: 'bold',
-              textAlign: 'center',
-              outline: 'none',
-              zIndex: 50,
-              padding: 0,
-              boxSizing: 'border-box',
-            }}
-          />
+          <>
+            {/* backdrop captures outside clicks — mousedown so it fires before anything else */}
+            <div
+              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); commit() }}
+              style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+            />
+            <textarea
+              key={`${editingLabel.overlayId}-${editingLabel.index}`}
+              autoFocus
+              rows={lineCount}
+              value={editingLabel.text}
+              onChange={e => setEditingLabel(prev => prev ? { ...prev, text: e.target.value } : null)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { e.preventDefault(); cancel() }
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit() }
+              }}
+              style={{
+                position: 'fixed',
+                left: editingLabel.screenX - editingLabel.width / 2,
+                top: editingLabel.screenY - computedH / 2,
+                minWidth: editingLabel.width,
+                width: 'max-content',
+                height: computedH,
+                background: overlay?.bgColor === 'transparent' ? 'rgba(0,0,20,0.85)' : (overlay?.bgColor ?? '#aa1111'),
+                border: '2px solid #5a9e6f',
+                borderRadius: 2,
+                color: overlay?.textColor ?? '#ffffff',
+                fontFamily: 'ui-monospace, monospace',
+                fontSize,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                outline: 'none',
+                zIndex: 50,
+                padding: `${fontSize * 0.45 / 2}px ${fontSize * 0.45}px`,
+                boxSizing: 'border-box',
+                resize: 'none',
+                lineHeight: 1.25,
+                overflow: 'hidden',
+              }}
+            />
+          </>
         )
       })()}
       {blobFlyout && (
