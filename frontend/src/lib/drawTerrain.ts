@@ -170,18 +170,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     for (const terrain of allTerrains) {
       const defaultPolys = defaultBlobMap.get(terrain) ?? []
 
-      // Clip blob fills to terrain hexes — prevents organic overflow into clear/other-terrain cells
-      tCtx.save()
-      tCtx.beginPath()
-      for (const { hex, verts } of projected) {
-        if (!hexTerrainLayers(hex).includes(terrain)) continue
-        if (edgeMode === 'whole' && hex.partial) continue
-        tCtx.moveTo(verts[0][0], verts[0][1])
-        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-        tCtx.closePath()
-      }
-      tCtx.clip()
-
       // a. Fill default polys
       if (defaultPolys.length > 0) {
         tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
@@ -252,8 +240,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       } else if (terrain === 'marsh' && marshTexture) {
         applyTextureOverlay(tCtx, marshTexture, defaultPolys, R, terrainTextureScales['marsh'] ?? 3, 0)
       }
-
-      tCtx.restore() // hex clip
     }
 
     // ── 5. Lakes ──────────────────────────────────────────────────────────────
@@ -270,18 +256,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         tCtx.fill()
       }
     }
-
-    // Clip lake fills to lake hexes
-    tCtx.save()
-    tCtx.beginPath()
-    for (const { hex, verts } of projected) {
-      if (!(hex.isLake ?? false)) continue
-      if (edgeMode === 'whole' && hex.partial) continue
-      tCtx.moveTo(verts[0][0], verts[0][1])
-      for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-      tCtx.closePath()
-    }
-    tCtx.clip()
 
     // Default lake pass
     const lakeBlobPolys = defaultLakeBlobs.find(b => b.terrain === 'lake')?.polys ?? []
@@ -313,8 +287,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const ovPolys = ovBlobs.find(b => b.terrain === 'lake')?.polys ?? []
       drawLakePolys(ovPolys, override.color ?? lakeColor)
     }
-
-    tCtx.restore() // lake hex clip
   } // end blob mode
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────

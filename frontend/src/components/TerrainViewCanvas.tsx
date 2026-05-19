@@ -103,6 +103,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const panOriginRef = useRef({ x: 0, y: 0 })
 
   const [isRoadPainting, setIsRoadPainting] = useState(false)
+  const [isTerrainPainting, setIsTerrainPainting] = useState(false)
   const [mapOverlay, setMapOverlay] = useState(false)
   const [overlayRect, setOverlayRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const overlayContainerRef = useRef<HTMLDivElement>(null)
@@ -119,7 +120,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     roadEdges, railEdges, rawRoadWays, rawRailWays, roadTierStyles, railStyle,
     showRawOsmRoads, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
     osmRailHexPaths, osmRailHighlight,
-    osmRiverWays, osmRiverHighlight,
+    osmRiverWays, hoveredOsmRiverIdx,
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
     railNodeEditMode,
@@ -206,7 +207,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const osmRailHexPathsRef = useRef(osmRailHexPaths)
   const osmRailHighlightRef = useRef(osmRailHighlight)
   const osmRiverWaysRef = useRef(osmRiverWays)
-  const osmRiverHighlightRef = useRef(osmRiverHighlight)
+  const hoveredOsmRiverIdxRef = useRef(hoveredOsmRiverIdx)
   const spotlightCursorRef = useRef<{ lx: number; ly: number } | null>(null)
   const spotlightRafRef = useRef<number | null>(null)
   const roadTierStylesRef = useRef(roadTierStyles)
@@ -412,7 +413,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   osmRailHexPathsRef.current = osmRailHexPaths
   osmRailHighlightRef.current = osmRailHighlight
   osmRiverWaysRef.current = osmRiverWays
-  osmRiverHighlightRef.current = osmRiverHighlight
+  hoveredOsmRiverIdxRef.current = hoveredOsmRiverIdx
   roadTierStylesRef.current = roadTierStyles
   railStyleRef.current = railStyle
   roadPaintModeRef.current = roadPaintMode
@@ -597,7 +598,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   blobComponentsRef.current = blobComponents
 
   // Per-terrain component maps using terrains[] — so layered hexes group correctly
+  const prevBlobCompByTerrainRef = useRef(new Map<string, Map<string, string>>())
   const blobComponentsByTerrain = useMemo(() => {
+    if (isTerrainPainting) return prevBlobCompByTerrainRef.current
     const result = new Map<string, Map<string, string>>()
     const terrainTypes = new Set<string>()
     for (const h of generatedHexes) {
@@ -612,8 +615,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           .map(h => ({ q: h.q, r: h.r, terrain: t, isLake: false as const }))
       ))
     }
+    prevBlobCompByTerrainRef.current = result
     return result
-  }, [generatedHexes])
+  }, [isTerrainPainting, generatedHexes])
   const blobComponentsByTerrainRef = useRef(blobComponentsByTerrain)
   blobComponentsByTerrainRef.current = blobComponentsByTerrain
 
@@ -829,8 +833,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const oceanSeaKeysRef = useRef(oceanSeaKeys)
   oceanSeaKeysRef.current = oceanSeaKeys
 
+  const prevTerrainBlobsRef = useRef<{ terrain: string; polys: [number, number][][] }[]>([])
   const defaultTerrainBlobs = useMemo(() => {
     if (projectedHexes.length === 0 || hexRadius === 0) return []
+    if (isTerrainPainting) return prevTerrainBlobsRef.current
     const overriddenKeys = new Set(Object.keys(terrainBlobOverrides))
     const terrainTypeSet = new Set<string>()
     for (const p of projectedHexes) {
@@ -848,7 +854,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
     const terrainTypes = [...terrainTypeSet]
     // Each terrain type is computed independently so cross-terrain blob coupling is impossible.
-    return terrainTypes.flatMap(terrain => {
+    const result = terrainTypes.flatMap(terrain => {
       const componentMap = blobComponentsByTerrain.get(terrain) ?? new Map<string, string>()
       const terrainProjected = projectedHexes.filter(p => {
         const h = p.hex as GeneratedHex
@@ -876,12 +882,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         hexRadius,
       )
     })
-  }, [projectedHexes, blobComponentsByTerrain, terrainBlobOverrides, terrainTypeBlobStyles, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius, realisticCoastline])
+    prevTerrainBlobsRef.current = result
+    return result
+  }, [isTerrainPainting, projectedHexes, blobComponentsByTerrain, terrainBlobOverrides, terrainTypeBlobStyles, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius, realisticCoastline])
   const defaultTerrainBlobsRef = useRef(defaultTerrainBlobs)
   defaultTerrainBlobsRef.current = defaultTerrainBlobs
 
+  const prevLakeBlobsRef = useRef<{ terrain: string; polys: [number, number][][] }[]>([])
   const defaultLakeBlobs = useMemo(() => {
     if (projectedHexes.length === 0 || hexRadius === 0) return []
+    if (isTerrainPainting) return prevLakeBlobsRef.current
     const lakeOverriddenKeys = new Set(Object.keys(lakeOverrides))
     const defaultLakeProjected = projectedHexes
       .filter(p => {
@@ -890,9 +900,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         return !ck || !lakeOverriddenKeys.has(ck)
       })
       .map(p => ({ hex: { ...p.hex, terrain: 'lake' }, verts: p.verts }))
-    if (defaultLakeProjected.length === 0) return []
-    return buildTerrainBlobsV2(defaultLakeProjected, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, hexRadius)
-  }, [projectedHexes, blobComponents, lakeOverrides, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, hexRadius])
+    if (defaultLakeProjected.length === 0) return prevLakeBlobsRef.current
+    const result = buildTerrainBlobsV2(defaultLakeProjected, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, hexRadius)
+    prevLakeBlobsRef.current = result
+    return result
+  }, [isTerrainPainting, projectedHexes, blobComponents, lakeOverrides, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, hexRadius])
   const defaultLakeBlobsRef = useRef(defaultLakeBlobs)
   defaultLakeBlobsRef.current = defaultLakeBlobs
 
@@ -1100,7 +1112,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         oCtx.translate(-px, -py)
         oCtx.save()
         oCtx.beginPath()
-        oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        oCtx.rect(px, py, pw, ph)
         oCtx.clip()
         _drawTerrain(oCtx, terrainParams)
         oCtx.restore()
@@ -1114,7 +1126,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // Draw with paper-edge clip active (clips content at paper boundary)
     ctx.save()
     ctx.beginPath()
-    ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+    ctx.rect(px, py, pw, ph)
     ctx.clip()
     // Blit terrain layer for screen rendering
     if (!isExport && terrainLayerRef.current) {
@@ -1185,7 +1197,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           _drawHexBorders(oCtx, projected, borderMode, edgeMode, inMargin)
           oCtx.restore()
@@ -1350,7 +1362,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isDraggingRiverDense) {
         ctx.save()
         ctx.beginPath()
-        ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        ctx.rect(px, py, pw, ph)
         ctx.clip()
         _drawRivers(ctx, liveRiverParams)
         ctx.restore()
@@ -1365,7 +1377,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           _drawRivers(oCtx, riverParams)
           oCtx.restore()
@@ -1419,7 +1431,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           _drawAllBuildings(oCtx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, hexBuildingGeoCache: hexBuildingGeoCacheRef.current, project })
           _drawAllBuildingsV2(oCtx, { hexes: hexesRef.current, urbanHexes: urbanHexesRef.current, urbanStyle: urbanStyleRef.current, settlements: settlementsRef.current, settlementTierStyles: settlementTierStylesRef.current, roadChains, roadTierStyles: roadTierStylesRef.current, project })
@@ -1532,7 +1544,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           // Bypass offscreen cache during drag — draw directly so the road bends live
           ctx.save()
           ctx.beginPath()
-          ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          ctx.rect(px, py, pw, ph)
           ctx.clip()
           _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
           ctx.restore()
@@ -1547,7 +1559,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             oCtx.translate(-px, -py)
             oCtx.save()
             oCtx.beginPath()
-            oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+            oCtx.rect(px, py, pw, ph)
             oCtx.clip()
             _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
             oCtx.restore()
@@ -1567,7 +1579,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!isExport && showRawOsmRoadsRef.current) {
         ctx.save()
         ctx.beginPath()
-        ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+        ctx.rect(px, py, pw, ph)
         ctx.clip()
         if (showRawOsmRoadsRef.current) {
           const tierColor = ['rgba(220,50,50,0.9)', 'rgba(220,140,30,0.9)', 'rgba(180,180,30,0.85)']
@@ -1821,7 +1833,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.translate(-px, -py)
           oCtx.save()
           oCtx.beginPath()
-          oCtx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+          oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           const activeRoadChainsS = ROAD_V2 && smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
           _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
@@ -1890,9 +1902,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const spotlight = osmSpotlightModeRef.current
     const cursor = spotlightCursorRef.current
     const railHighlight = osmRailHighlightRef.current
-    const riverHighlight = osmRiverHighlightRef.current
+    const hoveredRiverIdx = hoveredOsmRiverIdxRef.current
 
-    if (!spotlight && ht === null && !railHighlight && !riverHighlight) return
+    if (!spotlight && ht === null && !railHighlight && hoveredRiverIdx === null) return
     if (spotlight && !cursor) return
 
     const zoom = zoomRef.current
@@ -1944,23 +1956,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       canal: ['rgba(40,200,180,0.2)', 'rgba(60,220,200,0.9)'],
     }
 
-    const drawRiverOsmWays = (type: 'river' | 'canal') => {
-      const ways = osmRiverWaysRef.current.filter(w => w.type === type && w.coords.length >= 2)
-      if (ways.length === 0) return
-      const colors = riverOsmColors[type]
+    const drawHoveredRiverWay = (idx: number) => {
+      const way = osmRiverWaysRef.current[idx]
+      if (!way || way.coords.length < 2) return
+      const colors = riverOsmColors[way.type] ?? riverOsmColors.river
       for (let pass = 0; pass < 2; pass++) {
         ctx.strokeStyle = colors[pass]
-        for (const way of ways) {
-          ctx.lineWidth = pass === 0 ? 5 * way.width_multiplier : 1.5
-          ctx.beginPath()
-          const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
-          ctx.moveTo(x0, y0)
-          for (let i = 1; i < way.coords.length; i++) {
-            const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
-            ctx.lineTo(xi, yi)
-          }
-          ctx.stroke()
+        ctx.lineWidth = pass === 0 ? 5 * way.width_multiplier : 1.5
+        ctx.beginPath()
+        const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
+        ctx.moveTo(x0, y0)
+        for (let i = 1; i < way.coords.length; i++) {
+          const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
+          ctx.lineTo(xi, yi)
         }
+        ctx.stroke()
       }
     }
 
@@ -2001,14 +2011,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       drawWays(activeTiers)
       if (showRails) drawRailRawWays()
       ctx.restore()
-    } else if (ht !== null || railHighlight || riverHighlight) {
+    } else if (ht !== null || railHighlight || hoveredRiverIdx !== null) {
       ctx.save()
       ctx.beginPath()
-      ctx.rect(marginL, marginT, marginR - marginL, marginB - marginT)
+      ctx.rect(px, py, pw, ph)
       ctx.clip()
       if (ht !== null) drawWays([ht])
       if (railHighlight) drawRailRawWays()
-      if (riverHighlight) drawRiverOsmWays(riverHighlight)
+      if (hoveredRiverIdx !== null) drawHoveredRiverWay(hoveredRiverIdx)
       ctx.restore()
     }
 
@@ -2092,9 +2102,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, terrainColors, terrainTextureScales, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
+  useEffect(() => { draw() }, [generatedHexes, selectedHex, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, draw])
 
-  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, osmRiverHighlight, drawOsmHighlight])
+  useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
   // Load terrain textures
   useEffect(() => {
@@ -2314,13 +2324,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!terrainPaintModeRef.current) return
       isPaintingRef.current = true
       lastPaintedKeyRef.current = null
+      setIsTerrainPainting(true)
       paintAtClient(e.clientX, e.clientY)
     }
     const onMove = (e: MouseEvent) => {
       if (!isPaintingRef.current || !terrainPaintModeRef.current) return
       paintAtClient(e.clientX, e.clientY)
     }
-    const onUp = () => { isPaintingRef.current = false }
+    const onUp = () => {
+      if (isPaintingRef.current && terrainPaintModeRef.current) setIsTerrainPainting(false)
+      isPaintingRef.current = false
+    }
     el.addEventListener('mousedown', onDown)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)

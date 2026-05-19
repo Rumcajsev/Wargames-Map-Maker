@@ -5,10 +5,11 @@ export type RiversSlice = {
   osmRiverWays: OsmRiverWay[]
   riversOsmStatus: 'idle' | 'loading' | 'error' | 'done'
   riversOsmError: string | null
-  osmRiverHighlight: 'river' | 'canal' | null
+  hoveredOsmRiverIdx: number | null
+  appliedOsmRiverIndices: number[]
   fetchRivers: () => Promise<void>
-  applyOsmRivers: (type: 'river' | 'canal') => void
-  setOsmRiverHighlight: (v: 'river' | 'canal' | null) => void
+  toggleOsmRiver: (idx: number) => void
+  setHoveredOsmRiverIdx: (idx: number | null) => void
   clearOsmRivers: () => void
   riverEdges: { q1: number; r1: number; q2: number; r2: number }[]
   canalEdges: { q1: number; r1: number; q2: number; r2: number }[]
@@ -134,7 +135,8 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
     osmRiverWays: [],
     riversOsmStatus: 'idle',
     riversOsmError: null,
-    osmRiverHighlight: null,
+    hoveredOsmRiverIdx: null,
+    appliedOsmRiverIndices: [],
 
     riverEdges: [],
     canalEdges: [],
@@ -165,8 +167,8 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
     riverHopProps: {},
     selectedHopKey: null,
 
-    setOsmRiverHighlight: (v) => set({ osmRiverHighlight: v }),
-    clearOsmRivers: () => set({ osmRiverWays: [], riversOsmStatus: 'idle', riversOsmError: null, osmRiverHighlight: null }),
+    setHoveredOsmRiverIdx: (idx) => set({ hoveredOsmRiverIdx: idx }),
+    clearOsmRivers: () => set({ osmRiverWays: [], riversOsmStatus: 'idle', riversOsmError: null, hoveredOsmRiverIdx: null, appliedOsmRiverIndices: [] }),
 
     fetchRivers: async () => {
       const { generatedMetadata, hexOrientation } = get()
@@ -196,47 +198,56 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
       }
     },
 
-    applyOsmRivers: (type) => {
+    toggleOsmRiver: (idx) => {
+      const { osmRiverWays, appliedOsmRiverIndices, riverEdges, canalEdges, riverSegmentProps, canalSegmentProps } = get()
+      const way = osmRiverWays[idx]
+      if (!way) return
       get().pushUndoSnapshot()
-      const { osmRiverWays, riverEdges, canalEdges } = get()
-      const isRiver = type === 'river'
-      const existingEdges = isRiver ? riverEdges : canalEdges
+
+      const isRiver = way.type === 'river'
       const edgesKey = isRiver ? 'riverEdges' : 'canalEdges'
       const propsKey = isRiver ? 'riverSegmentProps' : 'canalSegmentProps'
+      const existingEdges = isRiver ? riverEdges : canalEdges
+      const existingProps = isRiver ? riverSegmentProps : canalSegmentProps
 
-      const existingPairs = new Set<string>()
-      for (const e of existingEdges) {
+      const wayEdgeKeys = new Set<string>()
+      for (const e of way.edges) {
         const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
-        existingPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`)
+        wayEdgeKeys.add(a < b ? `${a}|${b}` : `${b}|${a}`)
       }
 
-      const edgeSet = new Set<string>()
-      const newEdges: { q1: number; r1: number; q2: number; r2: number }[] = []
-      const newProps: Record<string, { width: number }> = {}
-
-      for (const way of osmRiverWays) {
-        if (way.type !== type) continue
-        const { hexes, width_multiplier } = way
-        for (let i = 0; i < hexes.length - 1; i++) {
-          const [q1, r1] = hexes[i], [q2, r2] = hexes[i + 1]
-          const dq = q2 - q1, dr = r2 - r1
-          const adj = (dq === 1 && dr === 0) || (dq === -1 && dr === 0) ||
-                      (dq === 0 && dr === 1) || (dq === 0 && dr === -1) ||
-                      (dq === 1 && dr === -1) || (dq === -1 && dr === 1)
-          if (!adj) continue
-          const a = `${q1},${r1}`, b = `${q2},${r2}`
+      if (appliedOsmRiverIndices.includes(idx)) {
+        const newEdges = existingEdges.filter(e => {
+          const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
+          return !wayEdgeKeys.has(a < b ? `${a}|${b}` : `${b}|${a}`)
+        })
+        const newProps = { ...existingProps }
+        for (const k of wayEdgeKeys) delete newProps[k]
+        set({
+          [edgesKey]: newEdges,
+          [propsKey]: newProps,
+          appliedOsmRiverIndices: appliedOsmRiverIndices.filter(i => i !== idx),
+        } as Partial<MapStore>)
+      } else {
+        const existingPairs = new Set(existingEdges.map(e => {
+          const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
+          return a < b ? `${a}|${b}` : `${b}|${a}`
+        }))
+        const newEdges: { q1: number; r1: number; q2: number; r2: number }[] = []
+        const newProps: Record<string, { width: number }> = {}
+        const edgeSet = new Set<string>()
+        for (const e of way.edges) {
+          const a = `${e.q1},${e.r1}`, b = `${e.q2},${e.r2}`
           const pairKey = a < b ? `${a}|${b}` : `${b}|${a}`
           if (existingPairs.has(pairKey) || edgeSet.has(pairKey)) continue
           edgeSet.add(pairKey)
-          newEdges.push({ q1, r1, q2, r2 })
-          newProps[pairKey] = { width: width_multiplier }
+          newEdges.push(e)
+          newProps[pairKey] = { width: way.width_multiplier }
         }
-      }
-
-      if (newEdges.length > 0) {
         set(s => ({
           [edgesKey]: [...(s[edgesKey] as typeof newEdges), ...newEdges],
           [propsKey]: { ...(s[propsKey] as Record<string, { width: number }>), ...newProps },
+          appliedOsmRiverIndices: [...s.appliedOsmRiverIndices, idx],
         }))
       }
     },
