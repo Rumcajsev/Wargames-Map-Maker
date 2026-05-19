@@ -2916,14 +2916,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         return
       }
 
-      // Segment in progress: backtrack if hex already in current segment, else append
+      // Segment in progress: close loop if returning to first hex, backtrack if revisiting any other hex, else append
       const segs = highlightLinesRef.current[hlId] ?? []
       const lastSeg = segs.length > 0 ? segs[segs.length - 1] : []
       const idx = lastSeg.lastIndexOf(key)
       if (idx !== -1) {
-        // Segments with < 2 hexes are deleted entirely (auto-cleanup on full backtrack)
-        truncateHighlightLineRef.current(hlId, idx < 2 ? 0 : idx)
-        if (idx < 2) { segmentStarted = false; prevHex = hex }
+        if (idx === 0 && lastSeg.length >= 3) {
+          // Close the loop: append first hex to complete the circuit, then finish this segment
+          appendHexToLineRef.current(hlId, hex.q, hex.r)
+          segmentStarted = false
+          prevHex = hex
+        } else {
+          // Segments with < 2 hexes are deleted entirely (auto-cleanup on full backtrack)
+          truncateHighlightLineRef.current(hlId, idx < 2 ? 0 : idx)
+          if (idx < 2) { segmentStarted = false; prevHex = hex }
+        }
       } else {
         appendHexToLineRef.current(hlId, hex.q, hex.r)
       }
