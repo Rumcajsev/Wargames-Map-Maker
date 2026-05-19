@@ -49,11 +49,28 @@ function HighlightSwatch({ h }: { h: HexHighlight }) {
     )
   }
 
+  const strokeProps = {
+    stroke: h.strokeEnabled ? color : '#3a3a5a',
+    strokeWidth: h.strokeEnabled ? 1.5 : 0.75,
+  }
+  const patId = `hs-hatch-${color.replace('#', '')}`
+  if ((h.fillPattern ?? 'none') === 'hatched' && h.fillEnabled && h.fillOpacity > 0) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+        <defs>
+          <pattern id={patId} patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="4" stroke={color} strokeWidth="1" strokeOpacity={h.fillOpacity} />
+          </pattern>
+        </defs>
+        <rect x="1.5" y="1.5" width="15" height="15" rx="2" fill={`url(#${patId})`} {...strokeProps} />
+      </svg>
+    )
+  }
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
       <rect x="1.5" y="1.5" width="15" height="15" rx="2"
         fill={color} fillOpacity={h.fillEnabled ? h.fillOpacity : 0}
-        stroke={h.strokeEnabled ? color : '#3a3a5a'} strokeWidth={h.strokeEnabled ? 1.5 : 0.75}
+        {...strokeProps}
       />
     </svg>
   )
@@ -126,6 +143,7 @@ const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
 const OVERLAY_DEFAULTS = {
   fillEnabled: true,
   fillOpacity: 0.3,
+  fillPattern: 'none' as const,
   strokeEnabled: true,
   strokeOpacity: 0.9,
   strokeWidth: 3,
@@ -293,6 +311,7 @@ export function HighlightsSidebar() {
       strokeColor: '#000000',
       strokeWidth: 1,
       textSize: 14,
+      opacity: 1,
     })
   }
 

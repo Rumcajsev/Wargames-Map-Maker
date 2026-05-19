@@ -458,6 +458,14 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       }
     }
   }
+  if (fromVersion < 25) {
+    const highlights = s.highlights as Array<Record<string, unknown>> | undefined
+    if (highlights) {
+      for (const h of highlights) {
+        if (!h.fillPattern) h.fillPattern = 'none'
+      }
+    }
+  }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
 }

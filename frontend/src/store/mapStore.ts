@@ -326,6 +326,7 @@ export interface LabelOverlay {
   strokeColor: string
   strokeWidth: number
   textSize: number
+  opacity: number
 }
 
 export interface HexHighlight {
@@ -340,6 +341,7 @@ export interface HexHighlight {
   strokeWidth: number
   joinNeighbors: boolean
   smoothing: number
+  fillPattern: 'none' | 'hatched'
   linePattern: 'none' | 'dotted' | 'dashed' | 'dashdot'
   linePatternSide: 'left' | 'right' | 'center'
   patternSpacing: number
@@ -636,7 +638,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
   }),
-  version: 24,
+  version: 25,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

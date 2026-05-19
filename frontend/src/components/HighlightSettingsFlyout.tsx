@@ -75,6 +75,28 @@ const PillToggle = ({ enabled, label, onToggle }: { enabled: boolean; label: str
 
 const PREVIEW_STROKE = '#a0a0c0'
 const PREVIEW_TICK = '#7a7a9a'
+const PREVIEW_FILL = '#6a6a9a'
+
+function FillPatternPreview({ pattern }: { pattern: 'none' | 'hatched' }) {
+  if (pattern === 'hatched') {
+    return (
+      <svg width="28" height="18" viewBox="0 0 28 18">
+        <defs>
+          <pattern id="fp-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="5" stroke={PREVIEW_STROKE} strokeWidth="1" />
+          </pattern>
+          <clipPath id="fp-clip"><rect x="2" y="2" width="24" height="14" /></clipPath>
+        </defs>
+        <rect x="2" y="2" width="24" height="14" rx="1" fill="url(#fp-hatch)" clipPath="url(#fp-clip)" stroke={PREVIEW_TICK} strokeWidth="0.8" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="28" height="18" viewBox="0 0 28 18">
+      <rect x="2" y="2" width="24" height="14" rx="1" fill={PREVIEW_FILL} />
+    </svg>
+  )
+}
 
 function PatternPreview({ pattern }: { pattern: string }) {
   const sw = 1.5
@@ -197,17 +219,36 @@ export function HighlightSettingsFlyout({ highlight, anchorY, onClose }: Props) 
       </div>
 
       {isArea && (
-        <SliderRow label="Fill" value={highlight.fillOpacity === 0 ? 'off' : `${Math.round(highlight.fillOpacity * 100)}%`} dim={highlight.fillOpacity === 0}>
-          <input
-            type="range" min={0} max={100} step={10}
-            value={Math.round(highlight.fillOpacity * 100)}
-            onChange={e => {
-              const v = Number(e.target.value)
-              upd({ fillOpacity: v / 100, fillEnabled: v > 0 })
-            }}
-            style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
-          />
-        </SliderRow>
+        <>
+          <SliderRow label="Fill" value={highlight.fillOpacity === 0 ? 'off' : `${Math.round(highlight.fillOpacity * 100)}%`} dim={highlight.fillOpacity === 0}>
+            <input
+              type="range" min={0} max={100} step={10}
+              value={Math.round(highlight.fillOpacity * 100)}
+              onChange={e => {
+                const v = Number(e.target.value)
+                upd({ fillOpacity: v / 100, fillEnabled: v > 0 })
+              }}
+              style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
+            />
+          </SliderRow>
+          {highlight.fillOpacity > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ ...labelStyle, marginBottom: 6 }}>Fill style</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {(['none', 'hatched'] as const).map(fp => (
+                  <button
+                    key={fp}
+                    onClick={() => upd({ fillPattern: fp })}
+                    style={vizBtnStyle((highlight.fillPattern ?? 'none') === fp)}
+                    title={fp === 'none' ? 'Solid' : 'Hatched'}
+                  >
+                    <FillPatternPreview pattern={fp} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <div style={{ marginBottom: 0 }}>

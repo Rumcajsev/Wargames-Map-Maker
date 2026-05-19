@@ -137,6 +137,23 @@ export function gaussianSmoothOpen(pts: [number, number][], sigma: number): [num
   })
 }
 
+// ── Area fill helpers ─────────────────────────────────────────────────────────
+
+function makeHatchFillPattern(ctx: Ctx, color: string, R: number): CanvasPattern | null {
+  const spacing = Math.max(4, R * 0.18)
+  const s = Math.ceil(spacing)
+  const tile = new OffscreenCanvas(s, s)
+  const tc = tile.getContext('2d')!
+  tc.strokeStyle = color
+  tc.lineWidth = 1
+  tc.beginPath()
+  tc.moveTo(0, s); tc.lineTo(s, 0)
+  tc.moveTo(-s, s); tc.lineTo(0, 0)
+  tc.moveTo(s, s); tc.lineTo(s * 2, 0)
+  tc.stroke()
+  return ctx.createPattern(tile, 'repeat')
+}
+
 // ── Pattern renderers ─────────────────────────────────────────────────────────
 
 function drawDotted(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
@@ -232,6 +249,7 @@ export function drawHighlights(
   const vKey = (v: [number, number]) => `${Math.round(v[0] * 10)},${Math.round(v[1] * 10)}`
 
   // Per-hex pass: fill + non-joined stroke
+  const hatchPatternCache = new Map<string, CanvasPattern | null>()
   for (const { hex, verts } of projected) {
     if (edgeMode === 'whole' && hex.partial) continue
     if (!hex.partial && !inMargin(verts)) continue
@@ -246,7 +264,15 @@ export function drawHighlights(
       for (let i = 1; i < verts.length; i++) hCtx.lineTo(verts[i][0], verts[i][1])
       hCtx.closePath()
       hCtx.globalAlpha = hl.fillOpacity
-      hCtx.fillStyle = hl.color
+      if ((hl.fillPattern ?? 'none') === 'hatched') {
+        const cacheKey = `${hl.id}-${hl.color}`
+        if (!hatchPatternCache.has(cacheKey)) {
+          hatchPatternCache.set(cacheKey, makeHatchFillPattern(hCtx, hl.color, R))
+        }
+        hCtx.fillStyle = hatchPatternCache.get(cacheKey) ?? hl.color
+      } else {
+        hCtx.fillStyle = hl.color
+      }
       hCtx.fill()
       hCtx.globalAlpha = 1
     }
