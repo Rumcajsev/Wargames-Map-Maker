@@ -773,8 +773,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Keys of hexes that are TRUE sea-coast hexes: have coastline_clip AND at least one
   // pure-sea neighbor. Inland water-body hexes also get coastline_clip but have no
   // pure-sea neighbor, so they are excluded from the sea mask.
+  const prevSeaCoastKeysRef = useRef(new Set<string>())
   const seaCoastKeys = useMemo(() => {
     if (!realisticCoastline) return new Set<string>()
+    if (isTerrainPainting) return prevSeaCoastKeysRef.current
     const hexByKey = new Map<string, GeneratedHex>()
     for (const h of generatedHexes) hexByKey.set(`${h.q},${h.r}`, h)
     const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
@@ -799,16 +801,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
       if (found) keys.add(`${h.q},${h.r}`)
     }
+    prevSeaCoastKeysRef.current = keys
     return keys
-  }, [generatedHexes, realisticCoastline])
+  }, [isTerrainPainting, generatedHexes, realisticCoastline])
   const seaCoastKeysRef = useRef(seaCoastKeys)
   seaCoastKeysRef.current = seaCoastKeys
 
   // Ocean sea keys: pure-sea hexes (terrain='sea', no clip) reachable from any seaCoastKey via
   // flood-fill through connected pure-sea hexes. Inland water bodies (class 80 pixels classified
   // as 'sea') form isolated islands with no connection to the coast — they are excluded.
+  const prevOceanSeaKeysRef = useRef(new Set<string>())
   const oceanSeaKeys = useMemo(() => {
     if (!realisticCoastline) return new Set<string>()
+    if (isTerrainPainting) return prevOceanSeaKeysRef.current
     const hexByKey = new Map<string, GeneratedHex>()
     for (const h of generatedHexes) hexByKey.set(`${h.q},${h.r}`, h)
     const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
@@ -837,8 +842,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         if (!visited.has(nk)) { visited.add(nk); queue.push(nk) }
       }
     }
+    prevOceanSeaKeysRef.current = visited
     return visited
-  }, [generatedHexes, realisticCoastline, seaCoastKeys])
+  }, [isTerrainPainting, generatedHexes, realisticCoastline, seaCoastKeys])
   const oceanSeaKeysRef = useRef(oceanSeaKeys)
   oceanSeaKeysRef.current = oceanSeaKeys
 
@@ -1967,19 +1973,24 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     const drawHoveredRiverWay = (idx: number) => {
       const way = osmRiverWaysRef.current[idx]
-      if (!way || way.coords.length < 2) return
+      if (!way) return
+      const segs = way.segments ?? (way.coords.length >= 2 ? [way.coords] : [])
+      if (segs.length === 0) return
       const colors = riverOsmColors[way.type] ?? riverOsmColors.river
       for (let pass = 0; pass < 2; pass++) {
         ctx.strokeStyle = colors[pass]
         ctx.lineWidth = pass === 0 ? 5 * way.width_multiplier : 1.5
-        ctx.beginPath()
-        const [x0, y0] = project(way.coords[0][0], way.coords[0][1])
-        ctx.moveTo(x0, y0)
-        for (let i = 1; i < way.coords.length; i++) {
-          const [xi, yi] = project(way.coords[i][0], way.coords[i][1])
-          ctx.lineTo(xi, yi)
+        for (const seg of segs) {
+          if (seg.length < 2) continue
+          ctx.beginPath()
+          const [x0, y0] = project(seg[0][0], seg[0][1])
+          ctx.moveTo(x0, y0)
+          for (let i = 1; i < seg.length; i++) {
+            const [xi, yi] = project(seg[i][0], seg[i][1])
+            ctx.lineTo(xi, yi)
+          }
+          ctx.stroke()
         }
-        ctx.stroke()
       }
     }
 

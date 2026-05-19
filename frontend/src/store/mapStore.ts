@@ -365,6 +365,7 @@ export interface OsmRiverWay {
   name: string
   type: 'river' | 'canal'
   coords: [number, number][]
+  segments: [number, number][][]
   edges: { q1: number; r1: number; q2: number; r2: number }[]
   width_multiplier: number
 }

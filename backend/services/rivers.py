@@ -393,6 +393,7 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
             "name": tags.get("name", ""),
             "type": wtype,
             "coords": [[lon, lat] for lon, lat in coords],
+            "segments": [[[lon, lat] for lon, lat in coords]],
             "edges": edges,
             "width_multiplier": width_multiplier,
         })
@@ -418,6 +419,7 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
                 "name": name,
                 "type": r["type"],
                 "coords": r["coords"],
+                "segments": list(r["segments"]),
                 "edges": list(r["edges"]),
                 "_edge_keys": {
                     (min(f"{e['q1']},{e['r1']}", f"{e['q2']},{e['r2']}"),
@@ -431,6 +433,8 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
             entry = named[key]
             seg_len = _polyline_length(r["coords"])
             entry["_total_length"] += seg_len
+            # Accumulate all coordinate segments for full-river hover preview
+            entry["segments"].extend(r["segments"])
             # Use coords from the longest individual segment for representative display
             if seg_len > _polyline_length(entry["coords"]):
                 entry["coords"] = r["coords"]
