@@ -398,13 +398,18 @@ export function buildTerrainBlobsV2(
     const p2Amp = bumpFraction * lobeAmp * R * lobeDirection
 
     const finalPolys = polys.map(poly => {
+      // Single-hex blobs (6 verts) gain nothing from the noise pipeline — return as-is.
+      if (poly.length <= 6) return poly
+
       const seed = Math.abs(Math.round(poly[0][0] * 73 + poly[0][1] * 97))
 
       let p: [number, number][] = poly
       for (let pass = 0; pass < smooth; pass++) p = preSmoothVar(p, 0.4)
       p = resizeToHexAnchors(p, hexCenters, resizeS)
 
-      p = subdivideClosedPolygon(p, R * 0.15)
+      // R * 0.25 (was 0.15) halves the point count before perturbXY and the
+      // 5× resampleSmoothQuad multiplier, cutting perturbNormal cost by ~40%.
+      p = subdivideClosedPolygon(p, R * 0.25)
       const permP1x = makePermutation(seed)
       const permP1y = makePermutation(seed + 31)
       p = perturbXY(p, permP1x, permP1y, sweepFreq / R, p1Amp)

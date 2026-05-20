@@ -1221,11 +1221,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       beachWidth: beachWidthRef.current,
     }
 
-    // Build offscreen terrain layer when dirty (skipped for export — always renders inline)
+    // Build offscreen terrain layer when dirty (skipped for export — always renders inline).
+    // Skip rebuild while actively painting: blobs are frozen during drag so the terrain
+    // visually doesn't change, and rebuilding on every mousemove event (~30ms each) blocks
+    // the main thread. The rebuild runs once on mouseup when isPaintingRef goes false.
     if (!isExport) {
       const papW = Math.ceil(pw), papH = Math.ceil(ph)
-      if (terrainDirtyRef.current || !terrainLayerRef.current ||
-          terrainLayerPapWRef.current !== papW || terrainLayerPapHRef.current !== papH) {
+      if (!isPaintingRef.current && (terrainDirtyRef.current || !terrainLayerRef.current ||
+          terrainLayerPapWRef.current !== papW || terrainLayerPapHRef.current !== papH)) {
         const offW = Math.ceil(pw * dpr * offZoom), offH = Math.ceil(ph * dpr * offZoom)
         const offscreen = new OffscreenCanvas(offW, offH)
         const oCtx = offscreen.getContext('2d')!
@@ -1515,27 +1518,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       _drawRivers(ctx, liveRiverParams)
     }
 
-    // Bridges — drawn after rivers, before roads
-    if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0 && bridgeTiersRef.current.length > 0) {
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(px, py, pw, ph)
-      ctx.clip()
-      _drawBridges({
-        ctx,
-        bridges: detectedBridgesRef.current,
-        tiers: bridgeTiersRef.current,
-        overrides: bridgeOverridesRef.current,
-        style: bridgeStyleRef.current,
-        tierStyles: (isExport
-          ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
-          : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
-        lineScale: isExport ? lineScale : 1,
-        project,
-      })
-      ctx.restore()
-    }
-
     // Urban area buildings + settlement buildings (rendered below roads)
     {
       const { chains: roadChains } = smoothedRoadDataRef.current
@@ -1752,6 +1734,27 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.restore()
       }
 
+    }
+
+    // Bridges — drawn on top of rivers and roads
+    if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0 && bridgeTiersRef.current.length > 0) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(px, py, pw, ph)
+      ctx.clip()
+      _drawBridges({
+        ctx,
+        bridges: detectedBridgesRef.current,
+        tiers: bridgeTiersRef.current,
+        overrides: bridgeOverridesRef.current,
+        style: bridgeStyleRef.current,
+        tierStyles: (isExport
+          ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
+          : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+        lineScale: isExport ? lineScale : 1,
+        project,
+      })
+      ctx.restore()
     }
 
     // Control point handles (visible when Roads panel active and no paint mode) — always inline
