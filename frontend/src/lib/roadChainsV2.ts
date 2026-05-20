@@ -30,6 +30,8 @@ export type RoadBaseDataV2 = {
   interHexDist: number
 }
 
+export type RoadTierGeomMap = Record<number, { wiggleAmp?: number; wiggleFreq?: number; pathSmoothing?: number; smoothing?: number }>
+
 export function buildRoadChainsV2(
   roadEdges: { q1: number; r1: number; q2: number; r2: number; tier: 0 | 1 | 2 }[],
   hexIdx: Map<string, { center: [number, number] }>,
@@ -43,6 +45,7 @@ export function buildRoadChainsV2(
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   snapBindings: Record<string, string> = {},
   chaikinPasses = 2,
+  tierGeom?: RoadTierGeomMap,
 ): RoadBaseDataV2 {
   if (roadEdges.length === 0) return { chains: [], junctions: [], controlPoints: [], interHexDist: 0 }
 
@@ -271,8 +274,16 @@ export function buildRoadChainsV2(
     const b = startKey < endKey ? endKey : startKey
     const id = `${a}|${b}`
 
+    const nonNullTiers = ptsTiers.filter(t => t !== null) as (0 | 1 | 2)[]
+    const chainTier = nonNullTiers.length > 0 ? Math.min(...nonNullTiers) as 0 | 1 | 2 : 2
+    const tg = tierGeom?.[chainTier]
+    const effectivePathSmoothing = tg?.pathSmoothing ?? pathSmoothing
+    const effectiveSmoothing = tg?.smoothing ?? smoothing
+    const effectiveWiggleAmp = tg?.wiggleAmp ?? wiggleAmpFactor
+    const effectiveWiggleFreq = tg?.wiggleFreq ?? wiggleFreqFactor
+
     const relaxed = pts.slice() as [number, number][]
-    const iters = Math.round(pathSmoothing)
+    const iters = Math.round(effectivePathSmoothing)
     for (let it = 0; it < iters; it++) {
       for (let i = 1; i < relaxed.length - 1; i++) {
         if (pinned[i]) continue
@@ -286,8 +297,10 @@ export function buildRoadChainsV2(
     }
 
     const storedHandles = chainOverrides[id]
-    const steps = Math.round(smoothing)
+    const steps = Math.round(effectiveSmoothing)
     const stepsActual = steps === 0 ? 1 : Math.max(2, steps)
+    const chainWiggleAmplitude = effectiveWiggleAmp * interHexDist
+    const chainWiggleFreqScaled = interHexDist > 0 ? effectiveWiggleFreq / interHexDist : 0
 
     for (let i = 0; i < edgeKeys.length; i++) {
       const ek = edgeKeys[i]
@@ -326,22 +339,20 @@ export function buildRoadChainsV2(
       hopTiers.push((tA ?? tB ?? 2) as 0 | 1 | 2)
     }
 
-    const minTier = (hopTiers.length > 0 ? Math.min(...hopTiers) : 2) as 0 | 1 | 2
-
     const sp = segProps[id]
     const hasAnyOverride = sp?.wiggleAmp !== undefined || sp?.wiggleFreq !== undefined ||
       hopKeysList.some(k => hopProps[k]?.wiggleAmp !== undefined || hopProps[k]?.wiggleFreq !== undefined)
 
     let chain: [number, number][]
     if (!hasAnyOverride) {
-      chain = wiggleChain(baseChain, wiggleAmplitude, wiggleFreq)
+      chain = wiggleChain(baseChain, chainWiggleAmplitude, chainWiggleFreqScaled)
     } else {
       const dense = [...baseChain] as [number, number][]
       for (let h = 0; h < hopCount; h++) {
         const [s, e] = hopRanges[h]
         const hp = hopProps[hopKeysList[h]]
-        const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
-        const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? wiggleFreqFactor) / interHexDist
+        const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? effectiveWiggleAmp) * interHexDist
+        const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? effectiveWiggleFreq) / interHexDist
         const slice = baseChain.slice(s, e + 1)
         const wiggled = wiggleChain(slice, amp, freq)
         for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
@@ -351,11 +362,42 @@ export function buildRoadChainsV2(
     const effectiveAmp = hasAnyOverride
       ? Math.max(...hopKeysList.map((k, h) => {
           const hp = hopProps[k]; const sp2 = segProps[id]
-          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? effectiveWiggleAmp) * interHexDist
         }))
-      : wiggleAmplitude
+      : chainWiggleAmplitude
     if (effectiveAmp > 0 && chaikinPasses > 0) chain = chaikin(chain, chaikinPasses, false)
-    chains.push({ tier: minTier, chain, baseChain, id, hopKeys: hopKeysList, hopRanges, hopTiers })
+
+    // Split chain at tier-change boundaries so each sub-chain has a uniform tier.
+    // A global walk over mixed-tier edges would otherwise collapse everything to minTier.
+    const tierRuns: { tier: 0 | 1 | 2; hopStart: number; hopEnd: number }[] = []
+    let runStart = 0
+    for (let h = 1; h < hopCount; h++) {
+      if (hopTiers[h] !== hopTiers[h - 1]) {
+        tierRuns.push({ tier: hopTiers[runStart], hopStart: runStart, hopEnd: h })
+        runStart = h
+      }
+    }
+    tierRuns.push({ tier: hopTiers[runStart] ?? 2, hopStart: runStart, hopEnd: hopCount })
+
+    if (tierRuns.length === 1) {
+      chains.push({ tier: tierRuns[0].tier, chain, baseChain, id, hopKeys: hopKeysList, hopRanges, hopTiers })
+    } else {
+      for (let ri = 0; ri < tierRuns.length; ri++) {
+        const { tier: runTier, hopStart, hopEnd } = tierRuns[ri]
+        const subId = ri === 0 ? id : `${id}|t${ri}`
+        const ptStart = hopRanges[hopStart][0]
+        const ptEnd = hopRanges[hopEnd - 1][1]
+        chains.push({
+          tier: runTier,
+          chain: chain.slice(ptStart, ptEnd + 1),
+          baseChain: baseChain.slice(ptStart, ptEnd + 1),
+          id: subId,
+          hopKeys: hopKeysList.slice(hopStart, hopEnd),
+          hopRanges: hopRanges.slice(hopStart, hopEnd).map(([s, e]) => [s - ptStart, e - ptStart] as [number, number]),
+          hopTiers: hopTiers.slice(hopStart, hopEnd),
+        })
+      }
+    }
   }
 
   // Single global walk — no per-tier split.
@@ -458,12 +500,17 @@ export function applyRoadWiggleV2(
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   chaikinPasses = 2,
+  tierGeom?: RoadTierGeomMap,
 ): RoadBaseDataV2 {
   const { interHexDist } = baseData
-  const wiggleAmplitude = wiggleAmpFactor * interHexDist
-  const wiggleFreq = interHexDist > 0 ? wiggleFreqFactor / interHexDist : 0
 
   const chains = baseData.chains.map(c => {
+    const tg = tierGeom?.[c.tier]
+    const effectiveAmpFactor = tg?.wiggleAmp ?? wiggleAmpFactor
+    const effectiveFreqFactor = tg?.wiggleFreq ?? wiggleFreqFactor
+    const wiggleAmplitude = effectiveAmpFactor * interHexDist
+    const wiggleFreq = interHexDist > 0 ? effectiveFreqFactor / interHexDist : 0
+
     const base = c.baseChain ?? c.chain
     const { id, hopKeys: hopKeysList = [], hopRanges = [] } = c
     const sp = segProps[id]
@@ -480,8 +527,8 @@ export function applyRoadWiggleV2(
         const [s, e] = hopRanges[h]
         const hp = hopProps[hopKeysList[h]]
         const spg = segProps[id]
-        const amp = (hp?.wiggleAmp ?? spg?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
-        const freq = (hp?.wiggleFreq ?? spg?.wiggleFreq ?? wiggleFreqFactor) / interHexDist
+        const amp = (hp?.wiggleAmp ?? spg?.wiggleAmp ?? effectiveAmpFactor) * interHexDist
+        const freq = (hp?.wiggleFreq ?? spg?.wiggleFreq ?? effectiveFreqFactor) / interHexDist
         const slice = base.slice(s, e + 1)
         const wiggled = wiggleChain(slice, amp, freq)
         for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
@@ -491,7 +538,7 @@ export function applyRoadWiggleV2(
     const effectiveAmp = hasAnyOverride
       ? Math.max(...hopKeysList.map(k => {
           const hp = hopProps[k], sp2 = segProps[id]
-          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? effectiveAmpFactor) * interHexDist
         }))
       : wiggleAmplitude
     if (effectiveAmp > 0 && chaikinPasses > 0) chain = chaikin(chain, chaikinPasses, false)

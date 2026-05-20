@@ -14,6 +14,21 @@ import { type LabelsSlice, createLabelsSlice } from './slices/labelsSlice'
 import { type UndoSlice, createUndoSlice } from './slices/undoSlice'
 import { type UiSlice, createUiSlice, migratePersisted, rehydrateState } from './slices/uiSlice'
 import { type BridgesSlice, createBridgesSlice } from './slices/bridgesSlice'
+import { type MegaHexSlice, createMegaHexSlice } from './slices/megaHexSlice'
+
+export interface RoadGeomOverride {
+  wiggleAmp: number
+  wiggleFreq: number
+  pathSmoothing: number
+  smoothing: number
+}
+
+export interface RailGeomOverride {
+  wiggleAmp: number
+  wiggleFreq: number
+  pathSmoothing: number
+  smoothing: number
+}
 
 export interface BlobOverride {
   terrain?: string
@@ -75,6 +90,7 @@ export type ActiveTool =
   | { type: 'rail-node-edit' }
   | { type: 'rail-select' }
   | { type: 'hex-mask'; mode: 'exclude' | 'include' }
+  | { type: 'mega-hex-origin' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -459,7 +475,8 @@ export type MapStore =
   LabelsSlice &
   UndoSlice &
   UiSlice &
-  BridgesSlice
+  BridgesSlice &
+  MegaHexSlice
 
 export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createSetupSlice(set, get),
@@ -475,6 +492,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createUndoSlice(set, get),
   ...createUiSlice(set, get),
   ...createBridgesSlice(set, get),
+  ...createMegaHexSlice(set),
 }), {
   name: 'ig2-map-store',
   storage: {
@@ -647,7 +665,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     bridgeTiers: s.bridgeTiers,
     bridgeOverrides: s.bridgeOverrides,
   }),
-  version: 29,
+  version: 31,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

@@ -530,6 +530,20 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     ]
     if (!s.bridgeOverrides) s.bridgeOverrides = {}
   }
+  if (fromVersion < 30) {
+    if (s.megaHexEnabled === undefined) s.megaHexEnabled = false
+    if (s.megaHexRadius === undefined) s.megaHexRadius = 1
+    if (s.megaHexColor === undefined) s.megaHexColor = '#cc4444'
+    if (s.megaHexOpacity === undefined) s.megaHexOpacity = 0.8
+    if (s.megaHexLineWidth === undefined) s.megaHexLineWidth = 2
+    if (s.megaHexOriginQ === undefined) s.megaHexOriginQ = 0
+    if (s.megaHexOriginR === undefined) s.megaHexOriginR = 0
+  }
+  if (fromVersion < 31) {
+    if (!s.roadTierGeometry) s.roadTierGeometry = [null, null, null]
+    if (s.railGeomOverride === undefined) s.railGeomOverride = null
+    if (s.railPathSmoothing === undefined) s.railPathSmoothing = 0
+  }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
 }

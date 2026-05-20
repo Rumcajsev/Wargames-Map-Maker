@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useMapStore } from '../store/mapStore'
 import { RoadsSettingsFlyout } from './RoadsSettingsFlyout'
+import { RoadGeomFlyout } from './RoadGeomFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
 import { ToolButton } from './ToolButton'
 
@@ -15,7 +16,7 @@ function statusDot(status: string) {
   return <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
 }
 
-type FlyoutKey = `road-${0 | 1 | 2}` | 'rail'
+type FlyoutKey = `road-${0 | 1 | 2}` | 'rail' | 'road-geom' | 'rail-geom'
 
 function RoadSegmentPanel({ selectedKeys, segmentProps, accentColor, globalWiggleAmp, globalWiggleFreq, setProp, clearProp, setSelectedKeys }: {
   selectedKeys: string[]
@@ -138,10 +139,6 @@ export function RoadsSidebar() {
     railPaintMode, railPaintEraser,
     roadNodeEditMode,
     setActiveTool,
-    roadWiggleAmp, setRoadWiggleAmp, setRoadWiggleDragging,
-    roadWiggleFreq, setRoadWiggleFreq,
-    roadSmoothing, setRoadSmoothing,
-    roadPathSmoothing, setRoadPathSmoothing,
     roadsStatus, roadsError,
     railsStatus, railsError,
     fetchRoads, fetchRails,
@@ -159,9 +156,6 @@ export function RoadsSidebar() {
     selectedRoadHopKey, setSelectedRoadHopKey,
     setRoadSegmentProp, clearRoadSegmentProp, setRoadHopProp, clearRoadHopProp,
     railNodeEditMode,
-    railWiggleAmp, setRailWiggleAmp, setRailWiggleDragging,
-    railWiggleFreq, setRailWiggleFreq,
-    railSmoothing, setRailSmoothing,
     railSelectMode, railSegmentProps, railHopProps,
     selectedRailSegmentKeys, setSelectedRailSegmentKeys, toggleRailSegmentSelection,
     selectedRailHopKey, setSelectedRailHopKey,
@@ -174,8 +168,6 @@ export function RoadsSidebar() {
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
   const [bridgesOpen, setBridgesOpen] = useState(false)
-  const [roadGeomOpen, setRoadGeomOpen] = useState(false)
-  const [railGeomOpen, setRailGeomOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -238,7 +230,7 @@ export function RoadsSidebar() {
 
   return (
     <>
-      {openFlyout && openFlyout !== 'rail' && (
+      {openFlyout && openFlyout !== 'rail' && openFlyout !== 'road-geom' && openFlyout !== 'rail-geom' && (
         <RoadsSettingsFlyout
           type="road"
           tier={parseInt(openFlyout.replace('road-', '')) as 0 | 1 | 2}
@@ -249,6 +241,20 @@ export function RoadsSidebar() {
       {openFlyout === 'rail' && (
         <RoadsSettingsFlyout
           type="rail"
+          anchorY={flyoutAnchorY}
+          onClose={() => setOpenFlyout(null)}
+        />
+      )}
+      {openFlyout === 'road-geom' && (
+        <RoadGeomFlyout
+          mode="road"
+          anchorY={flyoutAnchorY}
+          onClose={() => setOpenFlyout(null)}
+        />
+      )}
+      {openFlyout === 'rail-geom' && (
+        <RoadGeomFlyout
+          mode="rail"
           anchorY={flyoutAnchorY}
           onClose={() => setOpenFlyout(null)}
         />
@@ -314,17 +320,9 @@ export function RoadsSidebar() {
           </div>
         </div>
 
-        {/* ── Node edit + bendiness ── */}
+        {/* ── Road geometry ── */}
         <div style={sectionStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <div style={labelStyle}>Road Geometry</div>
-            <button
-              onClick={() => setRoadGeomOpen(o => !o)}
-              style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-            >{roadGeomOpen ? '▲' : '▼'}</button>
-          </div>
+          <div style={labelStyle}>Road Geometry</div>
           <ToolButton
             label="Edit Nodes"
             active={roadNodeEditMode}
@@ -332,7 +330,7 @@ export function RoadsSidebar() {
             swatchBorder={`1px solid ${roadNodeEditMode ? '#5a9e6f' : '#4a4a6a'}`}
             onSelect={() => setActiveTool(roadNodeEditMode ? { type: 'none' } : { type: 'node-edit' })}
           />
-          <div style={{ marginBottom: 10, marginTop: 4 }}>
+          <div style={{ marginBottom: 6, marginTop: 4 }}>
             <ToolButton
               label="Select segment"
               active={roadSelectMode}
@@ -344,66 +342,36 @@ export function RoadsSidebar() {
               accentText="#d0c8f0"
             />
           </div>
-          {roadSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Click a road to select. Cmd+click to pick a hop. Right-click to exit.</div>}
-          {roadGeomOpen && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleAmp.toFixed(2)}</span>
-              </div>
-              <input
-                type="range" min={0} max={1} step={0.01}
-                value={roadWiggleAmp}
-                onPointerDown={() => setRoadWiggleDragging(true)}
-                onPointerUp={() => setRoadWiggleDragging(false)}
-                onChange={e => setRoadWiggleAmp(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleFreq.toFixed(1)}</span>
-              </div>
-              <input
-                type="range" min={0.5} max={10} step={0.1}
-                value={roadWiggleFreq}
-                onChange={e => setRoadWiggleFreq(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Path smoothing</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadPathSmoothing}</span>
-              </div>
-              <input
-                type="range" min={0} max={50} step={1}
-                value={roadPathSmoothing}
-                onChange={e => setRoadPathSmoothing(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadSmoothing}</span>
-              </div>
-              <input
-                type="range" min={0} max={30} step={1}
-                value={roadSmoothing}
-                onChange={e => setRoadSmoothing(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer' }}
-              />
-            </>
-          )}
+          {roadSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -2, marginBottom: 8, lineHeight: 1.5 }}>Click a road to select. Cmd+click to pick a hop. Right-click to exit.</div>}
+          <button
+            data-road-geom-flyout=""
+            onClick={e => {
+              if (openFlyout === 'road-geom') {
+                setOpenFlyout(null)
+              } else {
+                setOpenFlyout('road-geom')
+                setFlyoutAnchorY(e.currentTarget.getBoundingClientRect().top)
+              }
+            }}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: openFlyout === 'road-geom' ? '#1a1f1a' : 'none',
+              border: `1px solid ${openFlyout === 'road-geom' ? '#3a5a3a' : '#1e1f2e'}`,
+              borderRadius: 3, padding: '5px 8px', cursor: 'pointer',
+              fontFamily: 'ui-monospace, monospace', fontSize: 11,
+              color: openFlyout === 'road-geom' ? '#c0e0c0' : '#8a8aaa', width: '100%',
+            }}
+            onMouseEnter={e => { if (openFlyout !== 'road-geom') e.currentTarget.style.color = '#a0a0c0' }}
+            onMouseLeave={e => { if (openFlyout !== 'road-geom') e.currentTarget.style.color = '#8a8aaa' }}
+          >
+            <span>Default road shape</span>
+            <span style={{ fontSize: 9, color: '#4a4a6a' }}>›</span>
+          </button>
         </div>
 
         {/* ── Rail geometry ── */}
         <div style={sectionStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <div style={labelStyle}>Rail Geometry</div>
-            <button
-              onClick={() => setRailGeomOpen(o => !o)}
-              style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-            >{railGeomOpen ? '▲' : '▼'}</button>
-          </div>
+          <div style={labelStyle}>Rail Geometry</div>
           <ToolButton
             label="Edit Rail Nodes"
             active={railNodeEditMode}
@@ -411,7 +379,7 @@ export function RoadsSidebar() {
             swatchBorder={`1px solid ${railNodeEditMode ? '#4a9ab0' : '#4a4a6a'}`}
             onSelect={() => setActiveTool(railNodeEditMode ? { type: 'none' } : { type: 'rail-node-edit' })}
           />
-          <div style={{ marginBottom: 10, marginTop: 4 }}>
+          <div style={{ marginBottom: 6, marginTop: 4 }}>
             <ToolButton
               label="Select rail segment"
               active={railSelectMode}
@@ -423,43 +391,31 @@ export function RoadsSidebar() {
               accentText="#b0d8f0"
             />
           </div>
-          {railSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Right-click a rail to select. Right-click to exit.</div>}
-          {railGeomOpen && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleAmp.toFixed(2)}</span>
-              </div>
-              <input
-                type="range" min={0} max={1} step={0.01}
-                value={railWiggleAmp}
-                onPointerDown={() => setRailWiggleDragging(true)}
-                onPointerUp={() => setRailWiggleDragging(false)}
-                onChange={e => setRailWiggleAmp(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleFreq.toFixed(1)}</span>
-              </div>
-              <input
-                type="range" min={0.5} max={10} step={0.1}
-                value={railWiggleFreq}
-                onChange={e => setRailWiggleFreq(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railSmoothing}</span>
-              </div>
-              <input
-                type="range" min={0} max={30} step={1}
-                value={railSmoothing}
-                onChange={e => setRailSmoothing(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer' }}
-              />
-            </>
-          )}
+          {railSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -2, marginBottom: 8, lineHeight: 1.5 }}>Right-click a rail to select. Right-click to exit.</div>}
+          <button
+            data-road-geom-flyout=""
+            onClick={e => {
+              if (openFlyout === 'rail-geom') {
+                setOpenFlyout(null)
+              } else {
+                setOpenFlyout('rail-geom')
+                setFlyoutAnchorY(e.currentTarget.getBoundingClientRect().top)
+              }
+            }}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: openFlyout === 'rail-geom' ? '#1a1e22' : 'none',
+              border: `1px solid ${openFlyout === 'rail-geom' ? '#2a4a5a' : '#1e1f2e'}`,
+              borderRadius: 3, padding: '5px 8px', cursor: 'pointer',
+              fontFamily: 'ui-monospace, monospace', fontSize: 11,
+              color: openFlyout === 'rail-geom' ? '#a0d0e0' : '#8a8aaa', width: '100%',
+            }}
+            onMouseEnter={e => { if (openFlyout !== 'rail-geom') e.currentTarget.style.color = '#a0a0c0' }}
+            onMouseLeave={e => { if (openFlyout !== 'rail-geom') e.currentTarget.style.color = '#8a8aaa' }}
+          >
+            <span>Default rail shape</span>
+            <span style={{ fontSize: 9, color: '#4a4a6a' }}>›</span>
+          </button>
         </div>
 
         {/* ── OSM fetch ── */}

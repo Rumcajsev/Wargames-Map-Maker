@@ -566,6 +566,7 @@ export function buildRailChains(
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   chaikinPasses = 2,
+  pathSmoothing = 0,
 ): RailBaseData {
   if (railEdges.length === 0) return { chains: [], controlPoints: [], interHexDist: 0 }
 
@@ -697,7 +698,7 @@ export function buildRailChains(
 
     // Path smoothing
     const relaxed = pts.slice() as [number, number][]
-    const iters = Math.round(smoothing * 0.3)
+    const iters = pathSmoothing > 0 ? Math.round(pathSmoothing) : Math.round(smoothing * 0.3)
     for (let it = 0; it < iters; it++) {
       for (let i = 1; i < relaxed.length - 1; i++) {
         if (pinned[i]) continue
@@ -775,10 +776,13 @@ export function applyRailWiggle(
   segProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   hopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }> = {},
   chaikinPasses = 2,
+  railGeomOverride?: { wiggleAmp?: number; wiggleFreq?: number },
 ): RailBaseData {
   const { interHexDist } = base
-  const wiggleAmplitude = wiggleAmpFactor * interHexDist
-  const wiggleFreq = interHexDist > 0 ? wiggleFreqFactor / interHexDist : 0
+  const effectiveAmpFactor = railGeomOverride?.wiggleAmp ?? wiggleAmpFactor
+  const effectiveFreqFactor = railGeomOverride?.wiggleFreq ?? wiggleFreqFactor
+  const wiggleAmplitude = effectiveAmpFactor * interHexDist
+  const wiggleFreq = interHexDist > 0 ? effectiveFreqFactor / interHexDist : 0
 
   const chains = base.chains.map(c => {
     const { id, baseChain, hopKeys = [], hopRanges = [] } = c
@@ -795,8 +799,8 @@ export function applyRailWiggle(
       for (let h = 0; h < hopKeys.length; h++) {
         const [s, e] = hopRanges[h]
         const hp = hopProps[hopKeys[h]]
-        const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
-        const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? wiggleFreqFactor) / (interHexDist || 1)
+        const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? effectiveAmpFactor) * interHexDist
+        const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? effectiveFreqFactor) / (interHexDist || 1)
         const slice = baseChain.slice(s, e + 1)
         const wiggled = wiggleChain(slice, amp, freq)
         for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
@@ -806,7 +810,7 @@ export function applyRailWiggle(
     const effectiveAmp = hasAnyOverride
       ? Math.max(...hopKeys.map(k => {
           const hp = hopProps[k], sp2 = segProps[id]
-          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? wiggleAmpFactor) * interHexDist
+          return (hp?.wiggleAmp ?? sp2?.wiggleAmp ?? effectiveAmpFactor) * interHexDist
         }))
       : wiggleAmplitude
     if (effectiveAmp > 0 && chaikinPasses > 0) chain = chaikin(chain, chaikinPasses, false)

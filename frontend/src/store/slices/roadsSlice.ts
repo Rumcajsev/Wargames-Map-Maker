@@ -1,4 +1,4 @@
-import type { MapStore, RawRoadWay, RoadEdge, HexRoadPath, RoadTierStyle, ActiveTool } from '../mapStore'
+import type { MapStore, RawRoadWay, RoadEdge, HexRoadPath, RoadTierStyle, RoadGeomOverride, ActiveTool } from '../mapStore'
 import { TIER_HIGHWAYS, HIGHWAY_TO_TIER, roadEdgeCanonicalKey, DEFAULT_ROAD_TIER_STYLES } from '../mapStore'
 
 export type RoadsSlice = {
@@ -26,6 +26,7 @@ export type RoadsSlice = {
   roadPathSmoothing: number
   roadChainOverrides: Record<string, [number, number][]>
   roadTierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
+  roadTierGeometry: [RoadGeomOverride | null, RoadGeomOverride | null, RoadGeomOverride | null]
   fetchRoads: () => Promise<void>
   fetchSettlementRoads: () => Promise<void>
   setOsmHighlightTier: (tier: 0 | 1 | 2 | null) => void
@@ -57,6 +58,8 @@ export type RoadsSlice = {
   deleteRoadChainOverride: (id: string) => void
   clearRoadChainOverrides: () => void
   setRoadTierStyle: (tier: 0 | 1 | 2, update: Partial<RoadTierStyle>) => void
+  setRoadTierGeometry: (tier: 0 | 1 | 2, update: Partial<RoadGeomOverride>) => void
+  clearRoadTierGeometry: (tier: 0 | 1 | 2) => void
   roadSegmentProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
   roadHopProps: Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
   roadDensityMinChain: number
@@ -114,6 +117,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadChainOverrides: {},
   roadSnapBindings: {},
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+  roadTierGeometry: [null, null, null],
   roadSegmentProps: {},
   roadHopProps: {},
   roadDensityMinChain: 1,
@@ -307,6 +311,24 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
     const styles = [...state.roadTierStyles] as [RoadTierStyle, RoadTierStyle, RoadTierStyle]
     styles[tier] = { ...styles[tier], ...update }
     return { roadTierStyles: styles }
+  }),
+
+  setRoadTierGeometry: (tier, update) => set((state) => {
+    const geoms = [...state.roadTierGeometry] as [RoadGeomOverride | null, RoadGeomOverride | null, RoadGeomOverride | null]
+    const existing = geoms[tier] ?? {
+      wiggleAmp: state.roadWiggleAmp,
+      wiggleFreq: state.roadWiggleFreq,
+      pathSmoothing: state.roadPathSmoothing,
+      smoothing: state.roadSmoothing,
+    }
+    geoms[tier] = { ...existing, ...update }
+    return { roadTierGeometry: geoms }
+  }),
+
+  clearRoadTierGeometry: (tier) => set((state) => {
+    const geoms = [...state.roadTierGeometry] as [RoadGeomOverride | null, RoadGeomOverride | null, RoadGeomOverride | null]
+    geoms[tier] = null
+    return { roadTierGeometry: geoms }
   }),
 
   setRoadSelectMode: (v) => set({ roadSelectMode: v, selectedRoadSegmentKeys: [], selectedRoadHopKey: null }),

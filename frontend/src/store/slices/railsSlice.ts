@@ -1,4 +1,4 @@
-import type { MapStore, RawRailWay, RailEdge, HexRailPath, RailStyle, ActiveTool } from '../mapStore'
+import type { MapStore, RawRailWay, RailEdge, HexRailPath, RailStyle, RailGeomOverride, ActiveTool } from '../mapStore'
 import { railEdgeCanonicalKey, DEFAULT_RAIL_STYLE } from '../mapStore'
 
 export type RailsSlice = {
@@ -20,6 +20,8 @@ export type RailsSlice = {
   railWiggleAmp: number
   railWiggleFreq: number
   railSmoothing: number
+  railPathSmoothing: number
+  railGeomOverride: RailGeomOverride | null
   railWiggleDragging: boolean
   railChainOverrides: Record<string, [number, number][]>
   // Segment select
@@ -47,6 +49,9 @@ export type RailsSlice = {
   setRailWiggleAmp: (v: number) => void
   setRailWiggleFreq: (v: number) => void
   setRailSmoothing: (v: number) => void
+  setRailPathSmoothing: (v: number) => void
+  setRailGeomOverride: (update: Partial<RailGeomOverride>) => void
+  clearRailGeomOverride: () => void
   setRailWiggleDragging: (v: boolean) => void
   setRailChainOverride: (id: string, pts: [number, number][]) => void
   deleteRailChainOverride: (id: string) => void
@@ -80,6 +85,8 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
   railWiggleAmp: 0,
   railWiggleFreq: 2.5,
   railSmoothing: 10,
+  railPathSmoothing: 0,
+  railGeomOverride: null,
   railWiggleDragging: false,
   railChainOverrides: {},
   railSelectMode: false,
@@ -112,6 +119,17 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
   setRailWiggleAmp: (v) => set({ railWiggleAmp: v }),
   setRailWiggleFreq: (v) => set({ railWiggleFreq: v }),
   setRailSmoothing: (v) => set({ railSmoothing: v }),
+  setRailPathSmoothing: (v) => set({ railPathSmoothing: v }),
+  setRailGeomOverride: (update) => set(s => {
+    const existing = s.railGeomOverride ?? {
+      wiggleAmp: s.railWiggleAmp,
+      wiggleFreq: s.railWiggleFreq,
+      pathSmoothing: s.railPathSmoothing,
+      smoothing: s.railSmoothing,
+    }
+    return { railGeomOverride: { ...existing, ...update } }
+  }),
+  clearRailGeomOverride: () => set({ railGeomOverride: null }),
   setRailWiggleDragging: (v) => set({ railWiggleDragging: v }),
   setRailChainOverride: (id, pts) => set(s => ({ railChainOverrides: { ...s.railChainOverrides, [id]: pts } })),
   deleteRailChainOverride: (id) => set(s => { const { [id]: _, ...rest } = s.railChainOverrides; return { railChainOverrides: rest } }),

@@ -30,6 +30,7 @@ import { drawHexNumbers as _drawHexNumbers, buildHexNumberMap } from '../lib/dra
 import { getToolCursor } from '../lib/cursors'
 import { detectBridges } from '../lib/detectBridges'
 import { drawBridges as _drawBridges } from '../lib/drawBridges'
+import { drawMegaHexGrid as _drawMegaHexGrid } from '../lib/drawMegaHexGrid'
 import type { BridgePoint } from '../lib/detectBridges'
 
 const OSM_OVERLAY_STYLE: maplibregl.StyleSpecification = {
@@ -131,7 +132,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     railNodeEditMode,
     railControlOverrides, setRailControlOverride, deleteRailControlOverride,
     railSnapBindings, setRailSnapBinding, deleteRailSnapBinding,
-    railWiggleAmp, railWiggleFreq, railSmoothing, railWiggleDragging,
+    railWiggleAmp, railWiggleFreq, railSmoothing, railPathSmoothing, railGeomOverride, railWiggleDragging,
     railChainOverrides, setRailChainOverride,
     railSelectMode, selectedRailSegmentKeys, selectedRailHopKey,
     setSelectedRailSegmentKeys, toggleRailSegmentSelection, setSelectedRailHopKey,
@@ -142,7 +143,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     roadControlOverrides, setRoadControlOverride, deleteRoadControlOverride,
     roadSnapBindings, setRoadSnapBinding, deleteRoadSnapBinding,
     roadNodeEditMode,
-    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadDensityMinChain, roadWiggleDragging,
+    roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing, roadTierGeometry, roadDensityMinChain, roadWiggleDragging,
     roadChainOverrides, setRoadChainOverride,
     riverEdges, canalEdges,
     riverEditMode, canalEditMode, toggleRiverEdge, toggleCanalEdge,
@@ -192,6 +193,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
     excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
     bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, setBridgeOverride,
+    megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth,
+    megaHexOriginQ, megaHexOriginR, setMegaHexOrigin,
   } = useMapStore()
   const mapModeRef = useRef(mapMode)
   const diptychJoinRef = useRef(diptychJoin)
@@ -228,6 +231,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const bridgeTiersRef = useRef(bridgeTiers)
   const bridgeOverridesRef = useRef(bridgeOverrides)
   const setBridgeOverrideRef = useRef(setBridgeOverride)
+  const megaHexEnabledRef = useRef(megaHexEnabled)
+  const megaHexRadiusRef = useRef(megaHexRadius)
+  const megaHexColorRef = useRef(megaHexColor)
+  const megaHexOpacityRef = useRef(megaHexOpacity)
+  const megaHexLineWidthRef = useRef(megaHexLineWidth)
+  const megaHexOriginQRef = useRef(megaHexOriginQ)
+  const megaHexOriginRRef = useRef(megaHexOriginR)
+  const setMegaHexOriginRef = useRef(setMegaHexOrigin)
   const detectedBridgesRef = useRef<BridgePoint[]>([])
   const bridgesDirtyRef = useRef(true)
   const roadPaintModeRef = useRef(roadPaintMode)
@@ -269,6 +280,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const railWiggleAmpRef = useRef(railWiggleAmp)
   const railWiggleFreqRef = useRef(railWiggleFreq)
   const railSmoothingRef = useRef(railSmoothing)
+  const railPathSmoothingRef = useRef(railPathSmoothing)
+  const railGeomOverrideRef = useRef(railGeomOverride)
+  const roadTierGeometryRef = useRef(roadTierGeometry)
   const railChainOverridesRef = useRef(railChainOverrides)
   const setRailChainOverrideRef = useRef(setRailChainOverride)
   const railSelectModeRef = useRef(railSelectMode)
@@ -461,6 +475,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   bridgeTiersRef.current = bridgeTiers
   bridgeOverridesRef.current = bridgeOverrides
   setBridgeOverrideRef.current = setBridgeOverride
+  megaHexEnabledRef.current = megaHexEnabled
+  megaHexRadiusRef.current = megaHexRadius
+  megaHexColorRef.current = megaHexColor
+  megaHexOpacityRef.current = megaHexOpacity
+  megaHexLineWidthRef.current = megaHexLineWidth
+  megaHexOriginQRef.current = megaHexOriginQ
+  megaHexOriginRRef.current = megaHexOriginR
+  setMegaHexOriginRef.current = setMegaHexOrigin
   roadPaintModeRef.current = roadPaintMode
   roadPaintBrushRef.current = roadPaintBrush
   roadPaintEraserRef.current = roadPaintEraser
@@ -593,6 +615,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   railWiggleAmpRef.current = railWiggleAmp
   railWiggleFreqRef.current = railWiggleFreq
   railSmoothingRef.current = railSmoothing
+  railPathSmoothingRef.current = railPathSmoothing
+  railGeomOverrideRef.current = railGeomOverride
+  roadTierGeometryRef.current = roadTierGeometry
   railChainOverridesRef.current = railChainOverrides
   setRailChainOverrideRef.current = setRailChainOverride
   deleteRailChainOverrideRef.current = deleteRailChainOverride
@@ -738,28 +763,39 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           .filter(cp => cp.key.startsWith('ja|'))
           .map(cp => [cp.key.slice(3), cp.pos] as [string, [number, number]])
       )
-      return buildRailChains(railEdges, roadEdges, hexCenterIdx, roadEdgeMidpoints, roadJunctionPositions, railControlOverrides, 0, 0, railSmoothing)
+      const effSmoothing = railGeomOverride?.smoothing ?? railSmoothing
+      const effPathSmoothing = railGeomOverride?.pathSmoothing ?? railPathSmoothing
+      return buildRailChains(railEdges, roadEdges, hexCenterIdx, roadEdgeMidpoints, roadJunctionPositions, railControlOverrides, 0, 0, effSmoothing, {}, {}, 2, effPathSmoothing)
     },
-    [railEdges, roadEdges, hexCenterIdx, roadBaseData, railControlOverrides, railSmoothing],
+    [railEdges, roadEdges, hexCenterIdx, roadBaseData, railControlOverrides, railSmoothing, railPathSmoothing, railGeomOverride],
   )
   const smoothedRailData = useMemo(
-    () => applyRailWiggle(railBaseData, railWiggleAmp, railWiggleFreq, railSegmentProps, railHopProps, railWiggleDragging ? 0 : 2),
-    [railBaseData, railWiggleAmp, railWiggleFreq, railSegmentProps, railHopProps, railWiggleDragging],
+    () => applyRailWiggle(railBaseData, railWiggleAmp, railWiggleFreq, railSegmentProps, railHopProps, railWiggleDragging ? 0 : 2, railGeomOverride ?? undefined),
+    [railBaseData, railWiggleAmp, railWiggleFreq, railSegmentProps, railHopProps, railWiggleDragging, railGeomOverride],
   )
   const smoothedRailDataRef = useRef(smoothedRailData)
   smoothedRailDataRef.current = smoothedRailData
   const railBaseDataRef = useRef(railBaseData)
   railBaseDataRef.current = railBaseData
 
+  const roadTierGeomMap = useMemo(
+    () => {
+      const map: Record<number, { wiggleAmp?: number; wiggleFreq?: number; pathSmoothing?: number; smoothing?: number }> = {}
+      roadTierGeometry.forEach((g, i) => { if (g) map[i] = g })
+      return Object.keys(map).length > 0 ? map : undefined
+    },
+    [roadTierGeometry],
+  )
+
   const roadBaseDataV2 = useMemo(
-    () => ROAD_V2 ? buildRoadChainsV2(roadEdges, hexCenterIdx, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings) : null,
-    [roadEdges, hexCenterIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
+    () => ROAD_V2 ? buildRoadChainsV2(roadEdges, hexCenterIdx, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings, 2, roadTierGeomMap) : null,
+    [roadEdges, hexCenterIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings, roadTierGeomMap],
   )
   const smoothedRoadDataV2 = useMemo(
     () => {
       if (!ROAD_V2 || !roadBaseDataV2) return null
       const chaikinPasses = (roadWiggleDragging || isRoadPainting) ? 0 : 2
-      const data = applyRoadWiggleV2(roadBaseDataV2, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, chaikinPasses)
+      const data = applyRoadWiggleV2(roadBaseDataV2, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, chaikinPasses, roadTierGeomMap)
       if (roadDensityMinChain <= 1) return data
       const chains = data.chains.filter(c => {
         if (c.id.startsWith('stub|')) return true
@@ -768,7 +804,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       })
       return { ...data, chains }
     },
-    [roadBaseDataV2, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, roadDensityMinChain, roadWiggleDragging, isRoadPainting],
+    [roadBaseDataV2, roadWiggleAmp, roadWiggleFreq, roadSegmentProps, roadHopProps, roadDensityMinChain, roadWiggleDragging, isRoadPainting, roadTierGeomMap],
   )
   const smoothedRoadDataV2Ref = useRef(smoothedRoadDataV2)
   smoothedRoadDataV2Ref.current = smoothedRoadDataV2
@@ -1337,6 +1373,22 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    // Mega hex grid overlay
+    if (megaHexEnabledRef.current) {
+      _drawMegaHexGrid(ctx, {
+        projected,
+        radius: megaHexRadiusRef.current,
+        color: megaHexColorRef.current,
+        opacity: megaHexOpacityRef.current,
+        lineWidth: megaHexLineWidthRef.current,
+        lineScale: isExport ? lineScale : 1,
+        originQ: megaHexOriginQRef.current,
+        originR: megaHexOriginRRef.current,
+        edgeMode,
+        inMargin,
+      })
+    }
+
     // Hex numbers
     if (hexNumbersEnabledRef.current && hexNumberMapRef.current.size > 0) {
       _drawHexNumbers({
@@ -1576,6 +1628,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     // During a CP drag, compute road geometry with the live position directly — no store update,
     // no React re-render cycle, no useMemo. On drop, the store is updated once for the full rebuild.
+    const liveTierGeomMap = (() => {
+      const map: Record<number, { wiggleAmp?: number; wiggleFreq?: number; pathSmoothing?: number; smoothing?: number }> = {}
+      roadTierGeometryRef.current.forEach((g, i) => { if (g) map[i] = g })
+      return Object.keys(map).length > 0 ? map : undefined
+    })()
+
     const liveRoadData = isDraggingCP
       ? ROAD_V2
         ? buildRoadChainsV2(
@@ -1591,6 +1649,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             roadHopPropsRef.current,
             undefined,
             0,
+            liveTierGeomMap,
           )
         : buildRoadChains(
             roadEdgesRef.current,
@@ -1621,6 +1680,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
               roadHopPropsRef.current,
               undefined,
               0,
+              liveTierGeomMap,
             )
           : buildRoadChains(
               roadEdgesRef.current,
@@ -1640,6 +1700,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           ? smoothedRoadDataV2Ref.current
           : smoothedRoadDataRef.current
 
+    const liveRailGeomOverride = railGeomOverrideRef.current ?? undefined
     const liveRailData = isDraggingRailCP
       ? applyRailWiggle(
           buildRailChains(
@@ -1649,13 +1710,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             new Map(roadBaseDataRef.current.controlPoints.filter(cp => cp.key.startsWith('em|')).map(cp => [cp.key, cp.pos] as [string, [number, number]])),
             new Map(roadBaseDataRef.current.controlPoints.filter(cp => cp.key.startsWith('ja|')).map(cp => [cp.key.slice(3), cp.pos] as [string, [number, number]])),
             { ...railControlOverridesRef.current, ...dragLiveOverrideRef.current },
-            0, 0, railSmoothingRef.current,
+            0, 0,
+            liveRailGeomOverride?.smoothing ?? railSmoothingRef.current,
+            {}, {}, 2,
+            liveRailGeomOverride?.pathSmoothing ?? railPathSmoothingRef.current,
           ),
           railWiggleAmpRef.current,
           railWiggleFreqRef.current,
           railSegmentPropsRef.current,
           railHopPropsRef.current,
           0,
+          liveRailGeomOverride,
         )
       : smoothedRailDataRef.current
 
@@ -2308,7 +2373,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2418,7 +2483,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const onDown = (e: MouseEvent) => {
       if (e.button !== 1 && e.button !== 0) return
       if (e.button === 0 && (e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (e.button === 0 && (terrainPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current || activeToolRef.current.type === 'hex-mask')) return
+      if (e.button === 0 && (terrainPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current || activeToolRef.current.type === 'hex-mask' || activeToolRef.current.type === 'mega-hex-origin')) return
       if (e.button === 0 && activePanelRef.current === 'highlights' && (highlightPaintModeRef.current || highlightLineEraserRef.current)) return
       if (e.button === 0 && draggingCpKeyRef.current) return
       e.preventDefault()
@@ -2602,6 +2667,48 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       window.removeEventListener('mouseup', onUp)
     }
   }, [hexMaskPaintAtClient])
+
+  // Mega hex origin drag — click or drag to place the lattice origin on a hex
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    let active = false
+    const setAtClient = (clientX: number, clientY: number) => {
+      const meta = metaRef.current
+      if (!meta) return
+      const logical = clientToLogicalRef.current(clientX, clientY)
+      if (!logical) return
+      const { lx, ly, cssW, cssH } = logical
+      const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+      for (const hex of hexesRef.current) {
+        const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py))
+        if (pointInPolygon(lx, ly, verts)) {
+          setMegaHexOriginRef.current(hex.q, hex.r)
+          break
+        }
+      }
+    }
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      if ((e.target as HTMLElement).tagName !== 'CANVAS') return
+      if (activeToolRef.current.type !== 'mega-hex-origin') return
+      active = true
+      setAtClient(e.clientX, e.clientY)
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!active) return
+      setAtClient(e.clientX, e.clientY)
+    }
+    const onUp = () => { active = false }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
 
   // Road/rail paint — edge between consecutive hexes visited in a stroke
   const prevEdgeHexRef = useRef<{ q: number; r: number } | null>(null)
