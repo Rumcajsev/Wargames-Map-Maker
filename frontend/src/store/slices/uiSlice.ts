@@ -275,7 +275,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 10,
+      version: 31,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         mapMode: s.mapMode, diptychJoin: s.diptychJoin,
