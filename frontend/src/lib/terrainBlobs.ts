@@ -413,14 +413,9 @@ export function buildTerrainBlobsV2(
 
       p = resampleSmoothQuad(p, 5)
 
-      // Single-hex blobs have a short perimeter — skip the expensive perturbNormal
-      // pass (2 Perlin calls per point × 120 pts) since the effect is barely visible
-      // at that scale. Multi-hex blobs still get the full lobe treatment.
-      if (poly.length > 6) {
-        const permP2a = makePermutation(seed + 67)
-        const permP2b = makePermutation(seed + 113)
-        p = perturbNormal(p, permP2a, permP2b, lobeFreq / R, p2Amp, lobeThreshold)
-      }
+      const permP2a = makePermutation(seed + 67)
+      const permP2b = makePermutation(seed + 113)
+      p = perturbNormal(p, permP2a, permP2b, lobeFreq / R, p2Amp, lobeThreshold)
 
       return p
     })
