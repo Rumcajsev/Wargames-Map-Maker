@@ -25,7 +25,6 @@ export type UiSlice = {
   blobSize: number
   blobCount: number
   showBridges: boolean
-  bridgeStyle: 'simple' | 'icon'
   urbanDisplayMode: 'plain' | 'polygon' | 'buildings'
   urbanScale: number
   urbanVertexRatio: number
@@ -61,7 +60,6 @@ export type UiSlice = {
   setBlobSize: (v: number) => void
   setBlobCount: (v: number) => void
   setShowBridges: (v: boolean) => void
-  setBridgeStyle: (v: 'simple' | 'icon') => void
   setUrbanDisplayMode: (mode: 'plain' | 'polygon' | 'buildings') => void
   setUrbanScale: (v: number) => void
   setUrbanVertexRatio: (v: number) => void
@@ -106,7 +104,6 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   blobSize: 0.18,
   blobCount: 7,
   showBridges: false,
-  bridgeStyle: 'simple',
   urbanDisplayMode: 'polygon',
   urbanScale: 0.72,
   urbanVertexRatio: 0.75,
@@ -240,7 +237,6 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   setBlobSize: (v) => set({ blobSize: v }),
   setBlobCount: (v) => set({ blobCount: v }),
   setShowBridges: (v) => set({ showBridges: v }),
-  setBridgeStyle: (v) => set({ bridgeStyle: v }),
   setUrbanDisplayMode: (mode) => set({ urbanDisplayMode: mode }),
   setUrbanScale: (v) => set({ urbanScale: v }),
   setUrbanVertexRatio: (v) => set({ urbanVertexRatio: v }),
@@ -297,7 +293,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         settlementLabelSizeScale: s.settlementLabelSizeScale,
         settlementLabelOverrides: s.settlementLabelOverrides,
         roadEdges: s.roadEdges, roadsDisplayMode: s.roadsDisplayMode,
-        roadsFetchTiers: s.roadsFetchTiers, roadsVisibleTiers: s.roadsVisibleTiers, roadsStatus: s.roadsStatus,
+        roadsVisibleTiers: s.roadsVisibleTiers, roadsStatus: s.roadsStatus,
         railEdges: s.railEdges, railsDisplayMode: s.railsDisplayMode,
         railsFetchTypes: s.railsFetchTypes, railsStatus: s.railsStatus,
         riverEdges: s.riverEdges, canalEdges: s.canalEdges,
@@ -464,10 +460,6 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 18) {
     if (s.roadDensityMinChain === undefined) s.roadDensityMinChain = 1
   }
-  if (fromVersion < 19) {
-    const tiers = s.roadsFetchTiers as [boolean, boolean, boolean] | undefined
-    if (tiers) tiers[2] = true
-  }
   if (fromVersion < 21) {
     delete s.railsDisplayMode
     const t = s.osmSpotlightTiers as boolean[] | undefined
@@ -550,7 +542,7 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
 
 export function rehydrateState(state: MapStore): MapStore {
   const dt = state.disabledTerrains
-  state.disabledTerrains = dt instanceof Set ? dt : new Set(dt as unknown as string[])
+  state.disabledTerrains = dt instanceof Set ? dt : new Set(Array.isArray(dt) ? dt as string[] : [])
   if (state.generateStatus === 'loading') state.generateStatus = 'idle'
   if (state.elevationStatus === 'loading') state.elevationStatus = 'idle'
   if (state.settlementsStatus === 'loading') state.settlementsStatus = 'idle'

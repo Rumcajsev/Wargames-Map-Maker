@@ -269,6 +269,7 @@ export function drawHighlights(
   hCtx: Ctx,
   { highlights, highlightedHexes, highlightLines, highlightEdgePaths, projected, edgeMode, R, project, inMargin, lineScale }: HighlightsParams,
 ) {
+  hCtx.save()
   const ls = lineScale ?? 1
   const hlMap = new Map(highlights.map(h => [h.id, h]))
   const hlHexes = highlightedHexes
@@ -522,4 +523,5 @@ export function drawHighlights(
       hCtx.restore()
     }
   }
+  hCtx.restore()
 }

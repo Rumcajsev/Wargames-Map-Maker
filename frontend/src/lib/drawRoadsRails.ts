@@ -17,6 +17,7 @@ export type DrawRoadsRailsParams = {
 export function drawRoadsAndRails(rCtx: Ctx, {
   roadChains, junctions, railChains, tierStyles, railStyle, project,
 }: DrawRoadsRailsParams) {
+  rCtx.save()
   const drawChain = (chain: [number, number][]) => {
     const pts = chain.map(([lon, lat]) => project(lon, lat))
     if (pts.length < 2) return
@@ -163,4 +164,5 @@ export function drawRoadsAndRails(rCtx: Ctx, {
       }
     }
   }
+  rCtx.restore()
 }

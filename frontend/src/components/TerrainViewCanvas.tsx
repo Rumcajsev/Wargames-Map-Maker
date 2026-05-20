@@ -2473,7 +2473,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }, 150)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      if (terrainZoomSettleRef.current !== null) clearTimeout(terrainZoomSettleRef.current)
+    }
   }, [draw])
 
   // Drag pan (left-click drag or middle-mouse — left is suppressed in paint mode)
@@ -4508,6 +4511,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }, 'image/png')
     }),
   }))
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+      if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current)
+      if (spotlightRafRef.current !== null) cancelAnimationFrame(spotlightRafRef.current)
+      if (hoverRafRef.current !== null) cancelAnimationFrame(hoverRafRef.current)
+    }
+  }, [])
 
   const menuItemStyle: CSSProperties = {
     padding: '5px 14px', cursor: 'pointer', color: '#a0a0c0', whiteSpace: 'nowrap',
