@@ -144,8 +144,6 @@ export function bleedPolygon(poly: [number, number][], maxBleed: number, R: numb
   return chaikin(p, 1, true)
 }
 
-// ── V1 blob pipeline ─────────────────────────────────────────────────────────
-
 export function buildTerrainBlobs(
   projected: { hex: { terrain: string; partial: boolean }; verts: [number, number][] }[],
   smooth: number,

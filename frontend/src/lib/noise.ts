@@ -1,6 +1,8 @@
 /** Seeded noise primitives and polygon perturbation utilities.
  *  All functions are pure (no canvas, no React, no store deps). */
 
+const permCache = new Map<number, Uint8Array>()
+
 const WIGGLE_PERM = makePermutation(17)
 
 /** Perlin-noise perpendicular wiggle for dense polylines.
@@ -46,8 +48,6 @@ export function mulberry32(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
-
-const permCache = new Map<number, Uint8Array>()
 
 export function makePermutation(seed: number): Uint8Array {
   const cached = permCache.get(seed)
