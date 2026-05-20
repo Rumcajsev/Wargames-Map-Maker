@@ -668,6 +668,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Per-terrain component maps using terrains[] — so layered hexes group correctly
   const prevBlobCompByTerrainRef = useRef(new Map<string, Map<string, string>>())
+  const perTerrainCompCache = useRef(new Map<string, { hexKey: string; components: Map<string, string> }>())
   const blobComponentsByTerrain = useMemo(() => {
     if (isTerrainPainting) return prevBlobCompByTerrainRef.current
     const result = new Map<string, Map<string, string>>()
@@ -678,11 +679,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
     for (const t of terrainTypes) {
-      result.set(t, computeConnectedComponents(
-        generatedHexes
-          .filter(h => hexTerrainLayers(h).includes(t))
-          .map(h => ({ q: h.q, r: h.r, terrain: t, isLake: false as const }))
-      ))
+      const hexesForType = generatedHexes.filter(h => hexTerrainLayers(h).includes(t))
+      const hexKey = hexesForType.map(h => `${h.q},${h.r}`).join('|')
+      const cached = perTerrainCompCache.current.get(t)
+      if (cached?.hexKey === hexKey) {
+        result.set(t, cached.components)
+      } else {
+        const components = computeConnectedComponents(
+          hexesForType.map(h => ({ q: h.q, r: h.r, terrain: t, isLake: false as const }))
+        )
+        perTerrainCompCache.current.set(t, { hexKey, components })
+        result.set(t, components)
+      }
+    }
+    for (const t of perTerrainCompCache.current.keys()) {
+      if (!terrainTypes.has(t)) perTerrainCompCache.current.delete(t)
     }
     prevBlobCompByTerrainRef.current = result
     return result
@@ -919,6 +930,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   oceanSeaKeysRef.current = oceanSeaKeys
 
   const prevTerrainBlobsRef = useRef<{ terrain: string; polys: [number, number][][] }[]>([])
+  type TerrainBlobCacheEntry = { hexKey: string; styleKey: string; blobs: { terrain: string; polys: [number, number][][] }[] }
+  const perTerrainBlobCache = useRef(new Map<string, TerrainBlobCacheEntry>())
   const defaultTerrainBlobs = useMemo(() => {
     if (projectedHexes.length === 0 || hexRadius === 0) return []
     if (isTerrainPainting) return prevTerrainBlobsRef.current
@@ -952,21 +965,30 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         }
         return true
       }).map(p => ({ ...p, hex: { ...p.hex, terrain } }))
-      if (terrainProjected.length === 0) return []
+      if (terrainProjected.length === 0) {
+        perTerrainBlobCache.current.delete(terrain)
+        return []
+      }
       const ts = terrainTypeBlobStyles[terrain]?.enabled ? terrainTypeBlobStyles[terrain] : null
-      return buildTerrainBlobsV2(
-        terrainProjected,
-        ts?.smooth ?? terrainBlobSmooth,
-        ts?.offset ?? terrainBlobOffset,
-        ts?.bump ?? terrainBlobBump,
-        ts?.sweepFreq ?? terrainBlobSweepFreq,
-        ts?.lobeFreq ?? terrainBlobLobeFreq,
-        ts?.lobeAmp ?? terrainBlobLobeAmp,
-        ts?.lobeThreshold ?? terrainBlobLobeThreshold,
-        ts?.lobeDirection ?? terrainBlobLobeDirection,
-        hexRadius,
-      )
+      const smooth = ts?.smooth ?? terrainBlobSmooth
+      const offset = ts?.offset ?? terrainBlobOffset
+      const bump = ts?.bump ?? terrainBlobBump
+      const sweepFreq = ts?.sweepFreq ?? terrainBlobSweepFreq
+      const lobeFreq = ts?.lobeFreq ?? terrainBlobLobeFreq
+      const lobeAmp = ts?.lobeAmp ?? terrainBlobLobeAmp
+      const lobeThreshold = ts?.lobeThreshold ?? terrainBlobLobeThreshold
+      const lobeDirection = ts?.lobeDirection ?? terrainBlobLobeDirection
+      const hexKey = terrainProjected.map(p => `${p.hex.q},${p.hex.r}`).join('|')
+      const styleKey = `${smooth}|${offset}|${bump}|${sweepFreq}|${lobeFreq}|${lobeAmp}|${lobeThreshold}|${lobeDirection}|${hexRadius}`
+      const cached = perTerrainBlobCache.current.get(terrain)
+      if (cached?.hexKey === hexKey && cached?.styleKey === styleKey) return cached.blobs
+      const blobs = buildTerrainBlobsV2(terrainProjected, smooth, offset, bump, sweepFreq, lobeFreq, lobeAmp, lobeThreshold, lobeDirection, hexRadius)
+      perTerrainBlobCache.current.set(terrain, { hexKey, styleKey, blobs })
+      return blobs
     })
+    for (const t of perTerrainBlobCache.current.keys()) {
+      if (!terrainTypeSet.has(t)) perTerrainBlobCache.current.delete(t)
+    }
     prevTerrainBlobsRef.current = result
     return result
   }, [isTerrainPainting, projectedHexes, blobComponentsByTerrain, terrainBlobOverrides, terrainTypeBlobStyles, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius, realisticCoastline])
@@ -974,6 +996,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   defaultTerrainBlobsRef.current = defaultTerrainBlobs
 
   const prevLakeBlobsRef = useRef<{ terrain: string; polys: [number, number][][] }[]>([])
+  const lakeBlobCache = useRef<{ hexKey: string; styleKey: string; blobs: { terrain: string; polys: [number, number][][] }[] } | null>(null)
   const defaultLakeBlobs = useMemo(() => {
     if (projectedHexes.length === 0 || hexRadius === 0) return []
     if (isTerrainPainting) return prevLakeBlobsRef.current
@@ -985,8 +1008,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         return !ck || !lakeOverriddenKeys.has(ck)
       })
       .map(p => ({ hex: { ...p.hex, terrain: 'lake' }, verts: p.verts }))
-    if (defaultLakeProjected.length === 0) return prevLakeBlobsRef.current
+    if (defaultLakeProjected.length === 0) {
+      lakeBlobCache.current = null
+      return prevLakeBlobsRef.current
+    }
+    const hexKey = defaultLakeProjected.map(p => `${p.hex.q},${p.hex.r}`).join('|')
+    const styleKey = `${lakeBlobSmooth}|${lakeBlobOffset}|${lakeBlobBump}|${lakeBlobSweepFreq}|${lakeBlobLobeFreq}|${lakeBlobLobeAmp}|${lakeBlobLobeThreshold}|${lakeBlobLobeDirection}|${hexRadius}`
+    if (lakeBlobCache.current?.hexKey === hexKey && lakeBlobCache.current?.styleKey === styleKey) {
+      return lakeBlobCache.current.blobs
+    }
     const result = buildTerrainBlobsV2(defaultLakeProjected, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, hexRadius)
+    lakeBlobCache.current = { hexKey, styleKey, blobs: result }
     prevLakeBlobsRef.current = result
     return result
   }, [isTerrainPainting, projectedHexes, blobComponents, lakeOverrides, lakeBlobSmooth, lakeBlobOffset, lakeBlobBump, lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection, hexRadius])
