@@ -229,8 +229,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const bridgeOverridesRef = useRef(bridgeOverrides)
   const setBridgeOverrideRef = useRef(setBridgeOverride)
   const detectedBridgesRef = useRef<BridgePoint[]>([])
-  const lastBridgeRoadRef = useRef<unknown>(null)
-  const lastBridgeRiverRef = useRef<unknown>(null)
+  const bridgesDirtyRef = useRef(true)
   const roadPaintModeRef = useRef(roadPaintMode)
   const roadPaintBrushRef = useRef(roadPaintBrush)
   const roadPaintEraserRef = useRef(roadPaintEraser)
@@ -1389,6 +1388,22 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     computedCanalChainsRef.current = canalChainData
     riverChainCache.chains = riverChainData
 
+    // Bridge detection — runs once per data-change (dirty flag), not every frame
+    if (bridgesDirtyRef.current) {
+      bridgesDirtyRef.current = false
+      if (bridgesEnabledRef.current) {
+        const roadChains = ROAD_V2 && smoothedRoadDataV2Ref.current
+          ? smoothedRoadDataV2Ref.current.chains
+          : smoothedRoadDataRef.current.chains
+        detectedBridgesRef.current = detectBridges(
+          roadChains,
+          [...riverChainData, ...canalChainData],
+        )
+      } else {
+        detectedBridgesRef.current = []
+      }
+    }
+
     const riverParams = {
       riverChainData,
       canalChainData,
@@ -1469,38 +1484,24 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     // Bridges — drawn after rivers, before roads
-    if (bridgesEnabledRef.current && bridgeTiersRef.current.length > 0) {
-      const activeRoadChains = smoothedRoadDataRef.current.chains
-      const activeRiverChains = computedRiverChainsRef.current
-      const activeCanalChains = computedCanalChainsRef.current
-      if (activeRoadChains !== lastBridgeRoadRef.current ||
-          activeRiverChains !== lastBridgeRiverRef.current) {
-        detectedBridgesRef.current = detectBridges(
-          activeRoadChains,
-          [...activeRiverChains, ...activeCanalChains],
-        )
-        lastBridgeRoadRef.current = activeRoadChains
-        lastBridgeRiverRef.current = activeRiverChains
-      }
-      if (detectedBridgesRef.current.length > 0) {
-        ctx.save()
-        ctx.beginPath()
-        ctx.rect(px, py, pw, ph)
-        ctx.clip()
-        _drawBridges({
-          ctx,
-          bridges: detectedBridgesRef.current,
-          tiers: bridgeTiersRef.current,
-          overrides: bridgeOverridesRef.current,
-          style: bridgeStyleRef.current,
-          tierStyles: (isExport
-            ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
-            : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
-          lineScale: isExport ? lineScale : 1,
-          project,
-        })
-        ctx.restore()
-      }
+    if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0 && bridgeTiersRef.current.length > 0) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(px, py, pw, ph)
+      ctx.clip()
+      _drawBridges({
+        ctx,
+        bridges: detectedBridgesRef.current,
+        tiers: bridgeTiersRef.current,
+        overrides: bridgeOverridesRef.current,
+        style: bridgeStyleRef.current,
+        tierStyles: (isExport
+          ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
+          : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+        lineScale: isExport ? lineScale : 1,
+        project,
+      })
+      ctx.restore()
     }
 
     // Urban area buildings + settlement buildings (rendered below roads)
@@ -2267,6 +2268,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { joinedHighlightsDirtyRef.current = true }, [highlights, highlightedHexes, highlightLines])
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
+  useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, riverEdges, canalEdges, generatedHexes])
   useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailData, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railControlOverrides, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, railSelectMode, showRawOsmRoads])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
