@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState, useMemo, forwardRef, useImperativeHandle, type CSSProperties } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, TERRAIN_COLORS, LAKE_COLOR, TERRAIN_PRIORITY, hexTerrainLayers, paperDimsMm, combinedDimsMm, type GeneratedHex, type RoadTierStyle } from '../store/mapStore'
+import { useMapStore, TERRAIN_COLORS, LAKE_COLOR, TERRAIN_PRIORITY, hexTerrainLayers, type GeneratedHex, type RoadTierStyle } from '../store/mapStore'
 import { BlobOverrideFlyout } from './BlobOverrideFlyout'
 import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon } from '../lib/geometry'
 import { mulberry32, makePermutation } from '../lib/noise'
@@ -32,6 +32,8 @@ import { detectBridges } from '../lib/detectBridges'
 import { drawBridges as _drawBridges } from '../lib/drawBridges'
 import { drawMegaHexGrid as _drawMegaHexGrid } from '../lib/drawMegaHexGrid'
 import type { BridgePoint } from '../lib/detectBridges'
+import { drawRoadHandles as _drawRoadHandles, drawRailHandles as _drawRailHandles, drawRiverHandles as _drawRiverHandles } from '../lib/drawEditHandles'
+import { drawPaperBackground as _drawPaperBackground, drawPaperMargin as _drawPaperMargin } from '../lib/drawPaperChrome'
 
 const OSM_OVERLAY_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -1182,12 +1184,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     ctx.translate(-cssW / 2, -cssH / 2)
 
     // Paper shadow
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'
-    ctx.shadowBlur = 16
-    ctx.fillStyle = mapBgColorRef.current
-    ctx.fillRect(px, py, pw, ph)
-    ctx.shadowBlur = 0
-    ctx.shadowColor = 'transparent'
+    _drawPaperBackground({ ctx, px, py, pw, ph, mapBgColor: mapBgColorRef.current })
 
     const mmToPx = pw / meta.paper_mm[0]
     const mgPx = meta.margin_mm * mmToPx
@@ -1822,130 +1819,19 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       ctx.restore()
     }
 
-    // Control point handles (visible when Roads panel active and no paint mode) — always inline
+    // Control point handles (visible when Roads panel active and no paint mode)
     if (roadNodeEditModeRef.current) {
-      const { controlPoints } = liveRoadData
-      const overrides = roadControlOverridesRef.current
-
-      // A hex is "dissolved" when any jt| override exists for it.
-      // In that state all arm dots are shown individually; the ja| dot is hidden.
-      const dissolvedHexes = new Set<string>()
-      for (const key of Object.keys(overrides)) {
-        if (key.startsWith('jt|')) dissolvedHexes.add(key.split('|')[1])
-      }
-
-      // Scale handles inversely with zoom so they stay a fixed screen size
-      const handleScale = 1 / (zoomRef.current ?? 1)
-      const juncR = 4 * handleScale
-      const edgeR = 3 * handleScale
-      const diamondR = 4 * handleScale
-
-      // Ghost skeleton: draw hovered chain's baseChain as a dashed line (pre-wiggle)
-      const hovChainForGhost = draggingCpKeyRef.current ? null : hoveredChainRef.current
-      const hovChainData = hovChainForGhost?.kind === 'road'
-        ? liveRoadData.chains.find(c => c.id === hovChainForGhost.id)
-        : null
-      if (hovChainData?.baseChain && hovChainData.baseChain.length >= 2) {
-        const bc = hovChainData.baseChain
-        ctx.save()
-        ctx.beginPath()
-        const [gx0, gy0] = project(bc[0][0], bc[0][1])
-        ctx.moveTo(gx0, gy0)
-        for (let i = 1; i < bc.length; i++) {
-          const [gx, gy] = project(bc[i][0], bc[i][1])
-          ctx.lineTo(gx, gy)
-        }
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)'
-        ctx.lineWidth = 1.5 * handleScale
-        ctx.setLineDash([4 * handleScale, 4 * handleScale])
-        ctx.stroke()
-        ctx.restore()
-      }
-
-      // Group coincident jt| endpoints (within 2px) into a single draggable dot
-      const jtDots = controlPoints.filter(cp => cp.key.startsWith('jt|') && dissolvedHexes.has(cp.key.split('|')[1]))
-      const jtGroups: { keys: string[]; pos: [number, number] }[] = []
-      for (const cp of jtDots) {
-        const [cx, cy] = project(cp.pos[0], cp.pos[1])
-        let merged = false
-        for (const g of jtGroups) {
-          const [gx, gy] = project(g.pos[0], g.pos[1])
-          if (Math.hypot(cx - gx, cy - gy) < 2) { g.keys.push(cp.key); merged = true; break }
-        }
-        if (!merged) jtGroups.push({ keys: [cp.key], pos: cp.pos })
-      }
-
-      ctx.save()
-      // ja| and em| dots
-      for (const { key, pos } of controlPoints) {
-        const isJunc = key.startsWith('ja|')
-        const isEdge = key.startsWith('em|')
-        if (key.startsWith('jt|')) continue  // rendered as groups below
-        if (isJunc) {
-          const hexKey = key.slice(3)
-          if (dissolvedHexes.has(hexKey)) continue
-        }
-        const [x, y] = project(pos[0], pos[1])
-        ctx.beginPath()
-        ctx.arc(x, y, isJunc ? juncR : edgeR, 0, Math.PI * 2)
-        ctx.fillStyle = isJunc ? 'rgba(255,255,255,0.6)' : (!!overrides[key] ? '#ffcc44' : 'rgba(255,255,255,0.6)')
-        ctx.fill()
-        ctx.strokeStyle = isJunc ? '#cc8800' : '#888'
-        ctx.lineWidth = handleScale
-        ctx.stroke()
-      }
-      // jt| group dots — lone endpoint = diamond, connected group = circle
-      for (const g of jtGroups) {
-        const [x, y] = project(g.pos[0], g.pos[1])
-        const isGroup = g.keys.length >= 2
-        const dragging = g.keys.includes(draggingCpKeyRef.current ?? '')
-        ctx.beginPath()
-        if (isGroup) {
-          ctx.arc(x, y, juncR, 0, Math.PI * 2)
-        } else {
-          const r = diamondR
-          ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
-        }
-        ctx.fillStyle = dragging ? '#ffcc44' : isGroup ? 'rgba(100,200,255,0.8)' : 'rgba(255,255,255,0.6)'
-        ctx.fill()
-        ctx.strokeStyle = isGroup ? '#2288cc' : '#4488cc'
-        ctx.lineWidth = handleScale
-        ctx.stroke()
-      }
-
-      // Snap preview
-      const snap = snapPreviewRef.current
-      const dragKey = draggingCpKeyRef.current
-      if (snap) {
-        if (snap.kind === 'sibling') {
-          // Highlight both the dragged dot and the target sibling with a diamond glow
-          for (const hlKey of [snap.key, dragKey]) {
-            if (!hlKey) continue
-            const cp = controlPoints.find(c => c.key === hlKey)
-            if (!cp) continue
-            const [x, y] = project(cp.pos[0], cp.pos[1])
-            const r = diamondR * 1.8
-            ctx.beginPath()
-            ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath()
-            ctx.fillStyle = 'rgba(255, 220, 40, 0.35)'
-            ctx.fill()
-            ctx.strokeStyle = '#ffdd00'
-            ctx.lineWidth = handleScale * 2
-            ctx.stroke()
-          }
-        } else {
-          // Road snap: draw a glowing circle at the snap point on the road
-          const [x, y] = project(snap.pos[0], snap.pos[1])
-          ctx.beginPath()
-          ctx.arc(x, y, juncR * 1.4, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(255, 220, 40, 0.4)'
-          ctx.fill()
-          ctx.strokeStyle = '#ffdd00'
-          ctx.lineWidth = handleScale * 2
-          ctx.stroke()
-        }
-      }
-      ctx.restore()
+      _drawRoadHandles({
+        ctx,
+        controlPoints: liveRoadData.controlPoints,
+        overrides: roadControlOverridesRef.current,
+        zoom: zoomRef.current ?? 1,
+        draggingCpKey: draggingCpKeyRef.current,
+        hoveredChain: hoveredChainRef.current,
+        snapPreview: snapPreviewRef.current,
+        liveChains: liveRoadData.chains,
+        project,
+      })
     }
 
     // Rail control point handles
@@ -1961,75 +1847,29 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             0, 0, railSmoothingRef.current,
           )
         : railBaseDataRef.current
-
-      const handleScale = 1 / (zoomRef.current ?? 1)
-      const juncR = 4 * handleScale
-      const edgeR = 3 * handleScale
-
-      const hovChainForGhost = draggingCpKeyRef.current ? null : hoveredChainRef.current
-      const hovChainData = hovChainForGhost?.kind === 'rail'
-        ? smoothedRailDataRef.current.chains.find(c => c.id === hovChainForGhost.id)
-        : null
-      if (hovChainData?.baseChain && hovChainData.baseChain.length >= 2) {
-        const bc = hovChainData.baseChain
-        ctx.save()
-        ctx.beginPath()
-        const [gx0, gy0] = project(bc[0][0], bc[0][1])
-        ctx.moveTo(gx0, gy0)
-        for (let i = 1; i < bc.length; i++) {
-          const [gx, gy] = project(bc[i][0], bc[i][1])
-          ctx.lineTo(gx, gy)
-        }
-        ctx.strokeStyle = 'rgba(0,220,220,0.3)'
-        ctx.lineWidth = 1.5 * handleScale
-        ctx.setLineDash([4 * handleScale, 4 * handleScale])
-        ctx.stroke()
-        ctx.restore()
-      }
-
-      ctx.save()
-      for (const { key, pos } of controlPoints) {
-        const isJunc = key.startsWith('ja|')
-        const [x, y] = project(pos[0], pos[1])
-        const overrideVal = railControlOverridesRef.current[key]
-        ctx.beginPath()
-        ctx.arc(x, y, isJunc ? juncR : edgeR, 0, Math.PI * 2)
-        ctx.fillStyle = !!overrideVal ? '#44ddff' : (isJunc ? 'rgba(0,200,220,0.6)' : 'rgba(0,200,220,0.5)')
-        ctx.fill()
-        ctx.strokeStyle = isJunc ? '#0099aa' : '#006688'
-        ctx.lineWidth = handleScale
-        ctx.stroke()
-      }
-      ctx.restore()
+      _drawRailHandles({
+        ctx,
+        controlPoints,
+        overrides: railControlOverridesRef.current,
+        zoom: zoomRef.current ?? 1,
+        draggingCpKey: draggingCpKeyRef.current,
+        hoveredChain: hoveredChainRef.current,
+        smoothedChains: smoothedRailDataRef.current.chains,
+        project,
+      })
     }
 
     // River node edit handles
     if (riverNodeEditModeRef.current && RIVER_V2) {
-      const handleScale = 1 / (zoomRef.current ?? 1)
-      const dotR = 2.5 * handleScale
-      const hovChain = hoveredChainRef.current?.kind === 'river' ? hoveredChainRef.current : null
-      const hovHandleIdx = hovChain ? hoveredHandleIdxRef.current : null
-      const denseDrag = draggingDensePtRef.current?.kind === 'river' ? draggingDensePtRef.current : null
-      const denseDragPos = dragLiveDensePosRef.current
-      const activeHandles = denseDrag
-        ? denseDrag.handles.map((p, i) => i === denseDrag.handleIdx && denseDragPos ? denseDragPos : p) as [number, number][]
-        : hovChain?.handles ?? null
-      if (activeHandles) {
-        const activeHandleIdx = denseDrag ? denseDrag.handleIdx : hovHandleIdx
-        ctx.save()
-        for (let i = 1; i < activeHandles.length - 1; i++) {
-          const [x, y] = project(activeHandles[i][0], activeHandles[i][1])
-          const isHovered = i === activeHandleIdx
-          ctx.beginPath()
-          ctx.arc(x, y, isHovered ? dotR * 1.8 : dotR, 0, Math.PI * 2)
-          ctx.fillStyle = isHovered ? '#ffcc44' : 'rgba(255,255,255,0.55)'
-          ctx.fill()
-          ctx.strokeStyle = isHovered ? '#cc8800' : 'rgba(60,140,200,0.8)'
-          ctx.lineWidth = handleScale * 0.8
-          ctx.stroke()
-        }
-        ctx.restore()
-      }
+      _drawRiverHandles({
+        ctx,
+        zoom: zoomRef.current ?? 1,
+        hoveredChain: hoveredChainRef.current,
+        hoveredHandleIdx: hoveredHandleIdxRef.current,
+        draggingDensePt: draggingDensePtRef.current,
+        dragLiveDensePos: dragLiveDensePosRef.current,
+        project,
+      })
     }
 
     // Settlements — offscreen cached
@@ -2119,30 +1959,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     if (!exportTarget) {
-      // Margin indicator — dashed inset rectangle (screen only)
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-      ctx.lineWidth = 0.75
-      ctx.setLineDash([4, 4])
-      ctx.strokeRect(px + mgPx, py + mgPx, pw - mgPx * 2, ph - mgPx * 2)
-      ctx.setLineDash([])
-
-      // Diptych seam line — matches the paper frame border style
-      if (mapModeRef.current === 'diptych') {
-        const [spwMm, sphMm] = paperDimsMm(paperSizeRef.current, orientationRef.current)
-        const [scwMm] = combinedDimsMm(paperSizeRef.current, orientationRef.current, mapModeRef.current, diptychJoinRef.current)
-        const seamIsVertical = scwMm === 2 * spwMm
-        ctx.strokeStyle = 'rgba(220, 60, 0, 0.9)'
-        ctx.lineWidth = 2 / zoom
-        ctx.beginPath()
-        if (seamIsVertical) {
-          ctx.moveTo(px + pw / 2, py)
-          ctx.lineTo(px + pw / 2, py + ph)
-        } else {
-          ctx.moveTo(px, py + ph / 2)
-          ctx.lineTo(px + pw, py + ph / 2)
-        }
-        ctx.stroke()
-      }
+      // Margin indicator + diptych seam (screen only)
+      _drawPaperMargin({
+        ctx, px, py, pw, ph, mgPx, zoom,
+        mapMode: mapModeRef.current,
+        paperSize: paperSizeRef.current,
+        orientation: orientationRef.current,
+        diptychJoin: diptychJoinRef.current,
+      })
     }
 
     ctx.restore() // pan/zoom
