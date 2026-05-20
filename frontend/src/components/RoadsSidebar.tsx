@@ -154,7 +154,6 @@ export function RoadsSidebar() {
     osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
     setOsmSpotlightMode, setOsmSpotlightRadius, setOsmSpotlightTiers,
     osmRailHexPaths, osmRailHighlight, setOsmRailHighlight, applyOsmRails,
-    roadDensityMinChain, setRoadDensityMinChain,
     roadSelectMode, roadSegmentProps, roadHopProps,
     selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
     selectedRoadHopKey, setSelectedRoadHopKey,
@@ -175,6 +174,8 @@ export function RoadsSidebar() {
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
   const [bridgesOpen, setBridgesOpen] = useState(false)
+  const [roadGeomOpen, setRoadGeomOpen] = useState(false)
+  const [railGeomOpen, setRailGeomOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -315,7 +316,15 @@ export function RoadsSidebar() {
 
         {/* ── Node edit + bendiness ── */}
         <div style={sectionStyle}>
-          <div style={labelStyle}>Road Geometry</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={labelStyle}>Road Geometry</div>
+            <button
+              onClick={() => setRoadGeomOpen(o => !o)}
+              style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+            >{roadGeomOpen ? '▲' : '▼'}</button>
+          </div>
           <ToolButton
             label="Edit Nodes"
             active={roadNodeEditMode}
@@ -336,53 +345,65 @@ export function RoadsSidebar() {
             />
           </div>
           {roadSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Click a road to select. Cmd+click to pick a hop. Right-click to exit.</div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleAmp.toFixed(2)}</span>
-          </div>
-          <input
-            type="range" min={0} max={1} step={0.01}
-            value={roadWiggleAmp}
-            onPointerDown={() => setRoadWiggleDragging(true)}
-            onPointerUp={() => setRoadWiggleDragging(false)}
-            onChange={e => setRoadWiggleAmp(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleFreq.toFixed(1)}</span>
-          </div>
-          <input
-            type="range" min={0.5} max={10} step={0.1}
-            value={roadWiggleFreq}
-            onChange={e => setRoadWiggleFreq(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Path smoothing</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadPathSmoothing}</span>
-          </div>
-          <input
-            type="range" min={0} max={50} step={1}
-            value={roadPathSmoothing}
-            onChange={e => setRoadPathSmoothing(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadSmoothing}</span>
-          </div>
-          <input
-            type="range" min={0} max={30} step={1}
-            value={roadSmoothing}
-            onChange={e => setRoadSmoothing(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer' }}
-          />
+          {roadGeomOpen && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleAmp.toFixed(2)}</span>
+              </div>
+              <input
+                type="range" min={0} max={1} step={0.01}
+                value={roadWiggleAmp}
+                onPointerDown={() => setRoadWiggleDragging(true)}
+                onPointerUp={() => setRoadWiggleDragging(false)}
+                onChange={e => setRoadWiggleAmp(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadWiggleFreq.toFixed(1)}</span>
+              </div>
+              <input
+                type="range" min={0.5} max={10} step={0.1}
+                value={roadWiggleFreq}
+                onChange={e => setRoadWiggleFreq(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Path smoothing</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadPathSmoothing}</span>
+              </div>
+              <input
+                type="range" min={0} max={50} step={1}
+                value={roadPathSmoothing}
+                onChange={e => setRoadPathSmoothing(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer', marginBottom: 6 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadSmoothing}</span>
+              </div>
+              <input
+                type="range" min={0} max={30} step={1}
+                value={roadSmoothing}
+                onChange={e => setRoadSmoothing(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#5a9e6f', cursor: 'pointer' }}
+              />
+            </>
+          )}
         </div>
 
         {/* ── Rail geometry ── */}
         <div style={sectionStyle}>
-          <div style={labelStyle}>Rail Geometry</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={labelStyle}>Rail Geometry</div>
+            <button
+              onClick={() => setRailGeomOpen(o => !o)}
+              style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+            >{railGeomOpen ? '▲' : '▼'}</button>
+          </div>
           <ToolButton
             label="Edit Rail Nodes"
             active={railNodeEditMode}
@@ -403,56 +424,48 @@ export function RoadsSidebar() {
             />
           </div>
           {railSelectMode && <div style={{ color: '#4a6a8a', fontSize: 10, marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>Right-click a rail to select. Right-click to exit.</div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleAmp.toFixed(2)}</span>
-          </div>
-          <input
-            type="range" min={0} max={1} step={0.01}
-            value={railWiggleAmp}
-            onPointerDown={() => setRailWiggleDragging(true)}
-            onPointerUp={() => setRailWiggleDragging(false)}
-            onChange={e => setRailWiggleAmp(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleFreq.toFixed(1)}</span>
-          </div>
-          <input
-            type="range" min={0.5} max={10} step={0.1}
-            value={railWiggleFreq}
-            onChange={e => setRailWiggleFreq(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
-            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railSmoothing}</span>
-          </div>
-          <input
-            type="range" min={0} max={30} step={1}
-            value={railSmoothing}
-            onChange={e => setRailSmoothing(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer' }}
-          />
+          {railGeomOpen && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleAmp.toFixed(2)}</span>
+              </div>
+              <input
+                type="range" min={0} max={1} step={0.01}
+                value={railWiggleAmp}
+                onPointerDown={() => setRailWiggleDragging(true)}
+                onPointerUp={() => setRailWiggleDragging(false)}
+                onChange={e => setRailWiggleAmp(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle freq</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railWiggleFreq.toFixed(1)}</span>
+              </div>
+              <input
+                type="range" min={0.5} max={10} step={0.1}
+                value={railWiggleFreq}
+                onChange={e => setRailWiggleFreq(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer', marginBottom: 6 }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Line smoothing</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{railSmoothing}</span>
+              </div>
+              <input
+                type="range" min={0} max={30} step={1}
+                value={railSmoothing}
+                onChange={e => setRailSmoothing(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#4a9ab0', cursor: 'pointer' }}
+              />
+            </>
+          )}
         </div>
 
         {/* ── OSM fetch ── */}
         <div style={sectionStyle}>
           <div style={labelStyle}>From OSM</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ color: '#6a6a8a', fontSize: 11 }}>Min chain length</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{roadDensityMinChain === 1 ? 'all' : `${roadDensityMinChain} hops`}</span>
-              </div>
-              <input
-                type="range" min={1} max={15} step={1}
-                value={roadDensityMinChain}
-                onChange={e => setRoadDensityMinChain(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#5a8a5a', cursor: 'pointer', marginBottom: 8 }}
-              />
-            </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
