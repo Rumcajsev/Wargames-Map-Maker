@@ -139,22 +139,43 @@ export function gaussianSmoothOpen(pts: [number, number][], sigma: number): [num
 
 // ── Area fill helpers ─────────────────────────────────────────────────────────
 
-function makeHatchFillPattern(ctx: Ctx, color: string, R: number, spacingMult: number): CanvasPattern | null {
-  const baseSpacing = Math.max(4, R * 0.18) * Math.max(0.3, spacingMult)
-  const dpr = Math.abs(ctx.getTransform().a) || 1
-  const s = Math.ceil(baseSpacing * dpr)
-  const tile = new OffscreenCanvas(s, s)
-  const tc = tile.getContext('2d')!
-  tc.strokeStyle = color
-  tc.lineWidth = Math.max(1, dpr * 0.9)
-  tc.beginPath()
-  tc.moveTo(0, s); tc.lineTo(s, 0)
-  tc.moveTo(-s, s); tc.lineTo(0, 0)
-  tc.moveTo(s, s); tc.lineTo(s * 2, 0)
-  tc.stroke()
-  const pat = ctx.createPattern(tile, 'repeat')
-  pat?.setTransform(new DOMMatrix().scale(1 / dpr, 1 / dpr))
-  return pat
+function drawHatchFill(
+  ctx: Ctx,
+  polys: [number, number][][],
+  color: string,
+  R: number,
+  spacingMult: number,
+  opacity: number,
+) {
+  const spacing = Math.max(4, R * 0.18) * Math.max(0.3, spacingMult)
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const poly of polys) {
+    for (const [x, y] of poly) {
+      if (x < minX) minX = x; if (x > maxX) maxX = x
+      if (y < minY) minY = y; if (y > maxY) maxY = y
+    }
+  }
+  ctx.save()
+  ctx.beginPath()
+  for (const poly of polys) {
+    ctx.moveTo(poly[0][0], poly[0][1])
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1])
+    ctx.closePath()
+  }
+  ctx.clip('evenodd')
+  ctx.globalAlpha = opacity
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.lineCap = 'butt'
+  const extent = Math.max(maxX - minX, maxY - minY) + spacing * 2
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+  ctx.beginPath()
+  for (let t = -extent; t <= extent; t += spacing) {
+    ctx.moveTo(cx + t + extent, cy - extent)
+    ctx.lineTo(cx + t - extent, cy + extent)
+  }
+  ctx.stroke()
+  ctx.restore()
 }
 
 // ── Pattern renderers ─────────────────────────────────────────────────────────
@@ -241,18 +262,19 @@ export type HighlightsParams = {
   R: number
   project: (lon: number, lat: number) => [number, number]
   inMargin: (verts: [number, number][]) => boolean
+  lineScale?: number
 }
 
 export function drawHighlights(
   hCtx: Ctx,
-  { highlights, highlightedHexes, highlightLines, highlightEdgePaths, projected, edgeMode, R, project, inMargin }: HighlightsParams,
+  { highlights, highlightedHexes, highlightLines, highlightEdgePaths, projected, edgeMode, R, project, inMargin, lineScale }: HighlightsParams,
 ) {
+  const ls = lineScale ?? 1
   const hlMap = new Map(highlights.map(h => [h.id, h]))
   const hlHexes = highlightedHexes
   const vKey = (v: [number, number]) => `${Math.round(v[0] * 10)},${Math.round(v[1] * 10)}`
 
   // Per-hex pass: fill + non-joined stroke
-  const hatchPatternCache = new Map<string, CanvasPattern | null>()
   for (const { hex, verts } of projected) {
     if (edgeMode === 'whole' && hex.partial) continue
     if (!hex.partial && !inMargin(verts)) continue
@@ -261,23 +283,19 @@ export function drawHighlights(
     const hl = hlMap.get(hlId)
     if (!hl) continue
 
-    if (hl.fillEnabled && hl.fillOpacity > 0) {
-      hCtx.beginPath()
-      hCtx.moveTo(verts[0][0], verts[0][1])
-      for (let i = 1; i < verts.length; i++) hCtx.lineTo(verts[i][0], verts[i][1])
-      hCtx.closePath()
-      hCtx.globalAlpha = hl.fillOpacity
+    if (!hl.joinNeighbors && hl.fillEnabled && hl.fillOpacity > 0) {
       if ((hl.fillPattern ?? 'none') === 'hatched') {
-        const cacheKey = `${hl.id}-${hl.color}-${hl.patternSpacing ?? 1}`
-        if (!hatchPatternCache.has(cacheKey)) {
-          hatchPatternCache.set(cacheKey, makeHatchFillPattern(hCtx, hl.color, R, hl.patternSpacing ?? 1))
-        }
-        hCtx.fillStyle = hatchPatternCache.get(cacheKey) ?? hl.color
+        drawHatchFill(hCtx, [verts], hl.color, R, hl.fillPatternSpacing ?? 1, hl.fillOpacity)
       } else {
+        hCtx.beginPath()
+        hCtx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) hCtx.lineTo(verts[i][0], verts[i][1])
+        hCtx.closePath()
+        hCtx.globalAlpha = hl.fillOpacity
         hCtx.fillStyle = hl.color
+        hCtx.fill()
+        hCtx.globalAlpha = 1
       }
-      hCtx.fill()
-      hCtx.globalAlpha = 1
     }
 
     if (hl.joinNeighbors) continue
@@ -295,7 +313,7 @@ export function drawHighlights(
     hCtx.closePath()
     hCtx.globalAlpha = hl.strokeOpacity
     hCtx.strokeStyle = hl.color
-    hCtx.lineWidth = hl.strokeWidth * 2
+    hCtx.lineWidth = hl.strokeWidth * 2 * ls
     hCtx.lineJoin = 'round'
     hCtx.stroke()
     hCtx.globalAlpha = 1
@@ -305,7 +323,9 @@ export function drawHighlights(
   // Joined stroke pass
   for (const hl of highlights) {
     if (!hl.joinNeighbors) continue
-    if (!hl.strokeEnabled || hl.strokeOpacity <= 0 || hl.strokeWidth <= 0) continue
+    const hasFill = hl.fillEnabled && hl.fillOpacity > 0
+    const hasStroke = hl.strokeEnabled && hl.strokeOpacity > 0 && hl.strokeWidth > 0
+    if (!hasFill && !hasStroke) continue
 
     const edgeCount = new Map<string, number>()
     type DirEdge = [[number, number], [number, number]]
@@ -359,6 +379,27 @@ export function drawHighlights(
       return gaussianSmoothClosed(resampled, Math.max(1, sigma))
     })
 
+    if (hasFill) {
+      if ((hl.fillPattern ?? 'none') === 'hatched') {
+        drawHatchFill(hCtx, smoothed, hl.color, R, hl.fillPatternSpacing ?? 1, hl.fillOpacity)
+      } else {
+        hCtx.save()
+        hCtx.beginPath()
+        for (const poly of smoothed) {
+          hCtx.moveTo(poly[0][0], poly[0][1])
+          for (let i = 1; i < poly.length; i++) hCtx.lineTo(poly[i][0], poly[i][1])
+          hCtx.closePath()
+        }
+        hCtx.globalAlpha = hl.fillOpacity
+        hCtx.fillStyle = hl.color
+        hCtx.fill('evenodd')
+        hCtx.globalAlpha = 1
+        hCtx.restore()
+      }
+    }
+
+    if (!hasStroke) continue
+
     const _areaPatternSuppresses = ['dashed', 'dotted', 'dashdot'].includes(hl.linePattern ?? 'none')
     if (!_areaPatternSuppresses) {
       hCtx.save()
@@ -372,7 +413,7 @@ export function drawHighlights(
 
       hCtx.globalAlpha = hl.strokeOpacity
       hCtx.strokeStyle = hl.color
-      hCtx.lineWidth = hl.strokeWidth * 2
+      hCtx.lineWidth = hl.strokeWidth * 2 * ls
       hCtx.lineJoin = s < 0.5 ? 'miter' : 'round'
       hCtx.lineCap = s < 0.5 ? 'butt' : 'round'
 
@@ -394,11 +435,11 @@ export function drawHighlights(
       hCtx.globalAlpha = hl.strokeOpacity
       hCtx.strokeStyle = hl.color
       hCtx.fillStyle = hl.color
-      hCtx.lineWidth = hl.strokeWidth
+      hCtx.lineWidth = hl.strokeWidth * ls
       hCtx.lineCap = 'round'
       hCtx.lineJoin = 'round'
       for (const poly of smoothed) {
-        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth, true, hl.patternSpacing ?? 1)
+        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth * ls, true, hl.patternSpacing ?? 1)
       }
       hCtx.globalAlpha = 1
       hCtx.restore()
@@ -444,19 +485,18 @@ export function drawHighlights(
       hCtx.save()
       hCtx.globalAlpha = hl.strokeOpacity
       hCtx.strokeStyle = hl.color
-      hCtx.lineWidth = hl.strokeWidth
+      hCtx.lineWidth = hl.strokeWidth * ls
       hCtx.lineJoin = s < 0.5 ? 'miter' : 'round'
       hCtx.lineCap = s < 0.5 ? 'butt' : 'round'
 
       const pattern = hl.linePattern ?? 'none'
       hCtx.fillStyle = hl.color
-
       const renderLinePts = (raw: [number, number][]) => {
         if (raw.length < 2) return
         const pts = buildLinePts(raw, s)
         const suppressBackbone = ['dashed', 'dotted', 'dashdot'].includes(pattern)
         if (!suppressBackbone) drawLinePath(pts)
-        if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, hl.strokeWidth, false, hl.patternSpacing ?? 1)
+        if (pattern !== 'none') drawPatternAlongPath(hCtx, pts, pattern as LinePattern, hl.strokeWidth * ls, false, hl.patternSpacing ?? 1)
       }
 
       if (hl.mode === 'edge') {

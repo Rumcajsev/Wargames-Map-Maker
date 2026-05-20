@@ -144,6 +144,7 @@ const OVERLAY_DEFAULTS = {
   fillEnabled: true,
   fillOpacity: 0.3,
   fillPattern: 'none' as const,
+  fillPatternSpacing: 1,
   strokeEnabled: true,
   strokeOpacity: 0.9,
   strokeWidth: 3,

@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { useMapStore, type IconOverlay } from '../store/mapStore'
+import { useMapStore, type LabelOverlay } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_HIGHLIGHTS } from '../palettes'
 import { useFlyoutTop } from './useFlyoutTop'
 
 interface Props {
-  overlay: IconOverlay
+  overlay: LabelOverlay
   anchorY: number
   onClose: () => void
 }
@@ -17,32 +17,6 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase',
 }
 
-const segBtnStyle = (active: boolean): React.CSSProperties => ({
-  flex: 1,
-  padding: '3px 0',
-  background: active ? '#1e3a28' : '#1a1b2e',
-  border: `1px solid ${active ? '#5a9e6f' : '#2a2b3e'}`,
-  borderRadius: 3,
-  color: active ? '#5a9e6f' : '#6a6a8a',
-  fontFamily: 'ui-monospace, monospace',
-  fontSize: 11,
-  cursor: 'pointer',
-})
-
-const vizBtnStyle = (active: boolean): React.CSSProperties => ({
-  width: 36,
-  height: 36,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: active ? '#1e3a28' : '#1a1b2e',
-  border: `1px solid ${active ? '#5a9e6f' : '#2a2b3e'}`,
-  borderRadius: 3,
-  cursor: 'pointer',
-  padding: 0,
-  flexShrink: 0,
-})
-
 const SliderRow = ({ label, value, children }: { label: string; value: string; children: React.ReactNode }) => (
   <div style={{ marginBottom: 10 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
@@ -53,59 +27,13 @@ const SliderRow = ({ label, value, children }: { label: string; value: string; c
   </div>
 )
 
-const PREVIEW_FILL = '#a0a0c0'
-const PREVIEW_STROKE = '#6a6a8a'
+const PALETTE_LABEL_BG = [
+  'transparent',
+  ...PALETTE_HIGHLIGHTS,
+] as const
 
-function ShapePreview({ shape }: { shape: IconOverlay['shape'] }) {
-  const cx = 18, cy = 18, r = 11
-  const sharedProps = { fill: PREVIEW_FILL, stroke: PREVIEW_STROKE, strokeWidth: 1.5 }
-
-  if (shape === 'circle') {
-    return (
-      <svg width="36" height="36" viewBox="0 0 36 36">
-        <circle cx={cx} cy={cy} r={r} {...sharedProps} />
-      </svg>
-    )
-  }
-  if (shape === 'square') {
-    return (
-      <svg width="36" height="36" viewBox="0 0 36 36">
-        <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} {...sharedProps} />
-      </svg>
-    )
-  }
-  if (shape === 'triangle') {
-    const s60 = r * Math.sin(Math.PI / 3)
-    const pts = `${cx},${cy - r} ${cx - s60},${cy + r * 0.5} ${cx + s60},${cy + r * 0.5}`
-    return (
-      <svg width="36" height="36" viewBox="0 0 36 36">
-        <polygon points={pts} {...sharedProps} />
-      </svg>
-    )
-  }
-  if (shape === 'diamond') {
-    const pts = `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`
-    return (
-      <svg width="36" height="36" viewBox="0 0 36 36">
-        <polygon points={pts} {...sharedProps} />
-      </svg>
-    )
-  }
-  const outerR = r, innerR = r * 0.38
-  const pts = Array.from({ length: 10 }, (_, i) => {
-    const angle = (i * Math.PI) / 5 - Math.PI / 2
-    const rad = i % 2 === 0 ? outerR : innerR
-    return `${cx + rad * Math.cos(angle)},${cy + rad * Math.sin(angle)}`
-  }).join(' ')
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36">
-      <polygon points={pts} {...sharedProps} />
-    </svg>
-  )
-}
-
-export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
-  const { updateIconOverlay, clearIconOverlay } = useMapStore()
+export function LabelSettingsFlyout({ overlay, anchorY, onClose }: Props) {
+  const { updateLabelOverlay, clearLabelOverlay } = useMapStore()
   const { ref: flyoutRef, top } = useFlyoutTop(anchorY)
 
   useEffect(() => {
@@ -120,13 +48,13 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  const upd = (changes: Partial<Omit<IconOverlay, 'id'>>) =>
-    updateIconOverlay(overlay.id, changes)
+  const upd = (changes: Partial<Omit<LabelOverlay, 'id'>>) =>
+    updateLabelOverlay(overlay.id, changes)
 
   return (
     <div
       ref={flyoutRef}
-      data-icon-flyout
+      data-label-flyout
       style={{
         position: 'fixed',
         left: 204,
@@ -145,7 +73,7 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#d0d0e8', fontWeight: 600 }}>Icon settings</span>
+        <span style={{ color: '#d0d0e8', fontWeight: 600 }}>Label settings</span>
         <button
           onClick={onClose}
           style={{ background: 'none', border: 'none', color: '#6a6a8a', cursor: 'pointer', fontSize: 14, padding: 0 }}
@@ -173,24 +101,31 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <div style={{ ...labelStyle, marginBottom: 6 }}>Shape</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['circle', 'square', 'triangle', 'diamond', 'star'] as const).map(shape => (
-            <button
-              key={shape}
-              onClick={() => upd({ shape })}
-              style={vizBtnStyle(overlay.shape === shape)}
-              title={shape.charAt(0).toUpperCase() + shape.slice(1)}
-            >
-              <ShapePreview shape={shape} />
-            </button>
-          ))}
-        </div>
+        <div style={{ ...labelStyle, marginBottom: 4 }}>Text color</div>
+        <ColorSwatch value={overlay.textColor} onChange={v => upd({ textColor: v })} palette={PALETTE_HIGHLIGHTS} />
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <div style={{ ...labelStyle, marginBottom: 4 }}>Fill color</div>
-        <ColorSwatch value={overlay.fillColor} onChange={v => upd({ fillColor: v })} palette={PALETTE_HIGHLIGHTS} />
+        <div style={{ ...labelStyle, marginBottom: 4 }}>Background</div>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={() => upd({ bgColor: 'transparent' })}
+            title="No background"
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 2,
+              border: overlay.bgColor === 'transparent' ? '2px solid #5a9e6f' : '1px solid #4a4a6a',
+              background: 'transparent',
+              backgroundImage: 'repeating-conic-gradient(#3a3a5a 0% 25%, #1a1b2e 0% 50%)',
+              backgroundSize: '8px 8px',
+              cursor: 'pointer',
+              flexShrink: 0,
+              padding: 0,
+            }}
+          />
+          <ColorSwatch value={overlay.bgColor === 'transparent' ? '#aa1111' : overlay.bgColor} onChange={v => upd({ bgColor: v })} palette={PALETTE_HIGHLIGHTS} />
+        </div>
       </div>
 
       <div style={{ marginBottom: 10 }}>
@@ -207,17 +142,26 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
         />
       </SliderRow>
 
-      <SliderRow label="Size" value={`${Math.round(overlay.size * 100)}% of hex`}>
+      <SliderRow label="Text size" value={`${overlay.textSize}px`}>
         <input
-          type="range" min={0.1} max={0.7} step={0.05}
-          value={overlay.size}
-          onChange={e => upd({ size: Number(e.target.value) })}
+          type="range" min={1} max={16} step={0.5}
+          value={overlay.textSize}
+          onChange={e => upd({ textSize: Number(e.target.value) })}
+          style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
+        />
+      </SliderRow>
+
+      <SliderRow label="Opacity" value={`${Math.round(overlay.opacity * 100)}%`}>
+        <input
+          type="range" min={0} max={1} step={0.05}
+          value={overlay.opacity}
+          onChange={e => upd({ opacity: Number(e.target.value) })}
           style={{ width: '100%', minWidth: 0, accentColor: '#5a9e6f' }}
         />
       </SliderRow>
 
       <button
-        onClick={() => clearIconOverlay(overlay.id)}
+        onClick={() => clearLabelOverlay(overlay.id)}
         style={{
           width: '100%',
           padding: '5px 0',
@@ -232,7 +176,7 @@ export function IconSettingsFlyout({ overlay, anchorY, onClose }: Props) {
         onMouseEnter={e => (e.currentTarget.style.color = '#e08080')}
         onMouseLeave={e => (e.currentTarget.style.color = '#9a6a6a')}
       >
-        Clear all icons
+        Clear all labels
       </button>
     </div>
   )

@@ -1,6 +1,8 @@
 import { useMapStore, TERRAIN_COLORS } from '../store/mapStore'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
 
+const BG_PALETTE = ['#ffffff', '#f5f0e8', '#eae4d4', '#ddd5c0', '#d4e8d4', '#d0dce8', '#e8d8d0', '#1a1a2a', '#000000'] as const
+
 const terrainLabel = (t: string) => t.replace(/_/g, ' ')
 
 // Edge labels per orientation: index 0–5 are edge midpoints, 6 = center.
@@ -85,6 +87,8 @@ const CORNER_OPTIONS = [
   { value: 'bottom-right', label: '↘' },
 ] as const
 
+const MEGA_HEX_SIZES: Record<number, string> = { 1: '7', 2: '19', 3: '37', 4: '61', 5: '91' }
+
 export function DisplaySidebar() {
   const {
     hexBorderMode, setHexBorderMode,
@@ -94,7 +98,21 @@ export function DisplaySidebar() {
     hexNumberColor, setHexNumberColor,
     hexNumberFontScale, setHexNumberFontScale,
     hexOrientation,
+    mapBgColor, setMapBgColor,
+    mapBorderEnabled, setMapBorderEnabled,
+    mapBorderColor, setMapBorderColor,
+    mapBorderWidth, setMapBorderWidth,
+    clipToHexGrid, setClipToHexGrid,
+    excludedHexKeys, resetExcludedHexes,
+    activeTool, setActiveTool,
+    megaHexEnabled, setMegaHexEnabled,
+    megaHexRadius, setMegaHexRadius,
+    megaHexColor, setMegaHexColor,
+    megaHexOpacity, setMegaHexOpacity,
+    megaHexLineWidth, setMegaHexLineWidth,
   } = useMapStore()
+
+  const hexMaskMode = activeTool.type === 'hex-mask' ? activeTool.mode : null
 
   const edgeLabels = hexOrientation === 'flat' ? FLAT_EDGE_LABELS : POINTY_EDGE_LABELS
   const currentLabel = edgeLabels[hexNumberEdge] ?? '?'
@@ -210,6 +228,251 @@ export function DisplaySidebar() {
               />
               <span style={{ fontSize: 10, color: '#5a5a7a' }}>{hexNumberColor}</span>
             </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Map Shape ── */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={labelStyle}>Map Shape</div>
+          {excludedHexKeys.length > 0 && (
+            <button
+              onClick={resetExcludedHexes}
+              style={{
+                padding: '2px 8px', background: 'none',
+                color: '#7a4a4a', border: '1px solid #3a2a2a',
+                borderRadius: 3, cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: 11,
+              }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['exclude', 'include'] as const).map(mode => {
+            const active = hexMaskMode === mode
+            return (
+              <button
+                key={mode}
+                onClick={() => setActiveTool(active ? { type: 'none' } : { type: 'hex-mask', mode })}
+                style={{
+                  flex: 1, padding: '4px 0',
+                  background: active ? (mode === 'exclude' ? '#3a1a1a' : '#1a2a1a') : 'none',
+                  color: active ? (mode === 'exclude' ? '#e07070' : '#7de0a0') : '#5a5a7a',
+                  border: '1px solid',
+                  borderColor: active ? (mode === 'exclude' ? '#8a3a3a' : '#4a9a6a') : '#1e1f2e',
+                  borderRadius: 3, cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 11, textTransform: 'capitalize',
+                }}
+              >
+                {mode === 'exclude' ? '− Remove' : '+ Add'}
+              </button>
+            )
+          })}
+        </div>
+        {excludedHexKeys.length > 0 && (
+          <div style={{ fontSize: 10, color: '#5a5a7a', marginTop: 6 }}>
+            {excludedHexKeys.length} hex{excludedHexKeys.length !== 1 ? 'es' : ''} removed
+          </div>
+        )}
+      </div>
+
+      {/* ── Map Frame ── */}
+      <div style={sectionStyle}>
+        <div style={labelStyle}>Map Frame</div>
+
+        {/* Background color */}
+        <div style={{ fontSize: 10, color: '#5a5a7a', marginBottom: 4 }}>Background color</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 10, alignItems: 'center' }}>
+          {BG_PALETTE.map(color => (
+            <button
+              key={color}
+              onClick={() => setMapBgColor(color)}
+              title={color}
+              style={{
+                width: 16, height: 16,
+                background: color,
+                border: mapBgColor.toLowerCase() === color.toLowerCase()
+                  ? '2px solid #7de0a0'
+                  : '1px solid rgba(255,255,255,0.18)',
+                borderRadius: 2, cursor: 'pointer', padding: 0,
+                boxSizing: 'border-box',
+                boxShadow: mapBgColor.toLowerCase() === color.toLowerCase() ? '0 0 0 1px rgba(0,0,0,0.5)' : 'none',
+              }}
+            />
+          ))}
+          <input
+            type="color"
+            value={mapBgColor}
+            onChange={e => setMapBgColor(e.target.value)}
+            title="Custom color"
+            style={{ width: 16, height: 16, border: '1px dashed #4a4a6a', borderRadius: 2, cursor: 'pointer', padding: 0, background: 'none' }}
+          />
+        </div>
+
+        {/* Clip to hex grid */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: '#5a5a7a' }}>Clip to hex grid</div>
+          <button
+            onClick={() => setClipToHexGrid(!clipToHexGrid)}
+            style={{
+              padding: '2px 8px',
+              background: clipToHexGrid ? '#1a2a3a' : 'none',
+              color: clipToHexGrid ? '#7de0a0' : '#5a5a7a',
+              border: '1px solid',
+              borderColor: clipToHexGrid ? '#4a9a6a' : '#1e1f2e',
+              borderRadius: 3, cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 11,
+            }}
+          >
+            {clipToHexGrid ? 'On' : 'Off'}
+          </button>
+        </div>
+
+        {/* Map border */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: mapBorderEnabled ? 8 : 0 }}>
+          <div style={{ fontSize: 10, color: '#5a5a7a' }}>Map border</div>
+          <button
+            onClick={() => setMapBorderEnabled(!mapBorderEnabled)}
+            style={{
+              padding: '2px 8px',
+              background: mapBorderEnabled ? '#1a2a3a' : 'none',
+              color: mapBorderEnabled ? '#7de0a0' : '#5a5a7a',
+              border: '1px solid',
+              borderColor: mapBorderEnabled ? '#4a9a6a' : '#1e1f2e',
+              borderRadius: 3, cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 11,
+            }}
+          >
+            {mapBorderEnabled ? 'On' : 'Off'}
+          </button>
+        </div>
+
+        {mapBorderEnabled && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 36, flexShrink: 0 }}>Color</div>
+              <input
+                type="color"
+                value={mapBorderColor}
+                onChange={e => setMapBorderColor(e.target.value)}
+                style={{ width: 28, height: 20, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a' }}>{mapBorderColor}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 36, flexShrink: 0 }}>Width</div>
+              <input
+                type="range" min={0.25} max={8} step={0.25}
+                value={mapBorderWidth}
+                onChange={e => setMapBorderWidth(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a', width: 28, textAlign: 'right' }}>
+                {mapBorderWidth.toFixed(2)}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Mega Hex Grid ── */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: megaHexEnabled ? 10 : 0 }}>
+          <div style={labelStyle}>Mega Hex Grid</div>
+          <button
+            onClick={() => setMegaHexEnabled(!megaHexEnabled)}
+            style={{
+              padding: '2px 8px',
+              background: megaHexEnabled ? '#1a2a3a' : 'none',
+              color: megaHexEnabled ? '#7de0a0' : '#5a5a7a',
+              border: '1px solid',
+              borderColor: megaHexEnabled ? '#4a9a6a' : '#1e1f2e',
+              borderRadius: 3, cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 11,
+            }}
+          >
+            {megaHexEnabled ? 'On' : 'Off'}
+          </button>
+        </div>
+
+        {megaHexEnabled && (
+          <>
+            {/* Size */}
+            <div style={{ fontSize: 10, color: '#5a5a7a', marginBottom: 4 }}>
+              Size — {MEGA_HEX_SIZES[megaHexRadius] ?? '?'} hexes
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <input
+                type="range" min={1} max={5} step={1}
+                value={megaHexRadius}
+                onChange={e => setMegaHexRadius(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a', width: 16, textAlign: 'right' }}>
+                R{megaHexRadius}
+              </span>
+            </div>
+
+            {/* Color */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 36, flexShrink: 0 }}>Color</div>
+              <input
+                type="color"
+                value={megaHexColor}
+                onChange={e => setMegaHexColor(e.target.value)}
+                style={{ width: 28, height: 20, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a' }}>{megaHexColor}</span>
+            </div>
+
+            {/* Opacity */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 36, flexShrink: 0 }}>Opacity</div>
+              <input
+                type="range" min={0.05} max={1} step={0.05}
+                value={megaHexOpacity}
+                onChange={e => setMegaHexOpacity(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a', width: 28, textAlign: 'right' }}>
+                {Math.round(megaHexOpacity * 100)}%
+              </span>
+            </div>
+
+            {/* Line width */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 36, flexShrink: 0 }}>Width</div>
+              <input
+                type="range" min={0.5} max={8} step={0.5}
+                value={megaHexLineWidth}
+                onChange={e => setMegaHexLineWidth(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a', width: 28, textAlign: 'right' }}>
+                {megaHexLineWidth.toFixed(1)}
+              </span>
+            </div>
+
+            {/* Set origin */}
+            <button
+              onClick={() => setActiveTool(
+                activeTool.type === 'mega-hex-origin' ? { type: 'none' } : { type: 'mega-hex-origin' }
+              )}
+              style={{
+                width: '100%', padding: '4px 0',
+                background: activeTool.type === 'mega-hex-origin' ? '#1a2a3a' : 'none',
+                color: activeTool.type === 'mega-hex-origin' ? '#7de0a0' : '#5a5a7a',
+                border: '1px solid',
+                borderColor: activeTool.type === 'mega-hex-origin' ? '#4a9a6a' : '#1e1f2e',
+                borderRadius: 3, cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: 11,
+              }}
+            >
+              {activeTool.type === 'mega-hex-origin' ? 'Click a hex to set origin…' : 'Set origin'}
+            </button>
           </>
         )}
       </div>
