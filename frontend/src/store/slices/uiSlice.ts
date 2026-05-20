@@ -521,6 +521,15 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 28) {
     if (s.riverPathSmoothing === undefined) s.riverPathSmoothing = 0
   }
+  if (fromVersion < 29) {
+    if (s.bridgesEnabled === undefined) s.bridgesEnabled = true
+    if (s.bridgeStyle === undefined) s.bridgeStyle = 'plank'
+    if (!s.bridgeTiers) s.bridgeTiers = [
+      { id: 'bt-0', label: 'Major', color: '#e8c060' },
+      { id: 'bt-1', label: 'Minor', color: '#c0b090' },
+    ]
+    if (!s.bridgeOverrides) s.bridgeOverrides = {}
+  }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
 }

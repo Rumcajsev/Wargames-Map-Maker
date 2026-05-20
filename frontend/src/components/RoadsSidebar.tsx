@@ -167,10 +167,14 @@ export function RoadsSidebar() {
     selectedRailSegmentKeys, setSelectedRailSegmentKeys, toggleRailSegmentSelection,
     selectedRailHopKey, setSelectedRailHopKey,
     setRailSegmentProp, clearRailSegmentProp, setRailHopProp, clearRailHopProp,
+    bridgesEnabled, setBridgesEnabled,
+    bridgeStyle, setBridgeStyle,
+    bridgeTiers, updateBridgeTier, addBridgeTier, removeBridgeTier,
   } = useMapStore()
 
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
+  const [bridgesOpen, setBridgesOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -738,6 +742,112 @@ export function RoadsSidebar() {
             />
           )
         })()}
+
+        {/* Bridges collapsible section */}
+        <div style={{ ...sectionStyle, padding: 0, overflow: 'hidden' }}>
+          <div
+            onClick={() => setBridgesOpen(o => !o)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '6px 10px', cursor: 'pointer', userSelect: 'none',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#1a1a2e')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>Bridges</span>
+              <span style={{ fontSize: 10, color: bridgesEnabled ? '#5a9e6f' : '#5a5a7a' }}>
+                {bridgesEnabled ? 'on' : 'off'}
+              </span>
+            </div>
+            <span style={{ color: '#4a4a6a', fontSize: 10 }}>{bridgesOpen ? '▲' : '▼'}</span>
+          </div>
+
+          {bridgesOpen && (
+            <div style={{ padding: '0 10px 10px' }}>
+              {/* Enable/disable */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 11 }}>Show bridges</span>
+                <input
+                  type="checkbox"
+                  checked={bridgesEnabled}
+                  onChange={e => setBridgesEnabled(e.target.checked)}
+                  style={{ accentColor: '#7a6ab0' }}
+                />
+              </div>
+
+              {/* Style picker */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11 }}>Style</span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {(['plank', 'icon'] as const).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setBridgeStyle(s)}
+                      style={{
+                        padding: '2px 8px', fontSize: 10, cursor: 'pointer',
+                        background: bridgeStyle === s ? '#2a2a4a' : 'none',
+                        border: `1px solid ${bridgeStyle === s ? '#4a4a8a' : '#2a2a4a'}`,
+                        borderRadius: 3, color: bridgeStyle === s ? '#a0a0c0' : '#4a4a6a',
+                        fontFamily: 'inherit',
+                      }}
+                    >{s}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tier list */}
+              <div style={{ ...labelStyle, marginBottom: 6 }}>Tiers</div>
+              {bridgeTiers.map((tier, idx) => (
+                <div key={tier.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                  <span style={{ fontSize: 10, color: '#4a4a6a', width: 14, textAlign: 'right', flexShrink: 0 }}>
+                    {idx + 1}
+                  </span>
+                  <input
+                    type="color"
+                    value={tier.color}
+                    onChange={e => updateBridgeTier(tier.id, { color: e.target.value })}
+                    style={{ width: 22, height: 18, border: 'none', padding: 0, cursor: 'pointer', background: 'none', flexShrink: 0 }}
+                    title="Bridge color"
+                  />
+                  <input
+                    type="text"
+                    value={tier.label}
+                    onChange={e => updateBridgeTier(tier.id, { label: e.target.value })}
+                    style={{
+                      flex: 1, background: '#0e0f18', border: '1px solid #2a2a4a', borderRadius: 3,
+                      color: '#a0a0c0', fontSize: 11, padding: '2px 5px', fontFamily: 'inherit',
+                    }}
+                  />
+                  {bridgeTiers.length > 1 && (
+                    <button
+                      onClick={() => removeBridgeTier(tier.id)}
+                      style={{
+                        background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer',
+                        fontSize: 12, padding: 0, lineHeight: 1,
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#9e5a5a')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+                      title="Remove tier"
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+              {bridgeTiers.length < 5 && (
+                <button
+                  onClick={addBridgeTier}
+                  style={{
+                    marginTop: 4, width: '100%', padding: '3px 0', background: 'none',
+                    border: '1px solid #2a2a4a', borderRadius: 3, color: '#4a4a6a',
+                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+                >+ Add tier</button>
+              )}
+            </div>
+          )}
+        </div>
 
       </div>
     </>

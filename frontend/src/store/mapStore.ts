@@ -13,6 +13,7 @@ import { type IconsSlice, createIconsSlice } from './slices/iconsSlice'
 import { type LabelsSlice, createLabelsSlice } from './slices/labelsSlice'
 import { type UndoSlice, createUndoSlice } from './slices/undoSlice'
 import { type UiSlice, createUiSlice, migratePersisted, rehydrateState } from './slices/uiSlice'
+import { type BridgesSlice, createBridgesSlice } from './slices/bridgesSlice'
 
 export interface BlobOverride {
   terrain?: string
@@ -457,7 +458,8 @@ export type MapStore =
   IconsSlice &
   LabelsSlice &
   UndoSlice &
-  UiSlice
+  UiSlice &
+  BridgesSlice
 
 export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createSetupSlice(set, get),
@@ -472,6 +474,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createLabelsSlice(set, get),
   ...createUndoSlice(set, get),
   ...createUiSlice(set, get),
+  ...createBridgesSlice(set, get),
 }), {
   name: 'ig2-map-store',
   storage: {
@@ -639,8 +642,12 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     showPaperTexture: s.showPaperTexture,
     paperTextureOpacity: s.paperTextureOpacity,
     showPaperVignette: s.showPaperVignette,
+    bridgesEnabled: s.bridgesEnabled,
+    bridgeStyle: s.bridgeStyle,
+    bridgeTiers: s.bridgeTiers,
+    bridgeOverrides: s.bridgeOverrides,
   }),
-  version: 28,
+  version: 29,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

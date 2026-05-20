@@ -28,6 +28,9 @@ import { drawHexBorders as _drawHexBorders, drawMapBoundary as _drawMapBoundary,
 import { drawTerrain as _drawTerrain } from '../lib/drawTerrain'
 import { drawHexNumbers as _drawHexNumbers, buildHexNumberMap } from '../lib/drawHexNumbers'
 import { getToolCursor } from '../lib/cursors'
+import { detectBridges } from '../lib/detectBridges'
+import { drawBridges as _drawBridges } from '../lib/drawBridges'
+import type { BridgePoint } from '../lib/detectBridges'
 
 const OSM_OVERLAY_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -188,6 +191,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     hexNumbersEnabled, hexNumberStartCorner, hexNumberEdge, hexNumberColor, hexNumberFontScale,
     mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
     excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
+    bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, setBridgeOverride,
   } = useMapStore()
   const mapModeRef = useRef(mapMode)
   const diptychJoinRef = useRef(diptychJoin)
@@ -219,6 +223,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const spotlightRafRef = useRef<number | null>(null)
   const roadTierStylesRef = useRef(roadTierStyles)
   const railStyleRef = useRef(railStyle)
+  const bridgesEnabledRef = useRef(bridgesEnabled)
+  const bridgeStyleRef = useRef(bridgeStyle)
+  const bridgeTiersRef = useRef(bridgeTiers)
+  const bridgeOverridesRef = useRef(bridgeOverrides)
+  const setBridgeOverrideRef = useRef(setBridgeOverride)
+  const detectedBridgesRef = useRef<BridgePoint[]>([])
+  const lastBridgeRoadRef = useRef<unknown>(null)
+  const lastBridgeRiverRef = useRef<unknown>(null)
   const roadPaintModeRef = useRef(roadPaintMode)
   const roadPaintBrushRef = useRef(roadPaintBrush)
   const roadPaintEraserRef = useRef(roadPaintEraser)
@@ -445,6 +457,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   hoveredOsmRiverIdxRef.current = hoveredOsmRiverIdx
   roadTierStylesRef.current = roadTierStyles
   railStyleRef.current = railStyle
+  bridgesEnabledRef.current = bridgesEnabled
+  bridgeStyleRef.current = bridgeStyle
+  bridgeTiersRef.current = bridgeTiers
+  bridgeOverridesRef.current = bridgeOverrides
+  setBridgeOverrideRef.current = setBridgeOverride
   roadPaintModeRef.current = roadPaintMode
   roadPaintBrushRef.current = roadPaintBrush
   roadPaintEraserRef.current = roadPaintEraser
@@ -1451,6 +1468,41 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       _drawRivers(ctx, liveRiverParams)
     }
 
+    // Bridges — drawn after rivers, before roads
+    if (bridgesEnabledRef.current && bridgeTiersRef.current.length > 0) {
+      const activeRoadChains = smoothedRoadDataRef.current.chains
+      const activeRiverChains = computedRiverChainsRef.current
+      const activeCanalChains = computedCanalChainsRef.current
+      if (activeRoadChains !== lastBridgeRoadRef.current ||
+          activeRiverChains !== lastBridgeRiverRef.current) {
+        detectedBridgesRef.current = detectBridges(
+          activeRoadChains,
+          [...activeRiverChains, ...activeCanalChains],
+        )
+        lastBridgeRoadRef.current = activeRoadChains
+        lastBridgeRiverRef.current = activeRiverChains
+      }
+      if (detectedBridgesRef.current.length > 0) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(px, py, pw, ph)
+        ctx.clip()
+        _drawBridges({
+          ctx,
+          bridges: detectedBridgesRef.current,
+          tiers: bridgeTiersRef.current,
+          overrides: bridgeOverridesRef.current,
+          style: bridgeStyleRef.current,
+          tierStyles: (isExport
+            ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
+            : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+          lineScale: isExport ? lineScale : 1,
+          project,
+        })
+        ctx.restore()
+      }
+    }
+
     // Urban area buildings + settlement buildings (rendered below roads)
     {
       const { chains: roadChains } = smoothedRoadDataRef.current
@@ -2219,7 +2271,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2329,7 +2381,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const onDown = (e: MouseEvent) => {
       if (e.button !== 1 && e.button !== 0) return
       if (e.button === 0 && (e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (e.button === 0 && (terrainPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current)) return
+      if (e.button === 0 && (terrainPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current || activeToolRef.current.type === 'hex-mask')) return
       if (e.button === 0 && activePanelRef.current === 'highlights' && (highlightPaintModeRef.current || highlightLineEraserRef.current)) return
       if (e.button === 0 && draggingCpKeyRef.current) return
       e.preventDefault()
@@ -2461,6 +2513,58 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       window.removeEventListener('mouseup', onUp)
     }
   }, [paintAtClient])
+
+  // Hex mask paint — exclude/include hexes by click-drag
+  const hexMaskPaintAtClient = useCallback((clientX: number, clientY: number, mode: 'exclude' | 'include', lastKey: { v: string | null }) => {
+    const meta = metaRef.current
+    if (!meta) return
+    const logical = clientToLogical(clientX, clientY)
+    if (!logical) return
+    const { lx, ly, cssW, cssH } = logical
+    const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    for (const hex of hexesRef.current) {
+      const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py))
+      if (pointInPolygon(lx, ly, verts)) {
+        const key = `${hex.q},${hex.r}`
+        if (key !== lastKey.v) {
+          lastKey.v = key
+          toggleExcludedHexRef.current(key, mode)
+        }
+        break
+      }
+    }
+  }, [clientToLogical])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    let active = false
+    let mode: 'exclude' | 'include' = 'exclude'
+    const lastKey = { v: null as string | null }
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      if ((e.target as HTMLElement).tagName !== 'CANVAS') return
+      const tool = activeToolRef.current
+      if (tool.type !== 'hex-mask') return
+      active = true
+      mode = tool.mode
+      lastKey.v = null
+      hexMaskPaintAtClient(e.clientX, e.clientY, mode, lastKey)
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!active) return
+      hexMaskPaintAtClient(e.clientX, e.clientY, mode, lastKey)
+    }
+    const onUp = () => { active = false }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [hexMaskPaintAtClient])
 
   // Road/rail paint — edge between consecutive hexes visited in a stroke
   const prevEdgeHexRef = useRef<{ q: number; r: number } | null>(null)
@@ -3467,6 +3571,40 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             color: terrainColorsRef.current[terrain] ?? '#888',
             dim: isCurrent,
           } as CtxItem)
+        }
+      }
+
+      // Bridge tier assignment — right-click near any detected bridge
+      if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0 && bridgeTiersRef.current.length > 0) {
+        const meta2 = metaRef.current
+        const logical2 = meta2 ? clientToLogicalRef.current(e.clientX, e.clientY) : null
+        if (meta2 && logical2) {
+          const { lx: lx2, ly: ly2, cssW: cssW2, cssH: cssH2 } = logical2
+          const { pw: pw2, ph: ph2, px: px2, py: py2 } = computePaper(cssW2, cssH2, meta2)
+          const R2 = hexRadiusRef.current
+
+          let nearestBridge: BridgePoint | null = null
+          let nearestDist = Infinity
+          for (const bridge of detectedBridgesRef.current) {
+            const [bx, by] = projectToCanvas(bridge.pos[0], bridge.pos[1], meta2, pw2, ph2, px2, py2)
+            const dist = Math.hypot(lx2 - bx, ly2 - by)
+            if (dist < nearestDist) { nearestDist = dist; nearestBridge = bridge }
+          }
+
+          if (nearestBridge && nearestDist < R2 * 0.6) {
+            const captured = nearestBridge
+            const currentTierId = bridgeOverridesRef.current[captured.id]
+            if (items.length > 0) items.push({ label: '─', action: () => {} })
+            items.push({ label: 'Bridge tier', action: () => {}, dim: true })
+            for (const tier of bridgeTiersRef.current) {
+              items.push({
+                label: tier.label,
+                color: tier.color,
+                action: () => setBridgeOverrideRef.current(captured.id, tier.id),
+                dim: tier.id === currentTierId,
+              })
+            }
+          }
         }
       }
 
