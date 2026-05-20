@@ -47,7 +47,11 @@ export function mulberry32(seed: number): () => number {
   }
 }
 
+const permCache = new Map<number, Uint8Array>()
+
 export function makePermutation(seed: number): Uint8Array {
+  const cached = permCache.get(seed)
+  if (cached) return cached
   const rng = seededRng(seed)
   const p = Array.from({ length: 256 }, (_: unknown, i: number) => i)
   for (let i = 255; i > 0; i--) {
@@ -56,6 +60,7 @@ export function makePermutation(seed: number): Uint8Array {
   }
   const perm = new Uint8Array(512)
   for (let i = 0; i < 512; i++) perm[i] = p[i & 255]
+  permCache.set(seed, perm)
   return perm
 }
 

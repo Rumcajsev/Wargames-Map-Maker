@@ -55,6 +55,24 @@ export function drawSettlements(sCtx: Ctx, {
   for (const { chain } of roadChains) sampleChain(chain)
   for (const { chain } of railChains) sampleChain(chain)
 
+  // Spatial grid for obstacle point queries — avoids O(n) scan per label candidate.
+  const OBS_CELL = 24
+  const obsGrid = new Map<number, number>()
+  const obsKey = (gx: number, gy: number) => gx * 100003 + gy
+  for (const [rx, ry] of obstaclePts) {
+    const k = obsKey(Math.floor(rx / OBS_CELL), Math.floor(ry / OBS_CELL))
+    obsGrid.set(k, (obsGrid.get(k) ?? 0) + 1)
+  }
+  const obsScore = (ex: number, ey: number, ew: number, eh: number): number => {
+    let count = 0
+    const gx0 = Math.floor(ex / OBS_CELL), gx1 = Math.floor((ex + ew) / OBS_CELL)
+    const gy0 = Math.floor(ey / OBS_CELL), gy1 = Math.floor((ey + eh) / OBS_CELL)
+    for (let gx = gx0; gx <= gx1; gx++)
+      for (let gy = gy0; gy <= gy1; gy++)
+        count += obsGrid.get(obsKey(gx, gy)) ?? 0
+    return count
+  }
+
   const placedBoxes: [number, number, number, number][] = []
 
   for (const s of placed) {
@@ -117,10 +135,7 @@ export function drawSettlements(sCtx: Ctx, {
     let best = cands[0]
     for (const c of cands) {
       const ex = c.bx - pad, ey = c.by - pad, ew = tw + pad * 2, eh = th + pad * 2
-      let score = c.bias
-      for (const [rx, ry] of obstaclePts) {
-        if (rx >= ex && rx <= ex + ew && ry >= ey && ry <= ey + eh) score += 1
-      }
+      let score = c.bias + obsScore(ex, ey, ew, eh)
       for (const [plx, ply, plw, plh] of placedBoxes) {
         if (ex < plx + plw && ex + ew > plx && ey < ply + plh && ey + eh > ply) score += 8
       }

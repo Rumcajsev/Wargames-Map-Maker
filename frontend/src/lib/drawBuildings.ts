@@ -78,6 +78,17 @@ export function drawHexBuildings(
   const [hcx, hcy] = project(hex.center[0], hex.center[1])
   const rng = mulberry32(Math.abs((hexQ * 31 + hexR) | 0))
 
+  // Bounding box of the hex — used to skip chains that don't intersect this hex.
+  let bboxMinX = Infinity, bboxMinY = Infinity, bboxMaxX = -Infinity, bboxMaxY = -Infinity
+  for (const [vx, vy] of hexVerts) {
+    if (vx < bboxMinX) bboxMinX = vx; if (vx > bboxMaxX) bboxMaxX = vx
+    if (vy < bboxMinY) bboxMinY = vy; if (vy > bboxMaxY) bboxMaxY = vy
+  }
+  const bboxPad = 20
+  const nearHex = (px: number, py: number) =>
+    px >= bboxMinX - bboxPad && px <= bboxMaxX + bboxPad &&
+    py >= bboxMinY - bboxPad && py <= bboxMaxY + bboxPad
+
   type RoadSample = { x: number; y: number; s: number; tx: number; ty: number }
   type RoadInfo = { samples: RoadSample[]; totalLen: number; hw: number; idx: number }
 
@@ -87,6 +98,7 @@ export function drawHexBuildings(
     const hw = roadTierStyles[roadTier].outerW / 2
     const pts = chain.map(([lon, lat]) => project(lon, lat) as [number, number])
     if (pts.length < 2) continue
+    if (!pts.some(([px, py]) => nearHex(px, py))) continue
     const samples: RoadSample[] = []
     let acc = 0
     for (let i = 0; i < pts.length; i++) {

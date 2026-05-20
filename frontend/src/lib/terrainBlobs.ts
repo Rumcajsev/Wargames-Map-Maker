@@ -44,6 +44,27 @@ export function coastalBlobTerrains(hex: GeneratedHex, realisticCoastline: boole
 
 // ── Coastline ring smoothing ─────────────────────────────────────────────────
 
+/** Pre-compute which ring segments lie along a hex edge, avoiding redundant
+ *  per-segment checks in both getCoastlineRuns and buildSmoothedRing. */
+function buildHexEdgeFlags(
+  ring: [number, number][],
+  hexVerts: [number, number][],
+  tol: number,
+): boolean[] {
+  const n = ring.length, nv = hexVerts.length
+  const flags = new Array<boolean>(n)
+  for (let i = 0; i < n; i++) {
+    const p = ring[i], q = ring[(i + 1) % n]
+    let onEdge = false
+    for (let e = 0; e < nv && !onEdge; e++) {
+      const a = hexVerts[e], b = hexVerts[(e + 1) % nv]
+      if (distToSeg(p, a, b) < tol && distToSeg(q, a, b) < tol) onEdge = true
+    }
+    flags[i] = onEdge
+  }
+  return flags
+}
+
 /** Split a coastline_clip ring into runs that follow the actual geographic coastline,
  *  skipping segments that lie along hex edges (where the land polygon was clipped). */
 export function getCoastlineRuns(
@@ -51,22 +72,15 @@ export function getCoastlineRuns(
   hexVerts: [number, number][],
   tol: number,
 ): [number, number][][] {
-  const n = ring.length, nv = hexVerts.length
-  const isHexEdgeSeg = (i: number): boolean => {
-    const p = ring[i], q = ring[(i + 1) % n]
-    for (let e = 0; e < nv; e++) {
-      const a = hexVerts[e], b = hexVerts[(e + 1) % nv]
-      if (distToSeg(p, a, b) < tol && distToSeg(q, a, b) < tol) return true
-    }
-    return false
-  }
+  const n = ring.length
+  const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
   let firstHex = -1
-  for (let i = 0; i < n; i++) if (isHexEdgeSeg(i)) { firstHex = i; break }
+  for (let i = 0; i < n; i++) if (hexEdge[i]) { firstHex = i; break }
   const runs: [number, number][][] = []
   let run: [number, number][] | null = null
   for (let j = 0; j < n; j++) {
     const i = firstHex >= 0 ? (firstHex + 1 + j) % n : j
-    if (isHexEdgeSeg(i)) {
+    if (hexEdge[i]) {
       if (run && run.length >= 2) runs.push(run)
       run = null
     } else {
@@ -87,17 +101,10 @@ export function buildSmoothedRing(
   tol: number,
   steps: number,
 ): [number, number][] {
-  const n = ring.length, nv = hexVerts.length
-  const isHexEdgeSeg = (i: number): boolean => {
-    const p = ring[i], q = ring[(i + 1) % n]
-    for (let e = 0; e < nv; e++) {
-      const a = hexVerts[e], b = hexVerts[(e + 1) % nv]
-      if (distToSeg(p, a, b) < tol && distToSeg(q, a, b) < tol) return true
-    }
-    return false
-  }
+  const n = ring.length
+  const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
   let firstHex = -1
-  for (let i = 0; i < n; i++) if (isHexEdgeSeg(i)) { firstHex = i; break }
+  for (let i = 0; i < n; i++) if (hexEdge[i]) { firstHex = i; break }
   const out: [number, number][] = []
   let coast: [number, number][] | null = null
   const flushCoast = () => {
@@ -107,7 +114,7 @@ export function buildSmoothedRing(
   }
   for (let j = 0; j < n; j++) {
     const i = firstHex >= 0 ? (firstHex + j) % n : j
-    if (isHexEdgeSeg(i)) {
+    if (hexEdge[i]) {
       flushCoast()
       out.push(ring[i])
     } else {
@@ -155,6 +162,11 @@ export function buildTerrainBlobs(
 
   for (const { hex, verts } of projected) {
     const t = hex.terrain
+    let tc: Map<string, number> | null = null
+    if (t !== 'clear') {
+      if (!edgeCount.has(t)) edgeCount.set(t, new Map())
+      tc = edgeCount.get(t)!
+    }
     for (let i = 0; i < 6; i++) {
       const a = verts[i], b = verts[(i + 1) % 6]
       const ka = vk(a), kb = vk(b)
@@ -163,16 +175,10 @@ export function buildTerrainBlobs(
       const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
       if (!allEdgeTerrainsMap.has(ek)) allEdgeTerrainsMap.set(ek, new Set())
       allEdgeTerrainsMap.get(ek)!.add(t)
-    }
-    if (t === 'clear') continue
-    if (!edgeCount.has(t)) edgeCount.set(t, new Map())
-    const tc = edgeCount.get(t)!
-    for (let i = 0; i < 6; i++) {
-      const a = verts[i], b = verts[(i + 1) % 6]
-      const ka = vk(a), kb = vk(b)
-      const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
-      tc.set(ek, (tc.get(ek) ?? 0) + 1)
-      if (!edgeEnds.has(ek)) edgeEnds.set(ek, [ka, kb])
+      if (tc !== null) {
+        tc.set(ek, (tc.get(ek) ?? 0) + 1)
+        if (!edgeEnds.has(ek)) edgeEnds.set(ek, [ka, kb])
+      }
     }
   }
 
@@ -338,21 +344,21 @@ export function buildTerrainBlobsV2(
       if (!hexCentersByTerrain.has(t)) hexCentersByTerrain.set(t, [])
       hexCentersByTerrain.get(t)!.push([cx, cy])
     }
+    let tc: Map<string, number> | null = null
+    if (t !== 'clear') {
+      if (!edgeCount.has(t)) edgeCount.set(t, new Map())
+      tc = edgeCount.get(t)!
+    }
     for (let i = 0; i < 6; i++) {
       const a = verts[i], b = verts[(i + 1) % 6]
       const ka = vk(a), kb = vk(b)
       if (!vpos.has(ka)) vpos.set(ka, a)
       if (!vpos.has(kb)) vpos.set(kb, b)
-    }
-    if (t === 'clear') continue
-    if (!edgeCount.has(t)) edgeCount.set(t, new Map())
-    const tc = edgeCount.get(t)!
-    for (let i = 0; i < 6; i++) {
-      const a = verts[i], b = verts[(i + 1) % 6]
-      const ka = vk(a), kb = vk(b)
-      const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
-      tc.set(ek, (tc.get(ek) ?? 0) + 1)
-      if (!edgeEnds.has(ek)) edgeEnds.set(ek, [ka, kb])
+      if (tc !== null) {
+        const ek = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
+        tc.set(ek, (tc.get(ek) ?? 0) + 1)
+        if (!edgeEnds.has(ek)) edgeEnds.set(ek, [ka, kb])
+      }
     }
   }
 

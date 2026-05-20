@@ -28,13 +28,16 @@ export function drawRoadsAndRails(rCtx: Ctx, {
   }
 
   if (roadChains.length > 0) {
+    const chainsByTier: [[number,number][][], [number,number][][], [number,number][][]] = [[], [], []]
+    for (const { tier, chain } of roadChains) chainsByTier[tier].push(chain)
+
     rCtx.lineCap = 'round'
     rCtx.lineJoin = 'round'
     for (const tier of [2, 1, 0] as const) {
       const s = tierStyles[tier]
       rCtx.strokeStyle = s.outer
       rCtx.lineWidth = s.outerW
-      for (const { tier: t, chain } of roadChains) { if (t === tier) drawChain(chain) }
+      for (const chain of chainsByTier[tier]) drawChain(chain)
     }
     for (const { pos, tier } of junctions) {
       const [x, y] = project(pos[0], pos[1])
@@ -46,7 +49,7 @@ export function drawRoadsAndRails(rCtx: Ctx, {
       const s = tierStyles[tier]
       rCtx.strokeStyle = s.inner
       rCtx.lineWidth = s.outerW * 0.5
-      for (const { tier: t, chain } of roadChains) { if (t === tier) drawChain(chain) }
+      for (const chain of chainsByTier[tier]) drawChain(chain)
     }
     for (const { pos, tier } of junctions) {
       const [x, y] = project(pos[0], pos[1])
