@@ -764,18 +764,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const blobComponentsByTerrainRef = useRef(blobComponentsByTerrain)
   blobComponentsByTerrainRef.current = blobComponentsByTerrain
 
-  // hexVertMap: hex key → projected canvas vertices. Needed for edge blob geometry.
-  // Recomputed whenever projectedHexes changes (which is stable during painting).
-  const hexVertMap = useMemo(() => {
-    const map = new Map<string, [number, number][]>()
-    for (const { hex, verts } of projectedHexes) {
-      map.set(`${hex.q},${hex.r}`, verts)
-    }
-    return map
-  }, [projectedHexes])
-  const hexVertMapRef = useRef(hexVertMap)
-  hexVertMapRef.current = hexVertMap
-
   const roadBaseData = useMemo(
     () => buildRoadChains(roadEdges, hexCenterIdx, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings),
     [roadEdges, hexCenterIdx, roadControlOverrides, roadSmoothing, roadPathSmoothing, roadChainOverrides, roadSnapBindings],
@@ -921,6 +909,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [generatedHexes, generatedMetadata, paperDims])
   const projectedHexesRef = useRef(projectedHexes)
   projectedHexesRef.current = projectedHexes
+
+  // hexVertMap: hex key → projected canvas vertices. Needed for edge blob geometry.
+  const hexVertMap = useMemo(() => {
+    const map = new Map<string, [number, number][]>()
+    for (const { hex, verts } of projectedHexes) {
+      map.set(`${hex.q},${hex.r}`, verts)
+    }
+    return map
+  }, [projectedHexes])
+  const hexVertMapRef = useRef(hexVertMap)
+  hexVertMapRef.current = hexVertMap
 
   // Coastal hexes: project each coastline_clip ring from lon/lat to canvas coords.
   // Each entry maps (q,r) → array of projected rings (one ring per polygon in the clip).
