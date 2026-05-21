@@ -44,9 +44,8 @@ export type TerrainSlice = {
   // Terrain paint
   terrainPaintMode: boolean
   terrainPaintBrush: string
+  terrainEdgePaintEnabled: boolean
   // Edge blob paint + state
-  edgeBlobPaintMode: boolean
-  edgeBlobPaintBrush: string
   edgeBlobPainted: Record<string, string>
   edgeBlobSmooth: number
   edgeBlobOffset: number
@@ -110,8 +109,7 @@ export type TerrainSlice = {
   setFieldWildness: (terrain: string, v: number) => void
   setTerrainPaintMode: (v: boolean) => void
   setTerrainPaintBrush: (v: string) => void
-  setEdgeBlobPaintMode: (v: boolean) => void
-  setEdgeBlobPaintBrush: (v: string) => void
+  setTerrainEdgePaintEnabled: (v: boolean) => void
   paintEdgeBlob: (edgeKey: string, terrain: string) => void
   eraseEdgeBlob: (edgeKey: string) => void
   setEdgeBlobSmooth: (v: number) => void
@@ -179,9 +177,8 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
 
   terrainPaintMode: false,
   terrainPaintBrush: 'clear',
+  terrainEdgePaintEnabled: false,
 
-  edgeBlobPaintMode: false,
-  edgeBlobPaintBrush: 'woods',
   edgeBlobPainted: {},
   edgeBlobSmooth: 0,
   edgeBlobOffset: -0.10,
@@ -251,7 +248,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     showReliefHeatmap: false,
     showElevHeatmap: false,
     terrainPaintMode: false,
-    edgeBlobPaintMode: false,
     lakePaintMode: false,
     elevationPaintMode: false,
     roadPaintMode: false,
@@ -542,11 +538,10 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setFieldPersistence: (v) => set({ fieldPersistence: v }),
   setFieldWildness: (terrain, v) => set((s) => ({ fieldWildness: { ...s.fieldWildness, [terrain]: v } })),
 
-  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false, edgeBlobPaintMode: false } : {}) }),
+  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
+  setTerrainEdgePaintEnabled: (v) => set({ terrainEdgePaintEnabled: v }),
 
-  setEdgeBlobPaintMode: (v) => set({ edgeBlobPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}) }),
-  setEdgeBlobPaintBrush: (v) => set({ edgeBlobPaintBrush: v }),
   paintEdgeBlob: (edgeKey, terrain) => set((s) => ({
     edgeBlobPainted: { ...s.edgeBlobPainted, [edgeKey]: terrain },
   })),
@@ -577,7 +572,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     return { edgeBlobOverrides: { ...s.edgeBlobOverrides, [key]: cleaned } }
   }),
 
-  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, edgeBlobPaintMode: false } : {}) }),
+  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false } : {}) }),
   setAutoLakesEnabled: (v) => {
     const { generatedHexes, lakeSensitivity } = get()
     const updated = generatedHexes.map((h) =>

@@ -4,8 +4,6 @@ import { TerrainBrushPicker } from './TerrainBrushPicker'
 import { TerrainSettingsFlyout } from './TerrainSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle, modeBtn } from './sidebarStyles'
 
-const EDGE_BRUSH_TERRAINS = TERRAIN_PRIORITY.filter(t => t !== 'clear')
-
 const terrainLabel = (t: string) => t.replace(/_/g, ' ')
 
 const SLIDER_TERRAINS = TERRAIN_PRIORITY.filter(t => t !== 'clear')
@@ -28,7 +26,7 @@ export function TerrainSidebar() {
     fieldAmp, setFieldAmp,
     fieldOctaves, setFieldOctaves,
     fieldPersistence, setFieldPersistence,
-    edgeBlobPaintMode, edgeBlobPaintBrush, setEdgeBlobPaintMode, setEdgeBlobPaintBrush,
+    terrainEdgePaintEnabled, setTerrainEdgePaintEnabled,
     edgeBlobSmooth, setEdgeBlobSmooth,
     edgeBlobOffset, setEdgeBlobOffset,
     edgeBlobBump, setEdgeBlobBump,
@@ -108,6 +106,20 @@ export function TerrainSidebar() {
             onSelect={selectBrush}
             onSettings={openSettings}
           />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: terrainEdgePaintEnabled ? '#c0c0e0' : '#6a6a8a', marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={terrainEdgePaintEnabled}
+              onChange={e => setTerrainEdgePaintEnabled(e.target.checked)}
+              style={{ accentColor: '#7a9e7a' }}
+            />
+            Edge painting
+          </label>
+          {terrainEdgePaintEnabled && (
+            <div style={{ fontSize: 10, color: '#5a8a5a', marginTop: 4, letterSpacing: 0.3, paddingLeft: 18 }}>
+              Near edge → paints edge blob
+            </div>
+          )}
         </div>
 
         {/* ── Render mode + style ── */}
@@ -250,63 +262,6 @@ export function TerrainSidebar() {
         {/* ── Edge blobs ── */}
         <div style={sectionStyle}>
           <div style={labelStyle}>Edge Blobs</div>
-
-          {/* Brush row */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-            {/* Mode toggle: clear = eraser */}
-            <button
-              style={{
-                ...modeBtn(edgeBlobPaintBrush === 'clear' && edgeBlobPaintMode),
-                fontSize: 10, padding: '3px 7px',
-              }}
-              onClick={() => {
-                if (edgeBlobPaintMode && edgeBlobPaintBrush === 'clear') {
-                  setEdgeBlobPaintMode(false)
-                  setActiveTool({ type: 'none' })
-                } else {
-                  setEdgeBlobPaintBrush('clear')
-                  setEdgeBlobPaintMode(true)
-                  setActiveTool({ type: 'none' })
-                }
-              }}
-            >Erase</button>
-            {EDGE_BRUSH_TERRAINS.map(t => {
-              const color = terrainColors[t] ?? TERRAIN_COLORS[t] ?? '#888'
-              const active = edgeBlobPaintMode && edgeBlobPaintBrush === t
-              return (
-                <button
-                  key={t}
-                  onClick={() => {
-                    if (active) {
-                      setEdgeBlobPaintMode(false)
-                      setActiveTool({ type: 'none' })
-                    } else {
-                      setEdgeBlobPaintBrush(t)
-                      setEdgeBlobPaintMode(true)
-                      setActiveTool({ type: 'none' })
-                    }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '3px 7px', fontSize: 10, letterSpacing: 0.5, textTransform: 'capitalize',
-                    background: active ? '#1a2a1a' : 'none',
-                    border: `1px solid ${active ? color : '#1e1f2e'}`,
-                    color: active ? color : '#6a6a8a',
-                    borderRadius: 3, cursor: 'pointer', fontFamily: 'ui-monospace, monospace',
-                  }}
-                >
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: color, display: 'inline-block', flexShrink: 0 }} />
-                  {t.replace(/_/g, ' ')}
-                </button>
-              )
-            })}
-          </div>
-
-          {edgeBlobPaintMode && (
-            <div style={{ fontSize: 10, color: '#5a8a5a', marginBottom: 8, letterSpacing: 0.3 }}>
-              Edge paint active — click near hex edges
-            </div>
-          )}
 
           {/* Global shape params (collapsible) */}
           <button

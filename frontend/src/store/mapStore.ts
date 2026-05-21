@@ -624,6 +624,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     urbanNoise: s.urbanNoise,
     urbanBuildingCount: s.urbanBuildingCount,
     urbanBuildingSize: s.urbanBuildingSize,
+    terrainEdgePaintEnabled: s.terrainEdgePaintEnabled,
     edgeBlobPainted: s.edgeBlobPainted,
     edgeBlobSmooth: s.edgeBlobSmooth,
     edgeBlobOffset: s.edgeBlobOffset,
@@ -684,7 +685,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     bridgeTiers: s.bridgeTiers,
     bridgeOverrides: s.bridgeOverrides,
   }),
-  version: 32,
+  version: 33,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

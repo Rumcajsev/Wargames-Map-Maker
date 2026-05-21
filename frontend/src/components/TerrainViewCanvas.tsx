@@ -172,8 +172,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     terrainBlobOverrides, setTerrainBlobOverride,
     terrainTypeBlobStyles,
     lakeOverrides, setLakeOverride,
-    edgeBlobPainted, edgeBlobPaintMode, edgeBlobPaintBrush,
+    edgeBlobPainted,
     paintEdgeBlob, eraseEdgeBlob,
+    terrainEdgePaintEnabled,
     edgeBlobSmooth, edgeBlobOffset, edgeBlobBump,
     edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection,
     edgeBlobWidth, edgeBlobOverrides, setEdgeBlobOverride,
@@ -216,8 +217,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const terrainPaintBrushRef = useRef(terrainPaintBrush)
   const overrideHexTerrainRef = useRef(overrideHexTerrain)
   const addHexTerrainLayerRef = useRef(addHexTerrainLayer)
-  const edgeBlobPaintModeRef = useRef(edgeBlobPaintMode)
-  const edgeBlobPaintBrushRef = useRef(edgeBlobPaintBrush)
+  const terrainEdgePaintEnabledRef = useRef(terrainEdgePaintEnabled)
   const paintEdgeBlobRef = useRef(paintEdgeBlob)
   const eraseEdgeBlobRef = useRef(eraseEdgeBlob)
   const edgeBlobPaintedRef = useRef(edgeBlobPainted)
@@ -676,8 +676,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   terrainBlobOverridesRef.current = terrainBlobOverrides
   terrainTypeBlobStylesRef.current = terrainTypeBlobStyles
   lakeOverridesRef.current = lakeOverrides
-  edgeBlobPaintModeRef.current = edgeBlobPaintMode
-  edgeBlobPaintBrushRef.current = edgeBlobPaintBrush
+  terrainEdgePaintEnabledRef.current = terrainEdgePaintEnabled
   paintEdgeBlobRef.current = paintEdgeBlob
   eraseEdgeBlobRef.current = eraseEdgeBlob
   edgeBlobPaintedRef.current = edgeBlobPainted
@@ -1172,6 +1171,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     window.addEventListener('keyup', onUp)
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
   }, [snapOverlay])
+
+  type PaintHoverTarget =
+    | { type: 'hex'; q: number; r: number; verts: [number, number][] }
+    | { type: 'edge'; p1: [number, number]; p2: [number, number]; edgeKey: string }
+    | null
+  const paintHoverTargetRef = useRef<PaintHoverTarget>(null)
 
   type ExportTarget = { canvas: HTMLCanvasElement; pw: number; ph: number }
 
@@ -1997,6 +2002,36 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       _drawExcludedHexOverlay(ctx, projected, excludedSet, mapBgColorRef.current)
     }
 
+    // Paint hover highlight (screen only — shows what clicking would paint)
+    if (!isExport && terrainPaintModeRef.current) {
+      const hoverTarget = paintHoverTargetRef.current
+      if (hoverTarget) {
+        const brush = terrainPaintBrushRef.current
+        const rawColor = terrainColorsRef.current[brush] ?? TERRAIN_COLORS[brush] ?? '#888888'
+        ctx.save()
+        if (hoverTarget.type === 'hex') {
+          ctx.globalAlpha = 0.40
+          ctx.fillStyle = rawColor
+          ctx.beginPath()
+          const { verts } = hoverTarget
+          ctx.moveTo(verts[0][0], verts[0][1])
+          for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i][0], verts[i][1])
+          ctx.closePath()
+          ctx.fill()
+        } else {
+          ctx.globalAlpha = 0.70
+          ctx.strokeStyle = rawColor
+          ctx.lineWidth = R * 0.40
+          ctx.lineCap = 'round'
+          ctx.beginPath()
+          ctx.moveTo(hoverTarget.p1[0], hoverTarget.p1[1])
+          ctx.lineTo(hoverTarget.p2[0], hoverTarget.p2[1])
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+    }
+
     ctx.restore() // clip
 
     // Hex grid mask — covers margin area (paper minus hex polygons) with background color
@@ -2432,159 +2467,171 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const clientToLogicalRef = useRef(clientToLogical)
   clientToLogicalRef.current = clientToLogical
 
-  // Paint on drag
+  // Unified terrain + edge blob paint with live hover highlight
   const isPaintingRef = useRef(false)
   const lastPaintedKeyRef = useRef<string | null>(null)
+  const lastPaintedEdgeKeyRef = useRef<string | null>(null)
 
-  const paintAtClient = useCallback((clientX: number, clientY: number) => {
+  const computeHoverTarget = useCallback((clientX: number, clientY: number): PaintHoverTarget => {
     const meta = metaRef.current
-    if (!meta) return
+    if (!meta) return null
     const logical = clientToLogical(clientX, clientY)
-    if (!logical) return
+    if (!logical) return null
     const { lx, ly, cssW, cssH } = logical
     const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
+    const R = meta.outer_radius_m * scalePxPerM
     const mgPx = meta.margin_mm * (pw / meta.paper_mm[0])
-    const marginL = px + mgPx, marginR = px + pw - mgPx
-    const marginT = py + mgPx, marginB = py + ph - mgPx
-    const inMargin = (verts: [number, number][]) =>
-      verts.every(([x, y]) => x >= marginL && x <= marginR && y >= marginT && y <= marginB)
-    for (const hex of hexesRef.current) {
-      if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
-      const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py))
-      if (!hex.partial && !inMargin(verts)) continue
-      if (pointInPolygon(lx, ly, verts)) {
-        const key = `${hex.q},${hex.r}`
-        if (key !== lastPaintedKeyRef.current) {
-          lastPaintedKeyRef.current = key
-          const brush = terrainPaintBrushRef.current
-          if (terrainLayersEnabledRef.current && brush !== 'clear') {
-            addHexTerrainLayerRef.current(hex.q, hex.r, brush)
-          } else {
-            overrideHexTerrainRef.current(hex.q, hex.r, brush)
+    const inMarginCheck = (verts: [number, number][]) =>
+      verts.every(([x, y]) => x >= px + mgPx && x <= px + pw - mgPx && y >= py + mgPx && y <= py + ph - mgPx)
+
+    const HEX_DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]
+    const SNAP = 2
+    const vk2 = (p: [number, number]) => `${Math.round(p[0] / SNAP)},${Math.round(p[1] / SNAP)}`
+
+    const hexMap = new Map<string, GeneratedHex>()
+    for (const hex of hexesRef.current) hexMap.set(`${hex.q},${hex.r}`, hex)
+
+    if (terrainEdgePaintEnabledRef.current) {
+      const threshold = R * 0.35
+      let bestDist = threshold
+      let bestEdge: { p1: [number, number]; p2: [number, number]; edgeKey: string } | null = null
+
+      for (const hex of hexesRef.current) {
+        if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
+        const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
+        const cx = verts.reduce((s, v) => s + v[0], 0) / 6
+        const cy = verts.reduce((s, v) => s + v[1], 0) / 6
+        if (Math.hypot(lx - cx, ly - cy) > R * 2) continue
+
+        for (const [dq, dr] of HEX_DIRS) {
+          const nq = hex.q + dq, nr = hex.r + dr
+          const neighbor = hexMap.get(`${nq},${nr}`)
+          if (!neighbor) continue
+          const nverts = neighbor.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
+          const nkeys = new Set(nverts.map(vk2))
+          const shared = verts.filter(v => nkeys.has(vk2(v)))
+          if (shared.length < 2) continue
+          const d = distToSeg([lx, ly], shared[0], shared[1])
+          if (d < bestDist) {
+            bestDist = d
+            bestEdge = { p1: shared[0], p2: shared[1], edgeKey: edgeBlobCanonicalKey(hex.q, hex.r, nq, nr) }
           }
         }
-        break
+      }
+
+      if (bestEdge) {
+        return { type: 'edge', p1: bestEdge.p1, p2: bestEdge.p2, edgeKey: bestEdge.edgeKey }
       }
     }
+
+    for (const hex of hexesRef.current) {
+      if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
+      const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
+      if (!hex.partial && !inMarginCheck(verts)) continue
+      if (pointInPolygon(lx, ly, verts)) {
+        return { type: 'hex', q: hex.q, r: hex.r, verts }
+      }
+    }
+
+    return null
   }, [clientToLogical])
+
+  // Clear hover when terrain paint mode is deactivated
+  useEffect(() => {
+    if (!terrainPaintMode && paintHoverTargetRef.current !== null) {
+      paintHoverTargetRef.current = null
+      draw()
+    }
+  }, [terrainPaintMode, draw])
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+
+    const hoverKey = (t: PaintHoverTarget) => {
+      if (!t) return null
+      if (t.type === 'hex') return `hex:${t.q},${t.r}`
+      return `edge:${t.edgeKey}`
+    }
+
+    const executePaint = (target: PaintHoverTarget) => {
+      if (!target) return
+      if (target.type === 'hex') {
+        const key = `${target.q},${target.r}`
+        if (key !== lastPaintedKeyRef.current) {
+          lastPaintedKeyRef.current = key
+          const brush = terrainPaintBrushRef.current
+          if (terrainLayersEnabledRef.current && brush !== 'clear') {
+            addHexTerrainLayerRef.current(target.q, target.r, brush)
+          } else {
+            overrideHexTerrainRef.current(target.q, target.r, brush)
+          }
+        }
+      } else {
+        if (target.edgeKey !== lastPaintedEdgeKeyRef.current) {
+          lastPaintedEdgeKeyRef.current = target.edgeKey
+          const brush = terrainPaintBrushRef.current
+          if (brush === 'clear') {
+            eraseEdgeBlobRef.current(target.edgeKey)
+          } else {
+            paintEdgeBlobRef.current(target.edgeKey, brush)
+          }
+        }
+      }
+    }
+
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return
       if ((e.target as HTMLElement).tagName !== 'CANVAS') return
       if (!terrainPaintModeRef.current) return
       isPaintingRef.current = true
       lastPaintedKeyRef.current = null
+      lastPaintedEdgeKeyRef.current = null
       setIsTerrainPainting(true)
-      paintAtClient(e.clientX, e.clientY)
+      const target = computeHoverTarget(e.clientX, e.clientY)
+      paintHoverTargetRef.current = target
+      executePaint(target)
     }
+
     const onMove = (e: MouseEvent) => {
-      if (!isPaintingRef.current || !terrainPaintModeRef.current) return
-      paintAtClient(e.clientX, e.clientY)
+      if (!terrainPaintModeRef.current) {
+        if (paintHoverTargetRef.current !== null) {
+          paintHoverTargetRef.current = null
+          draw()
+        }
+        return
+      }
+      const target = computeHoverTarget(e.clientX, e.clientY)
+      const changed = hoverKey(target) !== hoverKey(paintHoverTargetRef.current)
+      paintHoverTargetRef.current = target
+      if (changed) draw()
+      if (isPaintingRef.current) executePaint(target)
     }
+
     const onUp = () => {
       if (isPaintingRef.current && terrainPaintModeRef.current) setIsTerrainPainting(false)
       isPaintingRef.current = false
     }
+
+    const onLeave = () => {
+      if (paintHoverTargetRef.current !== null) {
+        paintHoverTargetRef.current = null
+        draw()
+      }
+    }
+
     el.addEventListener('mousedown', onDown)
+    el.addEventListener('mouseleave', onLeave)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
       el.removeEventListener('mousedown', onDown)
+      el.removeEventListener('mouseleave', onLeave)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [paintAtClient])
-
-  // Edge blob paint — click/drag near an edge to paint or erase it
-  const isEdgePaintingRef = useRef(false)
-  const lastPaintedEdgeKeyRef = useRef<string | null>(null)
-
-  const paintEdgeAtClient = useCallback((clientX: number, clientY: number) => {
-    const meta = metaRef.current
-    if (!meta) return
-    const logical = clientToLogical(clientX, clientY)
-    if (!logical) return
-    const { lx, ly, cssW, cssH } = logical
-    const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
-    const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
-    const R = meta.outer_radius_m * scalePxPerM
-    const threshold = R * 0.35
-
-    // Build a quick hex lookup
-    const hexMap = new Map<string, GeneratedHex>()
-    for (const hex of hexesRef.current) hexMap.set(`${hex.q},${hex.r}`, hex)
-
-    const HEX_DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]
-    const SNAP = 2
-    const vk2 = (p: [number, number]) => `${Math.round(p[0] / SNAP)},${Math.round(p[1] / SNAP)}`
-
-    let bestDist = threshold
-    let bestEdgeKey: string | null = null
-
-    for (const hex of hexesRef.current) {
-      if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
-      const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
-      // Quick reject: if hex center is far away, skip
-      const cx = verts.reduce((s, v) => s + v[0], 0) / 6
-      const cy = verts.reduce((s, v) => s + v[1], 0) / 6
-      if (Math.hypot(lx - cx, ly - cy) > R * 2) continue
-
-      for (const [dq, dr] of HEX_DIRS) {
-        const nq = hex.q + dq, nr = hex.r + dr
-        const neighbor = hexMap.get(`${nq},${nr}`)
-        if (!neighbor) continue
-        const nverts = neighbor.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
-        // Find shared vertices
-        const nkeys = new Set(nverts.map(vk2))
-        const shared = verts.filter(v => nkeys.has(vk2(v)))
-        if (shared.length < 2) continue
-        const d = distToSeg([lx, ly], shared[0], shared[1])
-        if (d < bestDist) {
-          bestDist = d
-          bestEdgeKey = edgeBlobCanonicalKey(hex.q, hex.r, nq, nr)
-        }
-      }
-    }
-
-    if (bestEdgeKey && bestEdgeKey !== lastPaintedEdgeKeyRef.current) {
-      lastPaintedEdgeKeyRef.current = bestEdgeKey
-      const brush = edgeBlobPaintBrushRef.current
-      if (brush === 'clear') {
-        eraseEdgeBlobRef.current(bestEdgeKey)
-      } else {
-        paintEdgeBlobRef.current(bestEdgeKey, brush)
-      }
-    }
-  }, [clientToLogical])
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const onDown = (e: MouseEvent) => {
-      if (e.button !== 0) return
-      if ((e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (!edgeBlobPaintModeRef.current) return
-      isEdgePaintingRef.current = true
-      lastPaintedEdgeKeyRef.current = null
-      paintEdgeAtClient(e.clientX, e.clientY)
-    }
-    const onMove = (e: MouseEvent) => {
-      if (!isEdgePaintingRef.current || !edgeBlobPaintModeRef.current) return
-      paintEdgeAtClient(e.clientX, e.clientY)
-    }
-    const onUp = () => { isEdgePaintingRef.current = false }
-    el.addEventListener('mousedown', onDown)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      el.removeEventListener('mousedown', onDown)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [paintEdgeAtClient])
+  }, [computeHoverTarget, draw])
 
   // Hex mask paint — exclude/include hexes by click-drag
   const hexMaskPaintAtClient = useCallback((clientX: number, clientY: number, mode: 'exclude' | 'include', lastKey: { v: string | null }) => {

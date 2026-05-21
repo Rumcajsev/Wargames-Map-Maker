@@ -275,7 +275,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 32,
+      version: 33,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         mapMode: s.mapMode, diptychJoin: s.diptychJoin,
@@ -548,6 +548,9 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (s.edgeBlobLobeThreshold === undefined) s.edgeBlobLobeThreshold = 0.08
     if (s.edgeBlobLobeDirection === undefined) s.edgeBlobLobeDirection = -1
     if (s.edgeBlobWidth === undefined) s.edgeBlobWidth = 0.25
+  }
+  if (fromVersion < 33) {
+    if (s.terrainEdgePaintEnabled === undefined) s.terrainEdgePaintEnabled = false
   }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
