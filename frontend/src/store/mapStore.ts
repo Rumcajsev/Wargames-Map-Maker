@@ -15,6 +15,7 @@ import { type UndoSlice, createUndoSlice } from './slices/undoSlice'
 import { type UiSlice, createUiSlice, migratePersisted, rehydrateState } from './slices/uiSlice'
 import { type BridgesSlice, createBridgesSlice } from './slices/bridgesSlice'
 import { type MegaHexSlice, createMegaHexSlice } from './slices/megaHexSlice'
+import { type AreasSlice, createAreasSlice } from './slices/areasSlice'
 
 export interface RoadGeomOverride {
   wiggleAmp: number
@@ -29,6 +30,27 @@ export interface RailGeomOverride {
   pathSmoothing: number
   smoothing: number
 }
+
+export interface MapArea {
+  id: string
+  name: string
+  color: string
+  labelOffset?: [number, number]
+}
+
+export interface AreasStyle {
+  borderWidth: number
+  labelSize: number
+}
+
+export interface AreasGenParams {
+  targetSize: number
+  riverWeight: number
+  terrainWeight: number
+}
+
+export const DEFAULT_AREAS_STYLE: AreasStyle = { borderWidth: 2.0, labelSize: 1.0 }
+export const DEFAULT_AREAS_GEN_PARAMS: AreasGenParams = { targetSize: 8, riverWeight: 0.7, terrainWeight: 2.0 }
 
 export interface BlobOverride {
   terrain?: string
@@ -92,6 +114,8 @@ export type ActiveTool =
   | { type: 'rail-select' }
   | { type: 'hex-mask'; mode: 'exclude' | 'include' }
   | { type: 'mega-hex-origin' }
+  | { type: 'area-paint'; id: string }
+  | { type: 'area-erase' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -460,6 +484,8 @@ export interface UndoSnapshot {
   railEdges: RailEdge[]
   riverEdges: { q1: number; r1: number; q2: number; r2: number }[]
   settlements: Settlement[]
+  areas?: MapArea[]
+  areaHexes?: Record<string, string>
 }
 
 export interface GenerateProgress {
@@ -482,7 +508,8 @@ export type MapStore =
   UndoSlice &
   UiSlice &
   BridgesSlice &
-  MegaHexSlice
+  MegaHexSlice &
+  AreasSlice
 
 export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createSetupSlice(set, get),
@@ -499,6 +526,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createUiSlice(set, get),
   ...createBridgesSlice(set, get),
   ...createMegaHexSlice(set),
+  ...createAreasSlice(set, get),
 }), {
   name: 'ig2-map-store',
   storage: {
@@ -673,6 +701,11 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     highlightedHexes: s.highlightedHexes,
     highlightLines: s.highlightLines,
     highlightEdgePaths: s.highlightEdgePaths,
+    areasMode: s.areasMode,
+    areas: s.areas,
+    areaHexes: s.areaHexes,
+    areasStyle: s.areasStyle,
+    areasGenParams: s.areasGenParams,
     iconOverlays: s.iconOverlays,
     placedIcons: s.placedIcons,
     labelOverlays: s.labelOverlays,
@@ -685,7 +718,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     bridgeTiers: s.bridgeTiers,
     bridgeOverrides: s.bridgeOverrides,
   }),
-  version: 33,
+  version: 34,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))
