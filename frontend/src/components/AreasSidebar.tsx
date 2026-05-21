@@ -25,7 +25,6 @@ function AreaRow({
       }}
       onClick={onSelect}
     >
-      {/* Color swatch / picker */}
       <input
         type="color"
         value={area.color}
@@ -33,7 +32,6 @@ function AreaRow({
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => onColorChange(e.target.value)}
       />
-      {/* Name */}
       <input
         type="text"
         value={area.name}
@@ -45,9 +43,7 @@ function AreaRow({
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => onRename(e.target.value)}
       />
-      {/* Hex count badge */}
       <span style={{ fontSize: 9, color: '#4a4a6a', flexShrink: 0 }}>{hexCount}</span>
-      {/* Delete */}
       <button
         style={{
           background: 'none', border: 'none', color: '#5a3a3a', cursor: 'pointer',
@@ -70,46 +66,51 @@ export function AreasSidebar() {
     areasStyle, setAreasStyle,
     areasGenParams, setAreasGenParams,
     generateAreas,
-    addArea, updateArea, deleteArea,
+    updateArea, deleteArea,
     eraseAllHexesForArea,
     activeTool, setActiveTool,
   } = useMapStore()
 
-  // Hex counts per area
   const hexCountByArea: Record<string, number> = {}
   for (const aId of Object.values(areaHexes)) {
     hexCountByArea[aId] = (hexCountByArea[aId] ?? 0) + 1
   }
 
-  const handleSelectArea = (id: string) => {
-    setActiveAreaId(id)
-    setActiveTool({ type: 'area-paint', id })
-  }
-
-  const handleClearAll = () => {
-    // Reset to empty (store action via direct state update)
-    for (const area of areas) eraseAllHexesForArea(area.id)
-    // Note: areas list stays, just hexes cleared. User can also delete areas individually.
-  }
-
   return (
     <div style={sidebarStyle}>
 
-      {/* ── Mode toggle ──────────────────────────────────────────────────── */}
+      {/* ── Mode + tool ───────────────────────────────────────────────── */}
       <div style={sectionStyle}>
         <div style={{ ...labelStyle, marginBottom: 8 }}>Areas Map Mode</div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
           <button style={modeBtn(areasMode)} onClick={() => setAreasMode(true)}>On</button>
           <button style={modeBtn(!areasMode)} onClick={() => setAreasMode(false)}>Off</button>
         </div>
         {areasMode && (
-          <div style={{ marginTop: 6, fontSize: 10, color: '#4a6a4a' }}>
-            Hex borders hidden
-          </div>
+          <>
+            <div style={{ ...labelStyle, marginBottom: 6 }}>Tool</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                style={modeBtn(activeTool.type === 'areas-draw')}
+                onClick={() => setActiveTool({ type: 'areas-draw' })}
+              >
+                Draw
+              </button>
+              <button
+                style={modeBtn(activeTool.type === 'areas-erase')}
+                onClick={() => setActiveTool({ type: 'areas-erase' })}
+              >
+                Erase
+              </button>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 10, color: '#4a5a4a', lineHeight: 1.4 }}>
+              Click empty terrain to create · drag from area to expand
+            </div>
+          </>
         )}
       </div>
 
-      {/* ── Auto-generate ─────────────────────────────────────────────────── */}
+      {/* ── Auto-generate ─────────────────────────────────────────────── */}
       <div style={sectionStyle}>
         <div style={labelStyle}>Generate</div>
         <div style={{ marginBottom: 6 }}>
@@ -145,34 +146,51 @@ export function AreasSidebar() {
             onChange={(e) => setAreasGenParams({ terrainWeight: +e.target.value })}
           />
         </div>
-        <button
-          style={{
-            width: '100%', padding: '5px 0', fontSize: 10, letterSpacing: 0.5,
-            textTransform: 'uppercase', background: '#1a2a3a', border: '1px solid #2a3a5a',
-            color: '#8ab0e0', borderRadius: 3, cursor: 'pointer', marginBottom: 4,
-            fontFamily: 'ui-monospace, monospace',
-          }}
-          onClick={generateAreas}
-        >
-          Generate Areas
-        </button>
-        <button
-          style={{
-            width: '100%', padding: '4px 0', fontSize: 10, letterSpacing: 0.5,
-            textTransform: 'uppercase', background: 'none', border: '1px solid #2a2a4a',
-            color: '#4a4a6a', borderRadius: 3, cursor: 'pointer',
-            fontFamily: 'ui-monospace, monospace',
-          }}
-          onClick={handleClearAll}
-        >
-          Clear Hexes
-        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button
+            style={{
+              flex: 1, padding: '5px 0', fontSize: 10, letterSpacing: 0.5,
+              textTransform: 'uppercase', background: '#1a2a3a', border: '1px solid #2a3a5a',
+              color: '#8ab0e0', borderRadius: 3, cursor: 'pointer',
+              fontFamily: 'ui-monospace, monospace',
+            }}
+            onClick={generateAreas}
+          >
+            Generate
+          </button>
+          <button
+            style={{
+              flex: 1, padding: '5px 0', fontSize: 10, letterSpacing: 0.5,
+              textTransform: 'uppercase', background: 'none', border: '1px solid #2a2a4a',
+              color: '#4a4a6a', borderRadius: 3, cursor: 'pointer',
+              fontFamily: 'ui-monospace, monospace',
+            }}
+            onClick={() => {
+              for (const area of areas) eraseAllHexesForArea(area.id)
+            }}
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
-      {/* ── Area list ─────────────────────────────────────────────────────── */}
+      {/* ── Area list ─────────────────────────────────────────────────── */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <span style={labelStyle}>Areas ({areas.length})</span>
+          {activeAreaId && (
+            <button
+              style={{
+                background: 'none', border: '1px solid #3a2a2a', color: '#6a4a4a',
+                fontSize: 10, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
+                fontFamily: 'ui-monospace, monospace',
+              }}
+              onClick={() => eraseAllHexesForArea(activeAreaId)}
+              title="Clear all hexes from this area"
+            >
+              Clear area
+            </button>
+          )}
         </div>
         <div style={{ overflowY: 'auto', maxHeight: 220 }}>
           {areas.map((area) => (
@@ -181,7 +199,7 @@ export function AreasSidebar() {
               area={area}
               isActive={activeAreaId === area.id}
               hexCount={hexCountByArea[area.id] ?? 0}
-              onSelect={() => handleSelectArea(area.id)}
+              onSelect={() => setActiveAreaId(area.id)}
               onRename={(name) => updateArea(area.id, { name })}
               onColorChange={(color) => updateArea(area.id, { color })}
               onDelete={() => deleteArea(area.id)}
@@ -189,61 +207,13 @@ export function AreasSidebar() {
           ))}
           {areas.length === 0 && (
             <div style={{ color: '#3a3a5a', fontSize: 11, paddingTop: 4 }}>
-              No areas yet. Generate or add one.
+              No areas yet — Generate or draw on the map.
             </div>
           )}
         </div>
-        <button
-          style={{
-            width: '100%', marginTop: 8, padding: '4px 0', fontSize: 10, letterSpacing: 0.5,
-            textTransform: 'uppercase', background: 'none', border: '1px solid #2a2a4a',
-            color: '#6a8a6a', borderRadius: 3, cursor: 'pointer',
-            fontFamily: 'ui-monospace, monospace',
-          }}
-          onClick={() => {
-            const idx = areas.length
-            const COLORS = ['#5a3a1a','#1a3a5a','#1a5a3a','#5a1a3a','#3a5a1a','#3a1a5a','#5a4a3a','#1a5a5a']
-            const id = addArea(`Area ${idx + 1}`, COLORS[idx % COLORS.length])
-            handleSelectArea(id)
-          }}
-        >
-          + Add Area
-        </button>
       </div>
 
-      {/* ── Paint tools (active area only) ───────────────────────────────── */}
-      {activeAreaId && (
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Paint</div>
-          <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-            <button
-              style={modeBtn(activeTool.type === 'area-paint')}
-              onClick={() => setActiveTool({ type: 'area-paint', id: activeAreaId })}
-            >
-              Paint
-            </button>
-            <button
-              style={modeBtn(activeTool.type === 'area-erase')}
-              onClick={() => setActiveTool({ type: 'area-erase' })}
-            >
-              Erase
-            </button>
-          </div>
-          <button
-            style={{
-              width: '100%', padding: '4px 0', fontSize: 10, letterSpacing: 0.5,
-              textTransform: 'uppercase', background: 'none', border: '1px solid #2a2a4a',
-              color: '#6a4a4a', borderRadius: 3, cursor: 'pointer',
-              fontFamily: 'ui-monospace, monospace',
-            }}
-            onClick={() => eraseAllHexesForArea(activeAreaId)}
-          >
-            Clear Area
-          </button>
-        </div>
-      )}
-
-      {/* ── Style ─────────────────────────────────────────────────────────── */}
+      {/* ── Style ─────────────────────────────────────────────────────── */}
       <div style={sectionStyle}>
         <div style={labelStyle}>Style</div>
         <div style={{ marginBottom: 6 }}>

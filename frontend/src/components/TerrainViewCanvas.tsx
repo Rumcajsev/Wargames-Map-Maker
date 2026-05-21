@@ -211,7 +211,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth,
     megaHexOriginQ, megaHexOriginR, setMegaHexOrigin,
     areasMode, areas, areaHexes, areasStyle, activeAreaId,
-    paintHexArea, eraseHexArea,
+    paintHexArea, eraseHexArea, addArea,
   } = useMapStore()
   const mapModeRef = useRef(mapMode)
   const diptychJoinRef = useRef(diptychJoin)
@@ -445,6 +445,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const activeAreaIdRef = useRef(activeAreaId)
   const paintHexAreaRef = useRef(paintHexArea)
   const eraseHexAreaRef = useRef(eraseHexArea)
+  const addAreaRef = useRef(addArea)
   const highlightLineEraserRef = useRef(highlightLineEraser)
   const activeToolRef = useRef(activeTool)
   const setHexHighlightRef = useRef(setHexHighlight)
@@ -550,6 +551,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   activeAreaIdRef.current = activeAreaId
   paintHexAreaRef.current = paintHexArea
   eraseHexAreaRef.current = eraseHexArea
+  addAreaRef.current = addArea
   highlightLineEraserRef.current = highlightLineEraser
   activeToolRef.current = activeTool
   setHexHighlightRef.current = setHexHighlight
@@ -2449,6 +2451,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (e.button === 0 && (e.target as HTMLElement).tagName !== 'CANVAS') return
       if (e.button === 0 && (terrainPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current || activeToolRef.current.type === 'hex-mask' || activeToolRef.current.type === 'mega-hex-origin')) return
       if (e.button === 0 && activePanelRef.current === 'highlights' && (highlightPaintModeRef.current || highlightLineEraserRef.current)) return
+      if (e.button === 0 && activePanelRef.current === 'areas' && (activeToolRef.current.type === 'areas-draw' || activeToolRef.current.type === 'areas-erase')) return
       if (e.button === 0 && draggingCpKeyRef.current) return
       e.preventDefault()
       isPanningRef.current = true
@@ -3345,6 +3348,93 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     const onUp = () => { painting = false; prevHex = null; segmentStarted = false; lastPainted = null }
+
+    el.addEventListener('mousedown', onDown, { capture: true })
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown, { capture: true })
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [clientToLogical])
+
+  // Area draw/erase drag — click empty hex to create new area, drag from existing to expand it
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    let painting = false
+    let dragAreaId: string | null = null
+    let eraseMode = false
+    let lastPainted: string | null = null
+
+    const AREA_COLORS = ['#5a3a1a', '#1a3a5a', '#1a5a3a', '#5a1a3a', '#3a5a1a', '#3a1a5a', '#5a4a3a', '#1a5a5a']
+    const TERRAIN_NAMES: Record<string, string> = {
+      woods: 'Woods', light_woods: 'Forest', rough: 'Hills', marsh: 'Marsh', sea: 'Sea', clear: 'Fields',
+    }
+
+    const hexAtClient = (clientX: number, clientY: number) => {
+      const meta = metaRef.current
+      if (!meta) return null
+      const logical = clientToLogical(clientX, clientY)
+      if (!logical) return null
+      const { lx, ly, cssW, cssH } = logical
+      const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+      for (const hex of hexesRef.current) {
+        if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
+        const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py))
+        if (pointInPolygon(lx, ly, verts)) return hex
+      }
+      return null
+    }
+
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      if ((e.target as HTMLElement).tagName !== 'CANVAS') return
+      if (activePanelRef.current !== 'areas') return
+      const tool = activeToolRef.current
+      if (tool.type !== 'areas-draw' && tool.type !== 'areas-erase') return
+      e.stopPropagation()
+      const hex = hexAtClient(e.clientX, e.clientY)
+      if (!hex) return
+      painting = true
+      eraseMode = tool.type === 'areas-erase'
+      const key = `${hex.q},${hex.r}`
+      lastPainted = key
+      if (eraseMode) {
+        eraseHexAreaRef.current(hex.q, hex.r)
+      } else {
+        const existingId = areaHexesRef.current[key]
+        if (existingId) {
+          dragAreaId = existingId
+          setActiveAreaIdRef.current(existingId)
+        } else {
+          const idx = areasRef.current.length
+          const color = AREA_COLORS[idx % AREA_COLORS.length]
+          const name = TERRAIN_NAMES[hex.terrain] ?? `Area ${idx + 1}`
+          const newId = addAreaRef.current(name, color)
+          paintHexAreaRef.current(hex.q, hex.r, newId)
+          dragAreaId = newId
+          setActiveAreaIdRef.current(newId)
+        }
+      }
+    }
+
+    const onMove = (e: MouseEvent) => {
+      if (!painting) return
+      const hex = hexAtClient(e.clientX, e.clientY)
+      if (!hex) return
+      const key = `${hex.q},${hex.r}`
+      if (key === lastPainted) return
+      lastPainted = key
+      if (eraseMode) {
+        eraseHexAreaRef.current(hex.q, hex.r)
+      } else if (dragAreaId) {
+        paintHexAreaRef.current(hex.q, hex.r, dragAreaId)
+      }
+    }
+
+    const onUp = () => { painting = false; dragAreaId = null; eraseMode = false; lastPainted = null }
 
     el.addEventListener('mousedown', onDown, { capture: true })
     window.addEventListener('mousemove', onMove)
@@ -4456,17 +4546,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             if (highlightedHexesRef.current[key]) {
               clearHexHighlightRef.current(hex.q, hex.r)
             }
-            return
-          }
-        }
-        if (activePanelRef.current === 'areas') {
-          const tool = activeToolRef.current
-          if (tool.type === 'area-paint') {
-            paintHexAreaRef.current(hex.q, hex.r, tool.id)
-            return
-          }
-          if (tool.type === 'area-erase') {
-            eraseHexAreaRef.current(hex.q, hex.r)
             return
           }
         }

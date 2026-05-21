@@ -61,11 +61,12 @@ export function createAreasSlice(
 
     setAreasMode: (v) => set((s) => {
       const updates: Partial<MapStore> = { areasMode: v }
-      if (!v) {
-        const t = s.activeTool.type
-        if (t === 'area-paint' || t === 'area-erase') {
-          updates.activeTool = { type: 'none' }
-        }
+      const t = s.activeTool.type
+      if (v && t !== 'areas-draw' && t !== 'areas-erase') {
+        updates.activeTool = { type: 'areas-draw' }
+      }
+      if (!v && (t === 'areas-draw' || t === 'areas-erase')) {
+        updates.activeTool = { type: 'none' }
       }
       return updates
     }),
@@ -95,8 +96,8 @@ export function createAreasSlice(
       }
       if (s.activeAreaId === id) updates.activeAreaId = null
       const t = s.activeTool
-      if ((t.type === 'area-paint' && t.id === id) || t.type === 'area-erase') {
-        updates.activeTool = { type: 'none' }
+      if (t.type === 'areas-draw' || t.type === 'areas-erase') {
+        updates.activeTool = { type: 'areas-draw' }
       }
       return updates
     }),

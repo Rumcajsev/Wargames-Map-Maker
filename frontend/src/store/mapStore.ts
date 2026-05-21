@@ -114,8 +114,8 @@ export type ActiveTool =
   | { type: 'rail-select' }
   | { type: 'hex-mask'; mode: 'exclude' | 'include' }
   | { type: 'mega-hex-origin' }
-  | { type: 'area-paint'; id: string }
-  | { type: 'area-erase' }
+  | { type: 'areas-draw' }
+  | { type: 'areas-erase' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
