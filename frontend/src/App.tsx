@@ -9,6 +9,7 @@ import { RiversSidebar } from './components/RiversSidebar'
 import { DisplaySidebar } from './components/DisplaySidebar'
 import { SettlementsSidebar } from './components/SettlementsSidebar'
 import { HighlightsSidebar } from './components/HighlightsSidebar'
+import { AreasSidebar } from './components/AreasSidebar'
 import { TerrainViewCanvas, type TerrainViewCanvasHandle } from './components/TerrainViewCanvas'
 
 function App() {
@@ -65,7 +66,7 @@ function App() {
             </div>
           )}
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-            {activePanel === 'display' ? <DisplaySidebar /> : activePanel === 'roads' ? <RoadsSidebar /> : activePanel === 'rivers' ? <RiversSidebar /> : activePanel === 'settlements' ? <SettlementsSidebar /> : activePanel === 'highlights' ? <HighlightsSidebar /> : <TerrainSidebar />}
+            {activePanel === 'display' ? <DisplaySidebar /> : activePanel === 'roads' ? <RoadsSidebar /> : activePanel === 'rivers' ? <RiversSidebar /> : activePanel === 'settlements' ? <SettlementsSidebar /> : activePanel === 'highlights' ? <HighlightsSidebar /> : activePanel === 'areas' ? <AreasSidebar /> : <TerrainSidebar />}
             <TerrainViewCanvas ref={canvasHandleRef} />
           </div>
         </>
