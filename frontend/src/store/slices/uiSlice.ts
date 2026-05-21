@@ -2,7 +2,7 @@ import type { MapStore, ActiveTool, UrbanStyle, RoadEdge } from '../mapStore'
 import { DEFAULT_URBAN_STYLE } from '../mapStore'
 
 export type UiSlice = {
-  activePanel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'highlights'
+  activePanel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'highlights' | 'areas'
   activeTool: ActiveTool
   urbanHexes: Array<{ q: number; r: number }>
   urbanStyle: UrbanStyle
@@ -37,7 +37,7 @@ export type UiSlice = {
   mapBorderWidth: number
   clipToHexGrid: boolean
   excludedHexKeys: string[]
-  setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style') => void
+  setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'areas') => void
   setActiveTool: (tool: ActiveTool) => void
   toggleUrbanHex: (q: number, r: number) => void
   setUrbanStyle: (style: Partial<UrbanStyle>) => void
@@ -551,6 +551,14 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 33) {
     if (s.terrainEdgePaintEnabled === undefined) s.terrainEdgePaintEnabled = false
+  }
+  if (fromVersion < 34) {
+    if (!s.areas) s.areas = []
+    if (!s.areaHexes) s.areaHexes = {}
+    if (s.areasMode === undefined) s.areasMode = false
+    if (!s.areasStyle) s.areasStyle = { borderWidth: 2.0, labelSize: 1.0 }
+    if (!s.areasGenParams) s.areasGenParams = { targetSize: 8, riverWeight: 0.7, terrainWeight: 2.0 }
+    if (s.activeAreaId === undefined) s.activeAreaId = null
   }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s
