@@ -556,9 +556,12 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.areas) s.areas = []
     if (!s.areaHexes) s.areaHexes = {}
     if (s.areasMode === undefined) s.areasMode = false
-    if (!s.areasStyle) s.areasStyle = { borderWidth: 2.0, labelSize: 1.0 }
+    if (!s.areasStyle) s.areasStyle = { borderWidth: 2.0, labelSize: 1.0, borderColor: '#2c1a00' }
     if (!s.areasGenParams) s.areasGenParams = { targetSize: 8, riverWeight: 0.7, terrainWeight: 2.0 }
     if (s.activeAreaId === undefined) s.activeAreaId = null
+  }
+  if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
+    (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s

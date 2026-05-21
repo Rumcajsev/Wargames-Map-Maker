@@ -56,7 +56,7 @@ export function createAreasSlice(
     areas: [],
     areaHexes: {},
     activeAreaId: null,
-    areasStyle: { borderWidth: 2.0, labelSize: 1.0 },
+    areasStyle: { borderWidth: 2.0, labelSize: 1.0, borderColor: '#2c1a00' },
     areasGenParams: { targetSize: 8, riverWeight: 0.7, terrainWeight: 2.0 },
 
     setAreasMode: (v) => set((s) => {

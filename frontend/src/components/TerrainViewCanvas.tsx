@@ -1545,7 +1545,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           const oCtx = offscreen.getContext('2d')!
           oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
-          _drawAreas(oCtx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, edgeMode, inMargin, R, style: areasStyleRef.current })
+          _drawAreas(oCtx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, riverEdges: riverEdgesRef.current, canalEdges: canalEdgesRef.current, edgeMode, inMargin, R, style: areasStyleRef.current })
           areasLayerRef.current = offscreen
           areasDirtyRef.current = false
           areasLayerPapWRef.current = papW
@@ -1554,7 +1554,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.drawImage(areasLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        _drawAreas(ctx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, edgeMode, inMargin, R, style: areasStyleRef.current, lineScale })
+        _drawAreas(ctx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, riverEdges: riverEdgesRef.current, canalEdges: canalEdgesRef.current, edgeMode, inMargin, R, style: areasStyleRef.current, lineScale })
       }
     }
 
@@ -2366,7 +2366,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Invalidate highlights offscreen layer whenever highlight data changes
   useEffect(() => { joinedHighlightsDirtyRef.current = true }, [highlights, highlightedHexes, highlightLines, highlightEdgePaths])
-  useEffect(() => { areasDirtyRef.current = true }, [areas, areaHexes, areasStyle, areasMode])
+  useEffect(() => { areasDirtyRef.current = true }, [areas, areaHexes, areasStyle, areasMode, riverEdges, canalEdges])
 
   // ResizeObserver — canvas fills the full container
   const meta = generatedMetadata

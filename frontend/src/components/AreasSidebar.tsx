@@ -227,7 +227,7 @@ export function AreasSidebar() {
             onChange={(e) => setAreasStyle({ borderWidth: +e.target.value })}
           />
         </div>
-        <div>
+        <div style={{ marginBottom: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
             <span>Label size</span>
             <span style={{ color: '#8ab0e0' }}>{areasStyle.labelSize.toFixed(1)}×</span>
@@ -236,6 +236,15 @@ export function AreasSidebar() {
             type="range" min={0.5} max={2.5} step={0.1} value={areasStyle.labelSize}
             style={{ width: '100%' }}
             onChange={(e) => setAreasStyle({ labelSize: +e.target.value })}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Border color</span>
+          <input
+            type="color"
+            value={areasStyle.borderColor ?? '#2c1a00'}
+            style={{ width: 28, height: 20, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+            onChange={(e) => setAreasStyle({ borderColor: e.target.value })}
           />
         </div>
       </div>

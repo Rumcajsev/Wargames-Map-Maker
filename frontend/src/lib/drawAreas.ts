@@ -10,6 +10,8 @@ export type DrawAreasParams = {
   areas: MapArea[]
   areaHexes: Record<string, string>
   projected: { hex: GeneratedHex; verts: [number, number][] }[]
+  riverEdges: { q1: number; r1: number; q2: number; r2: number }[]
+  canalEdges: { q1: number; r1: number; q2: number; r2: number }[]
   edgeMode: string
   inMargin: (verts: [number, number][]) => boolean
   R: number
@@ -19,12 +21,58 @@ export type DrawAreasParams = {
 
 const vKey = (v: [number, number]) => `${Math.round(v[0] * 10)},${Math.round(v[1] * 10)}`
 
+function edgePairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+
+/** Build a set of canonical vertex-pair keys for all edges that run along a
+ *  river or canal.  These edges should NOT get an area border drawn over them
+ *  because the river itself acts as the natural boundary.  Two hex vertices are
+ *  considered shared when they are within 2 canvas-pixels of each other. */
+function buildRiverEdgeVertexPairs(
+  riverEdges: { q1: number; r1: number; q2: number; r2: number }[],
+  canalEdges: { q1: number; r1: number; q2: number; r2: number }[],
+  projected: { hex: GeneratedHex; verts: [number, number][] }[],
+): Set<string> {
+  const projByKey = new Map<string, [number, number][]>()
+  for (const { hex, verts } of projected) {
+    projByKey.set(`${hex.q},${hex.r}`, verts)
+  }
+
+  const pairs = new Set<string>()
+
+  for (const e of [...riverEdges, ...canalEdges]) {
+    const verts1 = projByKey.get(`${e.q1},${e.r1}`)
+    const verts2 = projByKey.get(`${e.q2},${e.r2}`)
+    if (!verts1 || !verts2) continue
+
+    // Find the two canvas-vertices shared by the two adjacent hexes
+    const shared: [number, number][] = []
+    for (const v1 of verts1) {
+      for (const v2 of verts2) {
+        if (Math.hypot(v1[0] - v2[0], v1[1] - v2[1]) < 2) {
+          shared.push(v1)
+          break
+        }
+      }
+    }
+    if (shared.length === 2) {
+      pairs.add(edgePairKey(vKey(shared[0]), vKey(shared[1])))
+    }
+  }
+
+  return pairs
+}
+
 export function drawAreas(ctx: Ctx, {
-  areas, areaHexes, projected, edgeMode, inMargin, R, style, lineScale,
+  areas, areaHexes, projected, riverEdges, canalEdges, edgeMode, inMargin, R, style, lineScale,
 }: DrawAreasParams): void {
   if (areas.length === 0) return
   ctx.save()
   const ls = lineScale ?? 1
+
+  // Build river edge vertex-pair skip set once for the whole call
+  const riverVertexPairs = buildRiverEdgeVertexPairs(riverEdges, canalEdges, projected)
 
   // Pre-group: build vertex ring lists per area id
   const ringsByArea = new Map<string, [number, number][][]>()
@@ -59,6 +107,9 @@ export function drawAreas(ctx: Ctx, {
     hexCountByArea.set(aId, (hexCountByArea.get(aId) ?? 0) + 1)
   }
 
+  // Shared border style — one color for all area outlines
+  const borderColor = style.borderColor ?? '#2c1a00'
+
   // Draw each area: boundary outline then label
   for (const area of areas) {
     const hexVerts = ringsByArea.get(area.id)
@@ -73,7 +124,7 @@ export function drawAreas(ctx: Ctx, {
       for (let i = 0; i < 6; i++) {
         const v1 = verts[i], v2 = verts[(i + 1) % 6]
         const k1 = vKey(v1), k2 = vKey(v2)
-        const ek = k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`
+        const ek = edgePairKey(k1, k2)
         edgeCount.set(ek, (edgeCount.get(ek) ?? 0) + 1)
         allDirEdges.push([v1, v2])
       }
@@ -81,8 +132,12 @@ export function drawAreas(ctx: Ctx, {
 
     const outerEdges = allDirEdges.filter(([v1, v2]) => {
       const k1 = vKey(v1), k2 = vKey(v2)
-      const ek = k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`
-      return edgeCount.get(ek) === 1
+      const ek = edgePairKey(k1, k2)
+      // Skip shared internal edges (between two hexes of same area)
+      if (edgeCount.get(ek) !== 1) return false
+      // Skip edges that run along a river — the river is the visual border
+      if (riverVertexPairs.has(ek)) return false
+      return true
     })
     if (outerEdges.length === 0) continue
 
@@ -113,7 +168,7 @@ export function drawAreas(ctx: Ctx, {
 
     // ── Stroke boundary ─────────────────────────────────────────────────────
     ctx.save()
-    ctx.strokeStyle = area.color
+    ctx.strokeStyle = borderColor
     ctx.lineWidth = style.borderWidth * ls
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
@@ -144,7 +199,7 @@ export function drawAreas(ctx: Ctx, {
     ctx.strokeStyle = 'rgba(255,255,255,0.75)'
     ctx.lineWidth = 3 * ls
     ctx.strokeText(area.name, lx, ly)
-    // Fill
+    // Fill — label color stays per-area for visual variety
     ctx.fillStyle = area.color
     ctx.fillText(area.name, lx, ly)
     ctx.restore()

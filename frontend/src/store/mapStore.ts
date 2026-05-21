@@ -41,6 +41,7 @@ export interface MapArea {
 export interface AreasStyle {
   borderWidth: number
   labelSize: number
+  borderColor: string
 }
 
 export interface AreasGenParams {
@@ -49,7 +50,7 @@ export interface AreasGenParams {
   terrainWeight: number
 }
 
-export const DEFAULT_AREAS_STYLE: AreasStyle = { borderWidth: 2.0, labelSize: 1.0 }
+export const DEFAULT_AREAS_STYLE: AreasStyle = { borderWidth: 2.0, labelSize: 1.0, borderColor: '#2c1a00' }
 export const DEFAULT_AREAS_GEN_PARAMS: AreasGenParams = { targetSize: 8, riverWeight: 0.7, terrainWeight: 2.0 }
 
 export interface BlobOverride {
