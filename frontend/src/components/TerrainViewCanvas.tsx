@@ -1,12 +1,13 @@
 import { useRef, useEffect, useCallback, useState, useMemo, forwardRef, useImperativeHandle, type CSSProperties } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, TERRAIN_COLORS, LAKE_COLOR, TERRAIN_PRIORITY, hexTerrainLayers, type GeneratedHex, type RoadTierStyle } from '../store/mapStore'
+import { useMapStore, TERRAIN_COLORS, LAKE_COLOR, TERRAIN_PRIORITY, hexTerrainLayers, edgeBlobCanonicalKey, type GeneratedHex, type RoadTierStyle } from '../store/mapStore'
 import { BlobOverrideFlyout } from './BlobOverrideFlyout'
-import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon } from '../lib/geometry'
+import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon, distToSeg } from '../lib/geometry'
 import { mulberry32, makePermutation } from '../lib/noise'
 import { projectToCanvas, unprojectFromCanvas, computePaper } from '../lib/projection'
 import { coastalBlobTerrains, getCoastlineRuns, buildSmoothedRing, bleedPolygon, buildTerrainBlobsV2, computeConnectedComponents, buildFieldCanvas, type FieldTextureData } from '../lib/terrainBlobs'
+import { findEdgeChains as findEdgeChainsSync } from '../lib/edgeBlobs'
 import { riverChainCache, buildRiverChains, buildRiverChainsV2 } from '../lib/riverChains'
 
 const RIVER_V2 = true
@@ -171,6 +172,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     terrainBlobOverrides, setTerrainBlobOverride,
     terrainTypeBlobStyles,
     lakeOverrides, setLakeOverride,
+    edgeBlobPainted, edgeBlobPaintMode, edgeBlobPaintBrush,
+    paintEdgeBlob, eraseEdgeBlob,
+    edgeBlobSmooth, edgeBlobOffset, edgeBlobBump,
+    edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection,
+    edgeBlobWidth, edgeBlobOverrides, setEdgeBlobOverride,
     realisticCoastline,
     beachStrip, beachColor, beachWidth,
     terrainRenderMode, fieldFreq, fieldAmp, fieldOctaves, fieldPersistence, fieldWildness,
@@ -210,6 +216,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const terrainPaintBrushRef = useRef(terrainPaintBrush)
   const overrideHexTerrainRef = useRef(overrideHexTerrain)
   const addHexTerrainLayerRef = useRef(addHexTerrainLayer)
+  const edgeBlobPaintModeRef = useRef(edgeBlobPaintMode)
+  const edgeBlobPaintBrushRef = useRef(edgeBlobPaintBrush)
+  const paintEdgeBlobRef = useRef(paintEdgeBlob)
+  const eraseEdgeBlobRef = useRef(eraseEdgeBlob)
+  const edgeBlobPaintedRef = useRef(edgeBlobPainted)
+  const edgeBlobOverridesRef = useRef(edgeBlobOverrides)
+  const edgeBlobSmoothRef = useRef(edgeBlobSmooth)
+  const edgeBlobOffsetRef = useRef(edgeBlobOffset)
+  const edgeBlobBumpRef = useRef(edgeBlobBump)
+  const edgeBlobSweepFreqRef = useRef(edgeBlobSweepFreq)
+  const edgeBlobLobeFreqRef = useRef(edgeBlobLobeFreq)
+  const edgeBlobLobeAmpRef = useRef(edgeBlobLobeAmp)
+  const edgeBlobLobeThresholdRef = useRef(edgeBlobLobeThreshold)
+  const edgeBlobLobeDirectionRef = useRef(edgeBlobLobeDirection)
+  const edgeBlobWidthRef = useRef(edgeBlobWidth)
   const terrainLayersEnabledRef = useRef(terrainLayersEnabled)
   const roadEdgesRef = useRef(roadEdges)
   const railEdgesRef = useRef(railEdges)
@@ -655,6 +676,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   terrainBlobOverridesRef.current = terrainBlobOverrides
   terrainTypeBlobStylesRef.current = terrainTypeBlobStyles
   lakeOverridesRef.current = lakeOverrides
+  edgeBlobPaintModeRef.current = edgeBlobPaintMode
+  edgeBlobPaintBrushRef.current = edgeBlobPaintBrush
+  paintEdgeBlobRef.current = paintEdgeBlob
+  eraseEdgeBlobRef.current = eraseEdgeBlob
+  edgeBlobPaintedRef.current = edgeBlobPainted
+  edgeBlobOverridesRef.current = edgeBlobOverrides
+  edgeBlobSmoothRef.current = edgeBlobSmooth
+  edgeBlobOffsetRef.current = edgeBlobOffset
+  edgeBlobBumpRef.current = edgeBlobBump
+  edgeBlobSweepFreqRef.current = edgeBlobSweepFreq
+  edgeBlobLobeFreqRef.current = edgeBlobLobeFreq
+  edgeBlobLobeAmpRef.current = edgeBlobLobeAmp
+  edgeBlobLobeThresholdRef.current = edgeBlobLobeThreshold
+  edgeBlobLobeDirectionRef.current = edgeBlobLobeDirection
+  edgeBlobWidthRef.current = edgeBlobWidth
   terrainRenderModeRef.current = terrainRenderMode
   fieldFreqRef.current = fieldFreq
   fieldAmpRef.current = fieldAmp
@@ -728,6 +764,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const blobComponentsByTerrainRef = useRef(blobComponentsByTerrain)
   blobComponentsByTerrainRef.current = blobComponentsByTerrain
 
+  // hexVertMap: hex key → projected canvas vertices. Needed for edge blob geometry.
+  // Recomputed whenever projectedHexes changes (which is stable during painting).
+  const hexVertMap = useMemo(() => {
+    const map = new Map<string, [number, number][]>()
+    for (const { hex, verts } of projectedHexes) {
+      map.set(`${hex.q},${hex.r}`, verts)
+    }
+    return map
+  }, [projectedHexes])
+  const hexVertMapRef = useRef(hexVertMap)
+  hexVertMapRef.current = hexVertMap
 
   const roadBaseData = useMemo(
     () => buildRoadChains(roadEdges, hexCenterIdx, roadControlOverrides, 0, 0, roadSmoothing, roadPathSmoothing, roadChainOverrides, {}, {}, roadSnapBindings),
@@ -1252,6 +1299,16 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       beachStrip: beachStripRef.current,
       beachColor: beachColorRef.current,
       beachWidth: beachWidthRef.current,
+      edgeBlobPainted: edgeBlobPaintedRef.current,
+      edgeBlobOverrides: edgeBlobOverridesRef.current,
+      edgeBlobParams: {
+        smooth: edgeBlobSmoothRef.current, offset: edgeBlobOffsetRef.current,
+        bump: edgeBlobBumpRef.current, sweepFreq: edgeBlobSweepFreqRef.current,
+        lobeFreq: edgeBlobLobeFreqRef.current, lobeAmp: edgeBlobLobeAmpRef.current,
+        lobeThreshold: edgeBlobLobeThresholdRef.current, lobeDirection: edgeBlobLobeDirectionRef.current,
+        width: edgeBlobWidthRef.current,
+      },
+      hexVertMap: hexVertMapRef.current,
     }
 
     // Build offscreen terrain layer when dirty (skipped for export — always renders inline).
@@ -2185,7 +2242,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [generatedHexes, terrainRenderMode, fieldFreq, fieldAmp, fieldOctaves, fieldPersistence, fieldWildness, terrainColors, terrainTextureScales, forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, beachStrip, beachColor, beachWidth])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, beachStrip, beachColor, beachWidth, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes, excludedHexKeys])
@@ -2441,6 +2498,94 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       window.removeEventListener('mouseup', onUp)
     }
   }, [paintAtClient])
+
+  // Edge blob paint — click/drag near an edge to paint or erase it
+  const isEdgePaintingRef = useRef(false)
+  const lastPaintedEdgeKeyRef = useRef<string | null>(null)
+
+  const paintEdgeAtClient = useCallback((clientX: number, clientY: number) => {
+    const meta = metaRef.current
+    if (!meta) return
+    const logical = clientToLogical(clientX, clientY)
+    if (!logical) return
+    const { lx, ly, cssW, cssH } = logical
+    const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    const scalePxPerM = pw / (meta.scale_m_per_mm * meta.paper_mm[0])
+    const R = meta.outer_radius_m * scalePxPerM
+    const threshold = R * 0.35
+
+    // Build a quick hex lookup
+    const hexMap = new Map<string, GeneratedHex>()
+    for (const hex of hexesRef.current) hexMap.set(`${hex.q},${hex.r}`, hex)
+
+    const HEX_DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]
+    const SNAP = 2
+    const vk2 = (p: [number, number]) => `${Math.round(p[0] / SNAP)},${Math.round(p[1] / SNAP)}`
+
+    let bestDist = threshold
+    let bestEdgeKey: string | null = null
+
+    for (const hex of hexesRef.current) {
+      if (hexEdgeModeRef.current === 'whole' && hex.partial) continue
+      const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
+      // Quick reject: if hex center is far away, skip
+      const cx = verts.reduce((s, v) => s + v[0], 0) / 6
+      const cy = verts.reduce((s, v) => s + v[1], 0) / 6
+      if (Math.hypot(lx - cx, ly - cy) > R * 2) continue
+
+      for (const [dq, dr] of HEX_DIRS) {
+        const nq = hex.q + dq, nr = hex.r + dr
+        const neighbor = hexMap.get(`${nq},${nr}`)
+        if (!neighbor) continue
+        const nverts = neighbor.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py) as [number, number])
+        // Find shared vertices
+        const nkeys = new Set(nverts.map(vk2))
+        const shared = verts.filter(v => nkeys.has(vk2(v)))
+        if (shared.length < 2) continue
+        const d = distToSeg([lx, ly], shared[0], shared[1])
+        if (d < bestDist) {
+          bestDist = d
+          bestEdgeKey = edgeBlobCanonicalKey(hex.q, hex.r, nq, nr)
+        }
+      }
+    }
+
+    if (bestEdgeKey && bestEdgeKey !== lastPaintedEdgeKeyRef.current) {
+      lastPaintedEdgeKeyRef.current = bestEdgeKey
+      const brush = edgeBlobPaintBrushRef.current
+      if (brush === 'clear') {
+        eraseEdgeBlobRef.current(bestEdgeKey)
+      } else {
+        paintEdgeBlobRef.current(bestEdgeKey, brush)
+      }
+    }
+  }, [clientToLogical])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      if ((e.target as HTMLElement).tagName !== 'CANVAS') return
+      if (!edgeBlobPaintModeRef.current) return
+      isEdgePaintingRef.current = true
+      lastPaintedEdgeKeyRef.current = null
+      paintEdgeAtClient(e.clientX, e.clientY)
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!isEdgePaintingRef.current || !edgeBlobPaintModeRef.current) return
+      paintEdgeAtClient(e.clientX, e.clientY)
+    }
+    const onUp = () => { isEdgePaintingRef.current = false }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [paintEdgeAtClient])
 
   // Hex mask paint — exclude/include hexes by click-drag
   const hexMaskPaintAtClient = useCallback((clientX: number, clientY: number, mode: 'exclude' | 'include', lastKey: { v: string | null }) => {
@@ -3121,7 +3266,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   // Context menu
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: CtxItem[] } | null>(null)
   const [blobFlyout, setBlobFlyout] = useState<{
-    type: 'terrain' | 'lake'
+    type: 'terrain' | 'lake' | 'edge'
     canonicalKey: string
     terrain?: string
     x: number
@@ -3504,6 +3649,59 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
               label: `Edit ${t.replace(/_/g, ' ')} blob…`,
               action: () => setBlobFlyout({ type: 'terrain', canonicalKey, terrain: t, x: e.clientX, y: e.clientY }),
             })
+          }
+        }
+        // Edge blob chains near click point
+        if (Object.keys(edgeBlobPaintedRef.current).length > 0) {
+          const meta3 = metaRef.current
+          const logical3 = meta3 ? clientToLogicalRef.current(e.clientX, e.clientY) : null
+          if (meta3 && logical3) {
+            const { lx: lx3, ly: ly3, cssW: cW3, cssH: cH3 } = logical3
+            const { pw: pw3, ph: ph3, px: px3, py: py3 } = computePaper(cW3, cH3, meta3)
+            const R3 = hexRadiusRef.current
+            const threshold3 = R3 * 0.35
+            const hexMap3 = new Map<string, GeneratedHex>()
+            for (const h of hexesRef.current) hexMap3.set(`${h.q},${h.r}`, h)
+            const HEX_DIRS3: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]]
+            const SNAP3 = 2
+            const vk3 = (p: [number, number]) => `${Math.round(p[0] / SNAP3)},${Math.round(p[1] / SNAP3)}`
+            let nearestEdgeKey: string | null = null
+            let nearestEdgeDist = threshold3
+            for (const h of hexesRef.current) {
+              const hv = h.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta3, pw3, ph3, px3, py3) as [number, number])
+              const cx3 = hv.reduce((s, v) => s + v[0], 0) / 6
+              const cy3 = hv.reduce((s, v) => s + v[1], 0) / 6
+              if (Math.hypot(lx3 - cx3, ly3 - cy3) > R3 * 2) continue
+              for (const [dq3, dr3] of HEX_DIRS3) {
+                const nq3 = h.q + dq3, nr3 = h.r + dr3
+                if (!hexMap3.has(`${nq3},${nr3}`)) continue
+                const ek3 = edgeBlobCanonicalKey(h.q, h.r, nq3, nr3)
+                if (!edgeBlobPaintedRef.current[ek3]) continue
+                const nv = hexMap3.get(`${nq3},${nr3}`)!.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta3, pw3, ph3, px3, py3) as [number, number])
+                const nkeys3 = new Set(nv.map(vk3))
+                const shared3 = hv.filter(v => nkeys3.has(vk3(v)))
+                if (shared3.length < 2) continue
+                const d3 = distToSeg([lx3, ly3], shared3[0], shared3[1])
+                if (d3 < nearestEdgeDist) { nearestEdgeDist = d3; nearestEdgeKey = ek3 }
+              }
+            }
+            if (nearestEdgeKey) {
+              const ek = nearestEdgeKey
+              const terrain3 = edgeBlobPaintedRef.current[ek]
+              // Find chain key for this edge
+              const chains3 = findEdgeChainsSync(edgeBlobPaintedRef.current, hexVertMapRef.current)
+              const chain3 = chains3.find(c => c.edgeKeys.includes(ek))
+              const chainKey3 = chain3?.chainKey ?? ek
+              items.push({
+                label: `Edit edge ${terrain3?.replace(/_/g, ' ') ?? 'blob'}…`,
+                action: () => setBlobFlyout({ type: 'edge', canonicalKey: chainKey3, terrain: terrain3, x: e.clientX, y: e.clientY }),
+              })
+              items.push({
+                label: 'Erase edge blob',
+                action: () => eraseEdgeBlobRef.current(ek),
+                danger: true,
+              })
+            }
           }
         }
         if (items.length > 0) items.push({ label: '─', action: () => {} })

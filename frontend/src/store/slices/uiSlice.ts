@@ -275,7 +275,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 31,
+      version: 32,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         mapMode: s.mapMode, diptychJoin: s.diptychJoin,
@@ -535,6 +535,19 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.roadTierGeometry) s.roadTierGeometry = [null, null, null]
     if (s.railGeomOverride === undefined) s.railGeomOverride = null
     if (s.railPathSmoothing === undefined) s.railPathSmoothing = 0
+  }
+  if (fromVersion < 32) {
+    if (!s.edgeBlobPainted) s.edgeBlobPainted = {}
+    if (!s.edgeBlobOverrides) s.edgeBlobOverrides = {}
+    if (s.edgeBlobSmooth === undefined) s.edgeBlobSmooth = 0
+    if (s.edgeBlobOffset === undefined) s.edgeBlobOffset = -0.10
+    if (s.edgeBlobBump === undefined) s.edgeBlobBump = 0.47
+    if (s.edgeBlobSweepFreq === undefined) s.edgeBlobSweepFreq = 1.0
+    if (s.edgeBlobLobeFreq === undefined) s.edgeBlobLobeFreq = 4.1
+    if (s.edgeBlobLobeAmp === undefined) s.edgeBlobLobeAmp = 0.49
+    if (s.edgeBlobLobeThreshold === undefined) s.edgeBlobLobeThreshold = 0.08
+    if (s.edgeBlobLobeDirection === undefined) s.edgeBlobLobeDirection = -1
+    if (s.edgeBlobWidth === undefined) s.edgeBlobWidth = 0.25
   }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
   return s

@@ -4,6 +4,8 @@ import { TerrainBrushPicker } from './TerrainBrushPicker'
 import { TerrainSettingsFlyout } from './TerrainSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle, modeBtn } from './sidebarStyles'
 
+const EDGE_BRUSH_TERRAINS = TERRAIN_PRIORITY.filter(t => t !== 'clear')
+
 const terrainLabel = (t: string) => t.replace(/_/g, ' ')
 
 const SLIDER_TERRAINS = TERRAIN_PRIORITY.filter(t => t !== 'clear')
@@ -26,12 +28,23 @@ export function TerrainSidebar() {
     fieldAmp, setFieldAmp,
     fieldOctaves, setFieldOctaves,
     fieldPersistence, setFieldPersistence,
+    edgeBlobPaintMode, edgeBlobPaintBrush, setEdgeBlobPaintMode, setEdgeBlobPaintBrush,
+    edgeBlobSmooth, setEdgeBlobSmooth,
+    edgeBlobOffset, setEdgeBlobOffset,
+    edgeBlobBump, setEdgeBlobBump,
+    edgeBlobSweepFreq, setEdgeBlobSweepFreq,
+    edgeBlobLobeFreq, setEdgeBlobLobeFreq,
+    edgeBlobLobeAmp, setEdgeBlobLobeAmp,
+    edgeBlobLobeThreshold, setEdgeBlobLobeThreshold,
+    edgeBlobLobeDirection, setEdgeBlobLobeDirection,
+    edgeBlobWidth, setEdgeBlobWidth,
   } = useMapStore()
 
   const [openSettingsTerrain, setOpenSettingsTerrain] = useState<string | null>(null)
   const [settingsAnchorY, setSettingsAnchorY] = useState(0)
   const [defaultsOpen, setDefaultsOpen] = useState(false)
   const [defaultsAnchorY, setDefaultsAnchorY] = useState(0)
+  const [edgeBlobShapeOpen, setEdgeBlobShapeOpen] = useState(false)
 
   const selectBrush = (terrain: string) => {
     if (terrainPaintMode && terrainPaintBrush === terrain) {
@@ -229,6 +242,188 @@ export function TerrainSidebar() {
                 <input type="range" min={10} max={90} step={1} value={Math.round(fieldPersistence * 100)}
                   onChange={e => setFieldPersistence(Number(e.target.value) / 100)}
                   style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Edge blobs ── */}
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Edge Blobs</div>
+
+          {/* Brush row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {/* Mode toggle: clear = eraser */}
+            <button
+              style={{
+                ...modeBtn(edgeBlobPaintBrush === 'clear' && edgeBlobPaintMode),
+                fontSize: 10, padding: '3px 7px',
+              }}
+              onClick={() => {
+                if (edgeBlobPaintMode && edgeBlobPaintBrush === 'clear') {
+                  setEdgeBlobPaintMode(false)
+                  setActiveTool({ type: 'none' })
+                } else {
+                  setEdgeBlobPaintBrush('clear')
+                  setEdgeBlobPaintMode(true)
+                  setActiveTool({ type: 'none' })
+                }
+              }}
+            >Erase</button>
+            {EDGE_BRUSH_TERRAINS.map(t => {
+              const color = terrainColors[t] ?? TERRAIN_COLORS[t] ?? '#888'
+              const active = edgeBlobPaintMode && edgeBlobPaintBrush === t
+              return (
+                <button
+                  key={t}
+                  onClick={() => {
+                    if (active) {
+                      setEdgeBlobPaintMode(false)
+                      setActiveTool({ type: 'none' })
+                    } else {
+                      setEdgeBlobPaintBrush(t)
+                      setEdgeBlobPaintMode(true)
+                      setActiveTool({ type: 'none' })
+                    }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 7px', fontSize: 10, letterSpacing: 0.5, textTransform: 'capitalize',
+                    background: active ? '#1a2a1a' : 'none',
+                    border: `1px solid ${active ? color : '#1e1f2e'}`,
+                    color: active ? color : '#6a6a8a',
+                    borderRadius: 3, cursor: 'pointer', fontFamily: 'ui-monospace, monospace',
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: color, display: 'inline-block', flexShrink: 0 }} />
+                  {t.replace(/_/g, ' ')}
+                </button>
+              )
+            })}
+          </div>
+
+          {edgeBlobPaintMode && (
+            <div style={{ fontSize: 10, color: '#5a8a5a', marginBottom: 8, letterSpacing: 0.3 }}>
+              Edge paint active — click near hex edges
+            </div>
+          )}
+
+          {/* Global shape params (collapsible) */}
+          <button
+            onClick={() => setEdgeBlobShapeOpen(v => !v)}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: edgeBlobShapeOpen ? '#1a1f1a' : 'none',
+              border: `1px solid ${edgeBlobShapeOpen ? '#3a5a3a' : '#1e1f2e'}`,
+              borderRadius: 3, padding: '5px 8px', cursor: 'pointer',
+              fontFamily: 'ui-monospace, monospace', fontSize: 11,
+              color: edgeBlobShapeOpen ? '#c0e0c0' : '#8a8aaa', width: '100%',
+            }}
+            onMouseEnter={e => { if (!edgeBlobShapeOpen) e.currentTarget.style.color = '#a0a0c0' }}
+            onMouseLeave={e => { if (!edgeBlobShapeOpen) e.currentTarget.style.color = '#8a8aaa' }}
+          >
+            <span>Edge blob shape</span>
+            <span style={{ fontSize: 9, color: '#4a4a6a' }}>›</span>
+          </button>
+
+          {edgeBlobShapeOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, fontSize: 11, color: '#a0a0c0' }}>
+              {/* Width */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Width</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(edgeBlobWidth * 100)}%</span>
+                </div>
+                <input type="range" min={5} max={80} step={1} value={Math.round(edgeBlobWidth * 100)}
+                  onChange={e => setEdgeBlobWidth(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* Smooth */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Corner Rounding</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{edgeBlobSmooth}</span>
+                </div>
+                <input type="range" min={0} max={5} step={1} value={edgeBlobSmooth}
+                  onChange={e => setEdgeBlobSmooth(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* Bump */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Waviness</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(edgeBlobBump * 100)}%</span>
+                </div>
+                <input type="range" min={0} max={60} step={1} value={Math.round(edgeBlobBump * 100)}
+                  onChange={e => setEdgeBlobBump(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* Offset */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Inset</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{edgeBlobOffset > 0 ? '+' : ''}{Math.round(edgeBlobOffset * 100)}%</span>
+                </div>
+                <input type="range" min={-80} max={30} step={1} value={Math.round(edgeBlobOffset * 100)}
+                  onChange={e => setEdgeBlobOffset(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* SweepFreq */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Wave Scale</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{edgeBlobSweepFreq.toFixed(2)}</span>
+                </div>
+                <input type="range" min={40} max={100} step={1} value={Math.round(edgeBlobSweepFreq * 100)}
+                  onChange={e => setEdgeBlobSweepFreq(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* LobeFreq */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Fringe Scale</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{edgeBlobLobeFreq.toFixed(1)}</span>
+                </div>
+                <input type="range" min={20} max={50} step={1} value={Math.round(edgeBlobLobeFreq * 10)}
+                  onChange={e => setEdgeBlobLobeFreq(Number(e.target.value) / 10)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* LobeAmp */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Fringe Strength</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(edgeBlobLobeAmp * 100)}%</span>
+                </div>
+                <input type="range" min={0} max={100} step={1} value={Math.round(edgeBlobLobeAmp * 100)}
+                  onChange={e => setEdgeBlobLobeAmp(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* LobeThreshold */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Fringe Sparsity</span>
+                  <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(edgeBlobLobeThreshold * 100)}%</span>
+                </div>
+                <input type="range" min={0} max={40} step={1} value={Math.round(edgeBlobLobeThreshold * 100)}
+                  onChange={e => setEdgeBlobLobeThreshold(Number(e.target.value) / 100)}
+                  style={{ width: '100%', accentColor: '#7a9e7a' }} />
+              </div>
+              {/* LobeDirection */}
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>Fringe Direction</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {([['Outward', 1], ['Inward', -1]] as const).map(([label, dir]) => {
+                    const active = dir === 1 ? edgeBlobLobeDirection >= 0 : edgeBlobLobeDirection < 0
+                    return (
+                      <button key={label} onClick={() => setEdgeBlobLobeDirection(dir)} style={{
+                        flex: 1, padding: '3px 0', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase',
+                        background: active ? '#2a3a5a' : 'none', border: '1px solid #2a2a4a',
+                        color: active ? '#8ab0e0' : '#4a4a6a', borderRadius: 3, cursor: 'pointer',
+                        fontFamily: 'ui-monospace, monospace',
+                      }}>{label}</button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )}

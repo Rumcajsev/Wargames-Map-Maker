@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useMapStore, LAKE_COLOR, type BlobOverride } from '../store/mapStore'
 
 interface Props {
-  type: 'terrain' | 'lake'
+  type: 'terrain' | 'lake' | 'edge'
   canonicalKey: string
   terrain?: string
   x: number
@@ -14,16 +14,22 @@ export function BlobOverrideFlyout({ type, canonicalKey, terrain, x, y, onClose 
   const {
     terrainBlobOverrides, setTerrainBlobOverride,
     lakeOverrides, setLakeOverride,
+    edgeBlobOverrides, setEdgeBlobOverride,
     terrainColors,
     lakeBlobSmooth, lakeBlobOffset, lakeBlobBump,
     lakeBlobSweepFreq, lakeBlobLobeFreq, lakeBlobLobeAmp, lakeBlobLobeThreshold, lakeBlobLobeDirection,
     terrainBlobSmooth, terrainBlobOffset, terrainBlobBump,
     terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection,
+    edgeBlobSmooth, edgeBlobOffset, edgeBlobBump,
+    edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection,
+    edgeBlobWidth,
   } = useMapStore()
 
   const hasOverride = type === 'terrain'
     ? !!terrainBlobOverrides[canonicalKey]
-    : !!lakeOverrides[canonicalKey]
+    : type === 'lake'
+      ? !!lakeOverrides[canonicalKey]
+      : !!edgeBlobOverrides[canonicalKey]
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -34,22 +40,25 @@ export function BlobOverrideFlyout({ type, canonicalKey, terrain, x, y, onClose 
   }, [onClose])
 
   const W = 210
-  const estH = 180
+  const estH = type === 'edge' ? 200 : 180
   const clampedX = Math.min(x, window.innerWidth - W - 8)
   const clampedY = Math.min(y, window.innerHeight - estH - 8)
 
   const override: BlobOverride = type === 'terrain'
     ? (terrainBlobOverrides[canonicalKey] ?? {})
-    : (lakeOverrides[canonicalKey] ?? {})
+    : type === 'lake'
+      ? (lakeOverrides[canonicalKey] ?? {})
+      : (edgeBlobOverrides[canonicalKey] ?? {})
 
-  const globalSmooth        = type === 'terrain' ? terrainBlobSmooth        : lakeBlobSmooth
-  const globalOffset        = type === 'terrain' ? terrainBlobOffset        : lakeBlobOffset
-  const globalBump          = type === 'terrain' ? terrainBlobBump          : lakeBlobBump
-  const globalSweepFreq     = type === 'terrain' ? terrainBlobSweepFreq     : lakeBlobSweepFreq
-  const globalLobeFreq      = type === 'terrain' ? terrainBlobLobeFreq      : lakeBlobLobeFreq
-  const globalLobeAmp       = type === 'terrain' ? terrainBlobLobeAmp       : lakeBlobLobeAmp
-  const globalLobeThreshold = type === 'terrain' ? terrainBlobLobeThreshold : lakeBlobLobeThreshold
-  const globalLobeDirection = type === 'terrain' ? terrainBlobLobeDirection : lakeBlobLobeDirection
+  const globalSmooth        = type === 'terrain' ? terrainBlobSmooth        : type === 'lake' ? lakeBlobSmooth        : edgeBlobSmooth
+  const globalOffset        = type === 'terrain' ? terrainBlobOffset        : type === 'lake' ? lakeBlobOffset        : edgeBlobOffset
+  const globalBump          = type === 'terrain' ? terrainBlobBump          : type === 'lake' ? lakeBlobBump          : edgeBlobBump
+  const globalSweepFreq     = type === 'terrain' ? terrainBlobSweepFreq     : type === 'lake' ? lakeBlobSweepFreq     : edgeBlobSweepFreq
+  const globalLobeFreq      = type === 'terrain' ? terrainBlobLobeFreq      : type === 'lake' ? lakeBlobLobeFreq      : edgeBlobLobeFreq
+  const globalLobeAmp       = type === 'terrain' ? terrainBlobLobeAmp       : type === 'lake' ? lakeBlobLobeAmp       : edgeBlobLobeAmp
+  const globalLobeThreshold = type === 'terrain' ? terrainBlobLobeThreshold : type === 'lake' ? lakeBlobLobeThreshold : edgeBlobLobeThreshold
+  const globalLobeDirection = type === 'terrain' ? terrainBlobLobeDirection : type === 'lake' ? lakeBlobLobeDirection : edgeBlobLobeDirection
+  const globalWidth         = edgeBlobWidth
 
   const currentSmooth        = override.smooth        ?? globalSmooth
   const currentOffset        = override.offset        ?? globalOffset
@@ -59,27 +68,35 @@ export function BlobOverrideFlyout({ type, canonicalKey, terrain, x, y, onClose 
   const currentLobeAmp       = override.lobeAmp       ?? globalLobeAmp
   const currentLobeThreshold = override.lobeThreshold ?? globalLobeThreshold
   const currentLobeDirection = override.lobeDirection ?? globalLobeDirection
+  const currentWidth         = override.width         ?? globalWidth
 
   const setOverride = (patch: BlobOverride) => {
     if (type === 'terrain') setTerrainBlobOverride(canonicalKey, { terrain, ...patch })
-    else setLakeOverride(canonicalKey, patch)
+    else if (type === 'lake') setLakeOverride(canonicalKey, patch)
+    else setEdgeBlobOverride(canonicalKey, patch)
   }
 
-  // Returns the value to store, or undefined if it matches global (so the field is auto-removed
-  // from the override and the blob stays linked to global changes for that parameter).
   const fieldVal = (sliderInt: number, globalSliderInt: number, transform: (v: number) => number): number | undefined =>
     sliderInt === globalSliderInt ? undefined : transform(sliderInt)
+
   const reset = () => {
     if (type === 'terrain') setTerrainBlobOverride(canonicalKey, null)
-    else setLakeOverride(canonicalKey, null)
+    else if (type === 'lake') setLakeOverride(canonicalKey, null)
+    else setEdgeBlobOverride(canonicalKey, null)
     onClose()
   }
 
   const accentColor = type === 'terrain'
     ? (terrainColors[terrain!] ?? '#7a9e7a')
-    : (terrainColors['lake'] ?? LAKE_COLOR)
+    : type === 'lake'
+      ? (terrainColors['lake'] ?? LAKE_COLOR)
+      : (terrainColors[terrain!] ?? '#7a9e7a')
 
-  const title = type === 'terrain' ? (terrain?.replace(/_/g, ' ') ?? 'blob') : 'lake'
+  const title = type === 'terrain'
+    ? (terrain?.replace(/_/g, ' ') ?? 'blob')
+    : type === 'lake'
+      ? 'lake'
+      : `edge · ${terrain?.replace(/_/g, ' ') ?? 'blob'}`
 
   return (
     <div
@@ -114,6 +131,17 @@ export function BlobOverrideFlyout({ type, canonicalKey, terrain, x, y, onClose 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {type === 'edge' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Width</span>
+                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{Math.round(currentWidth * 100)}%</span>
+              </div>
+              <input type="range" min={5} max={80} step={1} value={Math.round(currentWidth * 100)}
+                onChange={e => setOverride({ width: fieldVal(Number(e.target.value), Math.round(globalWidth * 100), v => v / 100) })}
+                style={{ width: '100%', accentColor }} />
+            </div>
+          )}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
               <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Corner Rounding</span>

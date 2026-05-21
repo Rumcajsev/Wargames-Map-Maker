@@ -43,6 +43,7 @@ export interface BlobOverride {
   lobeDirection?: number
   textureScale?: number
   enabled?: boolean
+  width?: number
 }
 
 export interface ElevationThresholds {
@@ -404,6 +405,11 @@ export interface RoadEdge {
   manual?: boolean
 }
 
+export function edgeBlobCanonicalKey(q1: number, r1: number, q2: number, r2: number): string {
+  const a = `${q1},${r1}`, b = `${q2},${r2}`
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+
 export function roadEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: number, tier: 0 | 1 | 2): string {
   const a = `${q1},${r1}`, b = `${q2},${r2}`
   return `${tier}:${a < b ? `${a}|${b}` : `${b}|${a}`}`
@@ -618,6 +624,17 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     urbanNoise: s.urbanNoise,
     urbanBuildingCount: s.urbanBuildingCount,
     urbanBuildingSize: s.urbanBuildingSize,
+    edgeBlobPainted: s.edgeBlobPainted,
+    edgeBlobSmooth: s.edgeBlobSmooth,
+    edgeBlobOffset: s.edgeBlobOffset,
+    edgeBlobBump: s.edgeBlobBump,
+    edgeBlobSweepFreq: s.edgeBlobSweepFreq,
+    edgeBlobLobeFreq: s.edgeBlobLobeFreq,
+    edgeBlobLobeAmp: s.edgeBlobLobeAmp,
+    edgeBlobLobeThreshold: s.edgeBlobLobeThreshold,
+    edgeBlobLobeDirection: s.edgeBlobLobeDirection,
+    edgeBlobWidth: s.edgeBlobWidth,
+    edgeBlobOverrides: s.edgeBlobOverrides,
     terrainBlobOverrides: s.terrainBlobOverrides,
     terrainTypeBlobStyles: s.terrainTypeBlobStyles,
     terrainBlobSmooth: s.terrainBlobSmooth,
@@ -667,7 +684,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     bridgeTiers: s.bridgeTiers,
     bridgeOverrides: s.bridgeOverrides,
   }),
-  version: 31,
+  version: 32,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

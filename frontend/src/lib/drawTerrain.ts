@@ -5,6 +5,7 @@ import type { GeneratedHex, BlobOverride } from '../store/mapStore'
 import { buildTerrainBlobsV2, buildSmoothedRing, getCoastlineRuns, bleedPolygon } from './terrainBlobs'
 import { catmullRom } from './geometry'
 import { makePermutation } from './noise'
+import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams } from './edgeBlobs'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -45,7 +46,14 @@ export type DrawTerrainParams = {
   beachStrip: boolean
   beachColor: string
   beachWidth: number
+  // Edge blobs
+  edgeBlobPainted: Record<string, string>
+  edgeBlobParams: EdgeBlobParams
+  edgeBlobOverrides: Record<string, BlobOverride>
+  hexVertMap: Map<string, [number, number][]>
 }
+
+export type { EdgeBlobParams, EdgeBlobChain }
 
 function applyTextureOverlay(
   tCtx: Ctx,
@@ -91,6 +99,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     hexes, hexTerrainLayers, R,
     realisticCoastline, coastlineClips, seaCoastKeys, oceanSeaKeys,
     beachStrip, beachColor, beachWidth,
+    // edge blobs destructured inline below where used
   } = params
 
   // ── 1. Clear fills ──────────────────────────────────────────────────────────
@@ -288,6 +297,46 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       drawLakePolys(ovPolys, override.color ?? lakeColor)
     }
   } // end blob mode
+
+  // ── 5b. Edge blobs ───────────────────────────────────────────────────────────
+  const { edgeBlobPainted, edgeBlobParams, edgeBlobOverrides, hexVertMap } = params
+  if (Object.keys(edgeBlobPainted).length > 0) {
+    const chains = findEdgeChains(edgeBlobPainted, hexVertMap)
+    for (const chain of chains) {
+      const override = edgeBlobOverrides[chain.chainKey]
+      const chainParams: EdgeBlobParams = {
+        smooth:        override?.smooth         ?? edgeBlobParams.smooth,
+        offset:        override?.offset         ?? edgeBlobParams.offset,
+        bump:          override?.bump           ?? edgeBlobParams.bump,
+        sweepFreq:     override?.sweepFreq      ?? edgeBlobParams.sweepFreq,
+        lobeFreq:      override?.lobeFreq       ?? edgeBlobParams.lobeFreq,
+        lobeAmp:       override?.lobeAmp        ?? edgeBlobParams.lobeAmp,
+        lobeThreshold: override?.lobeThreshold  ?? edgeBlobParams.lobeThreshold,
+        lobeDirection: override?.lobeDirection  ?? edgeBlobParams.lobeDirection,
+        width:         override?.width          ?? edgeBlobParams.width,
+      }
+      const polys = buildEdgeBlobPolys(chain, hexVertMap, chainParams, R)
+      if (polys.length === 0) continue
+      const color = override?.color ?? terrainColors[chain.terrain] ?? '#cccccc'
+      tCtx.fillStyle = color
+      tCtx.beginPath()
+      for (const poly of polys) {
+        if (poly.length < 3) continue
+        tCtx.moveTo(poly[0][0], poly[0][1])
+        for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+        tCtx.closePath()
+      }
+      tCtx.fill('evenodd')
+      const texScale = override?.textureScale ?? (terrainTextureScales[chain.terrain] ?? 3)
+      if (chain.terrain === 'woods' && forestTexture) {
+        applyTextureOverlay(tCtx, forestTexture, polys, R, texScale, R * 0.12)
+      } else if (chain.terrain === 'light_woods' && lightWoodsTexture) {
+        applyTextureOverlay(tCtx, lightWoodsTexture, polys, R, texScale, R * 0.12)
+      } else if (chain.terrain === 'marsh' && marshTexture) {
+        applyTextureOverlay(tCtx, marshTexture, polys, R, texScale, R * 0.12)
+      }
+    }
+  }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
   if (realisticCoastline) {

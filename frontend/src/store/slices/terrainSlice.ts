@@ -44,6 +44,20 @@ export type TerrainSlice = {
   // Terrain paint
   terrainPaintMode: boolean
   terrainPaintBrush: string
+  // Edge blob paint + state
+  edgeBlobPaintMode: boolean
+  edgeBlobPaintBrush: string
+  edgeBlobPainted: Record<string, string>
+  edgeBlobSmooth: number
+  edgeBlobOffset: number
+  edgeBlobBump: number
+  edgeBlobSweepFreq: number
+  edgeBlobLobeFreq: number
+  edgeBlobLobeAmp: number
+  edgeBlobLobeThreshold: number
+  edgeBlobLobeDirection: number
+  edgeBlobWidth: number
+  edgeBlobOverrides: Record<string, BlobOverride>
   // Blank map
   blankMap: boolean
   setBlankMap: (v: boolean) => void
@@ -96,6 +110,20 @@ export type TerrainSlice = {
   setFieldWildness: (terrain: string, v: number) => void
   setTerrainPaintMode: (v: boolean) => void
   setTerrainPaintBrush: (v: string) => void
+  setEdgeBlobPaintMode: (v: boolean) => void
+  setEdgeBlobPaintBrush: (v: string) => void
+  paintEdgeBlob: (edgeKey: string, terrain: string) => void
+  eraseEdgeBlob: (edgeKey: string) => void
+  setEdgeBlobSmooth: (v: number) => void
+  setEdgeBlobOffset: (v: number) => void
+  setEdgeBlobBump: (v: number) => void
+  setEdgeBlobSweepFreq: (v: number) => void
+  setEdgeBlobLobeFreq: (v: number) => void
+  setEdgeBlobLobeAmp: (v: number) => void
+  setEdgeBlobLobeThreshold: (v: number) => void
+  setEdgeBlobLobeDirection: (v: number) => void
+  setEdgeBlobWidth: (v: number) => void
+  setEdgeBlobOverride: (key: string, override: BlobOverride | null) => void
   setAutoLakesEnabled: (v: boolean) => void
   setLakeSensitivity: (v: number) => void
   setLakePaintMode: (v: boolean) => void
@@ -151,6 +179,20 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
 
   terrainPaintMode: false,
   terrainPaintBrush: 'clear',
+
+  edgeBlobPaintMode: false,
+  edgeBlobPaintBrush: 'woods',
+  edgeBlobPainted: {},
+  edgeBlobSmooth: 0,
+  edgeBlobOffset: -0.10,
+  edgeBlobBump: 0.47,
+  edgeBlobSweepFreq: 1.0,
+  edgeBlobLobeFreq: 4.1,
+  edgeBlobLobeAmp: 0.49,
+  edgeBlobLobeThreshold: 0.08,
+  edgeBlobLobeDirection: -1,
+  edgeBlobWidth: 0.25,
+  edgeBlobOverrides: {},
 
   blankMap: false,
 
@@ -209,6 +251,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     showReliefHeatmap: false,
     showElevHeatmap: false,
     terrainPaintMode: false,
+    edgeBlobPaintMode: false,
     lakePaintMode: false,
     elevationPaintMode: false,
     roadPaintMode: false,
@@ -499,10 +542,42 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setFieldPersistence: (v) => set({ fieldPersistence: v }),
   setFieldWildness: (terrain, v) => set((s) => ({ fieldWildness: { ...s.fieldWildness, [terrain]: v } })),
 
-  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}) }),
+  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false, edgeBlobPaintMode: false } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
 
-  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false } : {}) }),
+  setEdgeBlobPaintMode: (v) => set({ edgeBlobPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}) }),
+  setEdgeBlobPaintBrush: (v) => set({ edgeBlobPaintBrush: v }),
+  paintEdgeBlob: (edgeKey, terrain) => set((s) => ({
+    edgeBlobPainted: { ...s.edgeBlobPainted, [edgeKey]: terrain },
+  })),
+  eraseEdgeBlob: (edgeKey) => set((s) => {
+    const { [edgeKey]: _, ...rest } = s.edgeBlobPainted
+    return { edgeBlobPainted: rest }
+  }),
+  setEdgeBlobSmooth: (v) => set({ edgeBlobSmooth: v }),
+  setEdgeBlobOffset: (v) => set({ edgeBlobOffset: v }),
+  setEdgeBlobBump: (v) => set({ edgeBlobBump: v }),
+  setEdgeBlobSweepFreq: (v) => set({ edgeBlobSweepFreq: v }),
+  setEdgeBlobLobeFreq: (v) => set({ edgeBlobLobeFreq: v }),
+  setEdgeBlobLobeAmp: (v) => set({ edgeBlobLobeAmp: v }),
+  setEdgeBlobLobeThreshold: (v) => set({ edgeBlobLobeThreshold: v }),
+  setEdgeBlobLobeDirection: (v) => set({ edgeBlobLobeDirection: v }),
+  setEdgeBlobWidth: (v) => set({ edgeBlobWidth: v }),
+  setEdgeBlobOverride: (key, override) => set((s) => {
+    if (override === null) {
+      const { [key]: _, ...rest } = s.edgeBlobOverrides
+      return { edgeBlobOverrides: rest }
+    }
+    const merged = { ...s.edgeBlobOverrides[key], ...override }
+    const cleaned = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined)) as BlobOverride
+    if (Object.keys(cleaned).length === 0) {
+      const { [key]: _, ...rest } = s.edgeBlobOverrides
+      return { edgeBlobOverrides: rest }
+    }
+    return { edgeBlobOverrides: { ...s.edgeBlobOverrides, [key]: cleaned } }
+  }),
+
+  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, elevationPaintMode: false, railPaintMode: false, edgeBlobPaintMode: false } : {}) }),
   setAutoLakesEnabled: (v) => {
     const { generatedHexes, lakeSensitivity } = get()
     const updated = generatedHexes.map((h) =>
