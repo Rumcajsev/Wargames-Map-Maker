@@ -301,6 +301,15 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   // ── 5b. Edge blobs ───────────────────────────────────────────────────────────
   const { edgeBlobPainted, edgeBlobParams, edgeBlobOverrides, hexVertMap } = params
   if (Object.keys(edgeBlobPainted).length > 0) {
+    // Build terrain → hex-key set for the connection extension check
+    const terrainToHexes = new Map<string, Set<string>>()
+    for (const { hex } of projected) {
+      for (const t of hexTerrainLayers(hex)) {
+        if (!terrainToHexes.has(t)) terrainToHexes.set(t, new Set())
+        terrainToHexes.get(t)!.add(`${hex.q},${hex.r}`)
+      }
+    }
+
     const chains = findEdgeChains(edgeBlobPainted, hexVertMap)
     for (const chain of chains) {
       const override = edgeBlobOverrides[chain.chainKey]
@@ -315,7 +324,8 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         lobeDirection: override?.lobeDirection  ?? edgeBlobParams.lobeDirection,
         width:         override?.width          ?? edgeBlobParams.width,
       }
-      const polys = buildEdgeBlobPolys(chain, hexVertMap, chainParams, R)
+      const hexTerrainSet = terrainToHexes.get(chain.terrain)
+      const polys = buildEdgeBlobPolys(chain, hexVertMap, chainParams, R, hexTerrainSet)
       if (polys.length === 0) continue
       const color = override?.color ?? terrainColors[chain.terrain] ?? '#cccccc'
       tCtx.fillStyle = color

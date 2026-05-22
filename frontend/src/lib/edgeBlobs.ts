@@ -125,6 +125,21 @@ export function findEdgeChains(
 
 // ── Blob geometry ─────────────────────────────────────────────────────────────
 
+/** Compute canvas-space centroid of a hex from its vertex list. */
+function hexCenter(q: number, r: number, hexVertMap: Map<string, [number, number][]>): [number, number] | null {
+  const verts = hexVertMap.get(`${q},${r}`)
+  if (!verts || verts.length === 0) return null
+  return [
+    verts.reduce((s, v) => s + v[0], 0) / verts.length,
+    verts.reduce((s, v) => s + v[1], 0) / verts.length,
+  ]
+}
+
+type OrderedPath = {
+  path: [number, number][]
+  orderedEdgeKeys: string[]   // length = path.length - 1; orderedEdgeKeys[i] → segment path[i]→path[i+1]
+}
+
 /**
  * Walk the edges of a chain into an ordered list of polyline paths.
  * At branch points (3+ edges meeting) the path is split into arms.
@@ -132,7 +147,7 @@ export function findEdgeChains(
 function buildOrderedPaths(
   edgeKeys: string[],
   hexVertMap: Map<string, [number, number][]>,
-): [number, number][][] {
+): OrderedPath[] {
   const vpos = new Map<string, [number, number]>()
   const vertToEdges = new Map<string, string[]>()
   const edgeToVerts = new Map<string, [string, string]>()
@@ -154,7 +169,7 @@ function buildOrderedPaths(
   if (vpos.size === 0) return []
 
   const visitedEdges = new Set<string>()
-  const paths: [number, number][][] = []
+  const paths: OrderedPath[] = []
 
   // Prefer to start from endpoint vertices (degree 1)
   const allVerts = [...vertToEdges.keys()]
@@ -172,6 +187,7 @@ function buildOrderedPaths(
     for (const firstEdge of unvisited) {
       if (visitedEdges.has(firstEdge)) continue
       const path: [number, number][] = [vpos.get(startVKey)!]
+      const orderedEdgeKeys: string[] = []
       let curV = startVKey
 
       for (;;) {
@@ -187,12 +203,13 @@ function buildOrderedPaths(
         if (!nextEdge || !nextV) break
         visitedEdges.add(nextEdge)
         path.push(vpos.get(nextV)!)
+        orderedEdgeKeys.push(nextEdge)
         // Stop at branch points (degree > 2) to let other arms start from there
         if ((vertToEdges.get(nextV)?.length ?? 0) > 2) break
         curV = nextV
       }
 
-      if (path.length >= 2) paths.push(path)
+      if (path.length >= 2) paths.push({ path, orderedEdgeKeys })
     }
   }
 
@@ -202,18 +219,25 @@ function buildOrderedPaths(
 /**
  * Build the blob polygon for one polyline path.
  * Creates an offset ribbon around the path, then applies the full Perlin blob pipeline.
+ * `leftHalfWidth` / `rightHalfWidth` override the default symmetric halfWidth per side
+ * (positive offset = left of path direction; negative = right).
  */
 function buildRibbonBlob(
   path: [number, number][],
   params: EdgeBlobParams,
   R: number,
+  leftHalfWidth?: number,
+  rightHalfWidth?: number,
 ): [number, number][] {
   const { smooth, offset, bump: bumpFraction, sweepFreq, lobeFreq, lobeAmp, lobeThreshold, lobeDirection, width } = params
   const halfWidth = width * R * Math.max(0.1, 1 + offset)
 
+  const lw = leftHalfWidth  ?? halfWidth
+  const rw = rightHalfWidth ?? halfWidth
+
   // Offset both sides to form a ribbon
-  const left  = offsetPolyline(path,  halfWidth)
-  const right = offsetPolyline(path, -halfWidth)
+  const left  = offsetPolyline(path,  lw)
+  const right = offsetPolyline(path, -rw)
 
   // Close the polygon with taper points at each end
   const startPt = path[0]
@@ -248,20 +272,66 @@ function buildRibbonBlob(
   return poly
 }
 
+/** How far (in units of R) to extend the ribbon toward a matching-terrain hex. */
+const HEX_CONNECT_EXTEND = 0.7
+
 /**
  * Build all blob polygons for one edge chain.
  * Returns a list of polygons (one per non-branching path segment in the chain).
+ *
+ * When `hexTerrainSet` is provided, any side of the ribbon that faces a hex
+ * whose terrain matches the chain terrain is extended to `HEX_CONNECT_EXTEND * R`
+ * so the edge blob visually merges with the adjacent hex blob.
  */
 export function buildEdgeBlobPolys(
   chain: EdgeBlobChain,
   hexVertMap: Map<string, [number, number][]>,
   params: EdgeBlobParams,
   R: number,
+  hexTerrainSet?: Set<string>,
 ): [number, number][][] {
-  const paths = buildOrderedPaths(chain.edgeKeys, hexVertMap)
+  const ordered = buildOrderedPaths(chain.edgeKeys, hexVertMap)
+  const halfWidth = params.width * R * Math.max(0.1, 1 + params.offset)
+  const bigWidth  = Math.max(halfWidth, HEX_CONNECT_EXTEND * R)
+
   const result: [number, number][][] = []
-  for (const path of paths) {
-    const poly = buildRibbonBlob(path, params, R)
+  for (const { path, orderedEdgeKeys } of ordered) {
+    let leftHalfWidth  = halfWidth
+    let rightHalfWidth = halfWidth
+
+    if (hexTerrainSet && hexTerrainSet.size > 0) {
+      let leftMatch = 0, rightMatch = 0
+
+      for (let i = 0; i < orderedEdgeKeys.length; i++) {
+        const { q1, r1, q2, r2 } = parseEdgeBlobKey(orderedEdgeKeys[i])
+        const c1 = hexCenter(q1, r1, hexVertMap)
+        const c2 = hexCenter(q2, r2, hexVertMap)
+        if (!c1 || !c2) continue
+
+        // Segment direction from path[i] to path[i+1]
+        const dx = path[i + 1][0] - path[i][0]
+        const dy = path[i + 1][1] - path[i][1]
+
+        // 2D cross product (dx,dy) × (c-path[i]) = dx*cy - dy*cx.
+        // In canvas coords (Y-down): cross > 0 → point is on the positive-offset side
+        // of the path, i.e. offsetPolyline(path, +w) extends toward it.
+        const cross1 = dx * (c1[1] - path[i][1]) - dy * (c1[0] - path[i][0])
+        const cross2 = dx * (c2[1] - path[i][1]) - dy * (c2[0] - path[i][0])
+
+        const hex1Match = hexTerrainSet.has(`${q1},${r1}`)
+        const hex2Match = hexTerrainSet.has(`${q2},${r2}`)
+
+        // cross > 0 → hex is on positive-offset side → extend leftHalfWidth (used with +offset)
+        // cross < 0 → hex is on negative-offset side → extend rightHalfWidth (used with -offset)
+        if (hex1Match) { if (cross1 > 0) leftMatch++; else rightMatch++ }
+        if (hex2Match) { if (cross2 > 0) leftMatch++; else rightMatch++ }
+      }
+
+      if (leftMatch  > 0) leftHalfWidth  = bigWidth
+      if (rightMatch > 0) rightHalfWidth = bigWidth
+    }
+
+    const poly = buildRibbonBlob(path, params, R, leftHalfWidth, rightHalfWidth)
     if (poly.length >= 3) result.push(poly)
   }
   return result
