@@ -2,6 +2,7 @@
 
 import type { RoadTierStyle, RailStyle, RoadDashStyle } from '../store/mapStore'
 import { offsetPolyline } from './geometry'
+import rough from 'roughjs'
 
 function dashPattern(style: RoadDashStyle, w: number): number[] {
   if (style === 'dashed') return [w * 2.5, w * 1.5]
@@ -39,18 +40,27 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     for (const { tier, chain } of roadChains) chainsByTier[tier].push(chain)
 
     if (mapStyle === 'historical_simple') {
-      // Single ink stroke — color, width, and dash only
-      rCtx.lineJoin = 'round'
+      // Wrap the context so rough.canvas works with both HTMLCanvasElement and OffscreenCanvas
+      const ctxWrapper = { getContext: () => rCtx } as unknown as HTMLCanvasElement
+      const rc = rough.canvas(ctxWrapper)
       for (const tier of [2, 1, 0] as const) {
         const s = tierStyles[tier]
         const w = s.outerW * 0.4
-        rCtx.lineCap = s.caseDash === 'dashed' ? 'butt' : 'round'
-        rCtx.strokeStyle = s.outer
-        rCtx.lineWidth = w
-        rCtx.setLineDash(dashPattern(s.caseDash, w))
-        for (const chain of chainsByTier[tier]) drawChain(chain)
+        const dash = dashPattern(s.caseDash, w)
+        for (const chain of chainsByTier[tier]) {
+          const pts = chain.map(([lon, lat]) => project(lon, lat))
+          if (pts.length < 2) continue
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
+          rc.path(d, {
+            roughness: 1.2,
+            stroke: s.outer,
+            strokeWidth: w,
+            fill: 'none',
+            seed: Math.abs(Math.round(pts[0][0] * 7 + pts[0][1] * 13)) + tier,
+            strokeLineDash: dash,
+          })
+        }
       }
-      rCtx.setLineDash([])
     } else {
       rCtx.lineJoin = 'round'
       for (const tier of [2, 1, 0] as const) {
