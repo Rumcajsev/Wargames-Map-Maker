@@ -1,5 +1,5 @@
 import type { MapStore, RawRoadWay, RoadEdge, HexRoadPath, RoadTierStyle, RoadGeomOverride, ActiveTool } from '../mapStore'
-import { TIER_HIGHWAYS, HIGHWAY_TO_TIER, roadEdgeCanonicalKey, DEFAULT_ROAD_TIER_STYLES } from '../mapStore'
+import { TIER_HIGHWAYS, HIGHWAY_TO_TIER, roadEdgeCanonicalKey, DEFAULT_ROAD_TIER_STYLES, DEFAULT_ROAD_GEOM } from '../mapStore'
 
 export type RoadsSlice = {
   rawRoadWays: RawRoadWay[]
@@ -110,10 +110,10 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
   roadPaintBrush: 1,
   roadPaintEraser: false,
   roadNodeEditMode: false,
-  roadWiggleAmp: 0,
-  roadWiggleFreq: 2.5,
-  roadSmoothing: 10,
-  roadPathSmoothing: 0,
+  roadWiggleAmp: DEFAULT_ROAD_GEOM.wiggleAmp,
+  roadWiggleFreq: DEFAULT_ROAD_GEOM.wiggleFreq,
+  roadSmoothing: DEFAULT_ROAD_GEOM.smoothing,
+  roadPathSmoothing: DEFAULT_ROAD_GEOM.pathSmoothing,
   roadChainOverrides: {},
   roadSnapBindings: {},
   roadTierStyles: [...DEFAULT_ROAD_TIER_STYLES] as [RoadTierStyle, RoadTierStyle, RoadTierStyle],

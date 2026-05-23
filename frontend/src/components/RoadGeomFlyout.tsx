@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { useMapStore } from '../store/mapStore'
+import { useEffect, useState } from 'react'
+import { useMapStore, DEFAULT_ROAD_GEOM, DEFAULT_RAIL_GEOM } from '../store/mapStore'
 
 type Props = {
   mode: 'road' | 'rail'
@@ -23,7 +23,7 @@ export function RoadGeomFlyout({ mode, anchorY, onClose }: Props) {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!(e.target as Element).closest('[data-road-geom-flyout]')) onClose()
+      if (!(e.target as Element).closest('[data-road-geom-flyout]')) { setConfirmReset(false); onClose() }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -31,6 +31,7 @@ export function RoadGeomFlyout({ mode, anchorY, onClose }: Props) {
 
   const isRoad = mode === 'road'
   const accent = isRoad ? '#5a9e6f' : '#4a9ab0'
+  const defaults = isRoad ? DEFAULT_ROAD_GEOM : DEFAULT_RAIL_GEOM
 
   const wiggleAmp = isRoad ? roadWiggleAmp : railWiggleAmp
   const wiggleFreq = isRoad ? roadWiggleFreq : railWiggleFreq
@@ -43,7 +44,24 @@ export function RoadGeomFlyout({ mode, anchorY, onClose }: Props) {
   const setSmoothing = isRoad ? setRoadSmoothing : setRailSmoothing
   const setWiggleDragging = isRoad ? setRoadWiggleDragging : setRailWiggleDragging
 
-  const flyoutHeight = 210
+  const isModified =
+    wiggleAmp !== defaults.wiggleAmp ||
+    wiggleFreq !== defaults.wiggleFreq ||
+    pathSmoothing !== defaults.pathSmoothing ||
+    smoothing !== defaults.smoothing
+
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  const handleReset = () => {
+    if (!confirmReset) { setConfirmReset(true); return }
+    setWiggleAmp(defaults.wiggleAmp)
+    setWiggleFreq(defaults.wiggleFreq)
+    setPathSmoothing(defaults.pathSmoothing)
+    setSmoothing(defaults.smoothing)
+    setConfirmReset(false)
+  }
+
+  const flyoutHeight = confirmReset ? 250 : 210
   const top = Math.min(anchorY, window.innerHeight - flyoutHeight - 8)
 
   return (
@@ -69,13 +87,40 @@ export function RoadGeomFlyout({ mode, anchorY, onClose }: Props) {
         <span style={{ color: '#e0e0f0', letterSpacing: 0.5 }}>
           {isRoad ? 'Default road shape' : 'Default rail shape'}
         </span>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-        >×</button>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {isModified && (
+            <button
+              onClick={handleReset}
+              title="Revert to defaults"
+              style={{ background: 'none', border: 'none', color: confirmReset ? '#c08040' : '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 13, lineHeight: 1 }}
+              onMouseEnter={e => (e.currentTarget.style.color = confirmReset ? '#e09050' : '#a0a0c0')}
+              onMouseLeave={e => (e.currentTarget.style.color = confirmReset ? '#c08040' : '#4a4a6a')}
+            >↺</button>
+          )}
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
+          >×</button>
+        </div>
       </div>
+
+      {confirmReset && (
+        <div style={{ background: '#1a1520', border: '1px solid #3a2a1a', borderRadius: 3, padding: '8px 10px', marginBottom: 10 }}>
+          <div style={{ color: '#c09060', fontSize: 10, marginBottom: 6 }}>Reset to defaults?</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={handleReset}
+              style={{ flex: 1, padding: '3px 0', fontSize: 10, background: '#2a1a0a', border: '1px solid #6a4a2a', color: '#d09050', borderRadius: 3, cursor: 'pointer', fontFamily: 'ui-monospace, monospace' }}
+            >Reset</button>
+            <button
+              onClick={() => setConfirmReset(false)}
+              style={{ flex: 1, padding: '3px 0', fontSize: 10, background: 'none', border: '1px solid #2a2a4a', color: '#5a5a7a', borderRadius: 3, cursor: 'pointer', fontFamily: 'ui-monospace, monospace' }}
+            >Cancel</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
         <span style={{ color: '#6a6a8a', fontSize: 11 }}>Wiggle amp</span>

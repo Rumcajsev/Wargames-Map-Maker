@@ -284,6 +284,20 @@ export const DEFAULT_RAIL_STYLE: RailStyle = {
   railStyle: 'classic',
 }
 
+export const DEFAULT_ROAD_GEOM = {
+  wiggleAmp: 0.20,
+  wiggleFreq: 0.9,
+  pathSmoothing: 0,
+  smoothing: 10,
+}
+
+export const DEFAULT_RAIL_GEOM = {
+  wiggleAmp: 0,
+  wiggleFreq: 2.5,
+  pathSmoothing: 0,
+  smoothing: 10,
+}
+
 export const LABEL_FONTS = {
   classic: { name: 'Classic',  family: "Georgia, 'Times New Roman', serif" },
   antique: { name: 'Antique',  family: "'IM Fell English', Palatino, 'Book Antiqua', serif" },
