@@ -176,29 +176,9 @@ def _process_tiles(
     return stats
 
 
-def classify_elevation(
-    elevation_median_m: float,
-    elevation_range_m: float,
-    thresholds: dict,
-) -> str:
-    rank = {"flat": 0, "hills": 1, "mountains": 2}
-    range_class = (
-        "mountains" if elevation_range_m >= thresholds["mountains_range_m"]
-        else "hills" if elevation_range_m >= thresholds["hills_range_m"]
-        else "flat"
-    )
-    abs_class = (
-        "mountains" if elevation_median_m >= thresholds["mountains_absolute_m"]
-        else "hills" if elevation_median_m >= thresholds["hills_absolute_m"]
-        else "flat"
-    )
-    return max(range_class, abs_class, key=lambda x: rank[x])
-
-
 async def generate_elevation(
     hexes: list[dict],
     config,
-    thresholds: dict,
     progress_cb=None,
 ) -> list[dict]:
     for h in hexes:
@@ -260,9 +240,6 @@ async def generate_elevation(
         if s is None:
             continue
         h.update(s)
-        h["elevation_class"] = classify_elevation(
-            s["elevation_median_m"], s["elevation_range_m"], thresholds
-        )
 
     return hexes
 
@@ -270,7 +247,6 @@ async def generate_elevation(
 async def elevation_stream_generator(
     hexes: list[dict],
     config,
-    thresholds: dict,
 ) -> AsyncGenerator[str, None]:
     try:
         yield f"data: {json.dumps({'step': 'progress', 'message': 'Starting elevation fetch…', 'progress': 2})}\n\n"
@@ -282,7 +258,7 @@ async def elevation_stream_generator(
 
         async def run() -> None:
             try:
-                result = await generate_elevation(hexes, config, thresholds, progress_cb=cb)
+                result = await generate_elevation(hexes, config, progress_cb=cb)
                 await progress_queue.put(("__done__", result))
             except Exception as exc:
                 await progress_queue.put(("__error__", str(exc)))

@@ -200,7 +200,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     placeIcon, removeIconAt,
     labelOverlays, placedLabels, activeLabelOverlayId,
     placeLabel, removeLabelAt, updateLabelText, moveLabelTo,
-    elevationPaintMode,
     showElevationDebug,
     activeTool,
     setActiveTool,

@@ -91,15 +91,9 @@ async def generate_rails(config: RailsConfig) -> dict:
 
 @router.post("/elevation-stream")
 async def elevation_stream(config: ElevationConfig) -> StreamingResponse:
-    thresholds = {
-        "hills_range_m": config.hills_range_m,
-        "mountains_range_m": config.mountains_range_m,
-        "hills_absolute_m": config.hills_absolute_m,
-        "mountains_absolute_m": config.mountains_absolute_m,
-    }
     hexes = [dict(h) for h in config.hexes]
     return StreamingResponse(
-        elevation_stream_generator(hexes, config, thresholds),
+        elevation_stream_generator(hexes, config),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

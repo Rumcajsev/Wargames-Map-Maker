@@ -128,9 +128,6 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     updates.terrainPaintMode = tool.type === 'terrain'
     if (tool.type === 'terrain') updates.terrainPaintBrush = tool.brush
 
-    updates.elevationPaintMode = tool.type === 'elevation'
-    if (tool.type === 'elevation') updates.elevationPaintBrush = tool.brush
-
     updates.lakePaintMode = tool.type === 'lake'
 
     updates.roadPaintMode = tool.type === 'road'
@@ -317,10 +314,8 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         riverPathSmoothing: s.riverPathSmoothing,
         showRiverLabels: s.showRiverLabels, riverLabelColor: s.riverLabelColor,
         canalWidthScale: s.canalWidthScale,
-        elevationThresholds: s.elevationThresholds, elevationStatus: s.elevationStatus,
-        showReliefHeatmap: s.showReliefHeatmap, showElevHeatmap: s.showElevHeatmap,
-        activePanel: s.activePanel, elevationStyle: s.elevationStyle,
-        contourInterval: s.contourInterval, hexBorderMode: s.hexBorderMode,
+        elevationStatus: s.elevationStatus,
+        activePanel: s.activePanel, hexBorderMode: s.hexBorderMode,
         terrainDisplacement: s.terrainDisplacement, terrainNoiseFrequency: s.terrainNoiseFrequency,
         terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
         illustratedStyle: s.illustratedStyle,
@@ -611,14 +606,23 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
         h.elevation_range_m = null
       }
     }
-    const t = s.elevationThresholds as Record<string, unknown> | undefined
-    if (t) {
-      t.hills_range_m = t.hills_relief_m ?? 80
-      t.mountains_range_m = t.mountains_relief_m ?? 300
-      delete t.hills_relief_m
-      delete t.mountains_relief_m
-    }
     s.elevationStatus = 'idle'
+  }
+  if (fromVersion < 39) {
+    const hexes = s.generatedHexes as Array<Record<string, unknown>> | undefined
+    if (hexes) {
+      for (const h of hexes) {
+        delete h.elevation_class
+        delete h.elevation_manual_override
+      }
+    }
+    delete s.elevationThresholds
+    delete s.showReliefHeatmap
+    delete s.showElevHeatmap
+    delete s.elevationStyle
+    delete s.contourInterval
+    delete s.elevationPaintMode
+    delete s.elevationPaintBrush
   }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'

@@ -111,7 +111,7 @@ export const createRailsSlice = (set: Set, get: () => MapStore): RailsSlice => (
   setRailPaintEraser: (v) => set({ railPaintEraser: v }),
   setRailStyle: (update) => set((state) => ({ railStyle: { ...state.railStyle, ...update } })),
 
-  setRailNodeEditMode: (v) => set({ railNodeEditMode: v, ...(v ? { railPaintMode: false, roadPaintMode: false, terrainPaintMode: false, elevationPaintMode: false } : {}) }),
+  setRailNodeEditMode: (v) => set({ railNodeEditMode: v, ...(v ? { railPaintMode: false, roadPaintMode: false, terrainPaintMode: false } : {}) }),
   setRailControlOverride: (key, pos) => set(s => ({ railControlOverrides: { ...s.railControlOverrides, [key]: pos } })),
   deleteRailControlOverride: (key) => set(s => { const { [key]: _, ...rest } = s.railControlOverrides; return { railControlOverrides: rest } }),
   setRailSnapBinding: (jtKey, emKey) => set(s => ({ railSnapBindings: { ...s.railSnapBindings, [jtKey]: emKey } })),

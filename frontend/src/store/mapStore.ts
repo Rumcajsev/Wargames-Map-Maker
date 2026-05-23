@@ -69,19 +69,6 @@ export interface BlobOverride {
   width?: number
 }
 
-export interface ElevationThresholds {
-  hills_range_m: number
-  mountains_range_m: number
-  hills_absolute_m: number
-  mountains_absolute_m: number
-}
-
-export const DEFAULT_ELEVATION_THRESHOLDS: ElevationThresholds = {
-  hills_range_m: 80,
-  mountains_range_m: 300,
-  hills_absolute_m: 600,
-  mountains_absolute_m: 1500,
-}
 
 export type PaperSize = 'A4' | 'A3' | 'A2' | 'A1'
 export type Orientation = 'portrait' | 'landscape'
@@ -91,7 +78,6 @@ export type HexEdgeMode = 'whole' | 'half'
 export type ActiveTool =
   | { type: 'none' }
   | { type: 'terrain'; brush: string }
-  | { type: 'elevation'; brush: 'flat' | 'hills' | 'mountains' }
   | { type: 'lake' }
   | { type: 'road'; tier: 0 | 1 | 2; erasing: boolean }
   | { type: 'rail'; erasing: boolean }
@@ -147,8 +133,6 @@ export interface GeneratedHex {
   elevation_max_m: number | null
   elevation_min_m: number | null
   elevation_range_m: number | null
-  elevation_class: 'flat' | 'hills' | 'mountains' | null
-  elevation_manual_override?: boolean
   coastline_clip?: [number, number][][] | null
 }
 
@@ -487,7 +471,7 @@ export function railEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: num
 }
 
 export interface UndoSnapshot {
-  terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean; isLake: boolean; elevation_class: 'flat' | 'hills' | 'mountains' | null; elevation_manual_override: boolean }>
+  terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean; isLake: boolean }>
   roadEdges: RoadEdge[]
   railEdges: RailEdge[]
   riverEdges: { q1: number; r1: number; q2: number; r2: number }[]
@@ -607,13 +591,8 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     riverWiggliness: s.riverWiggliness,
     showRiverLabels: s.showRiverLabels,
     riverLabelColor: s.riverLabelColor,
-    elevationThresholds: s.elevationThresholds,
     elevationStatus: s.elevationStatus,
-    showReliefHeatmap: s.showReliefHeatmap,
-    showElevHeatmap: s.showElevHeatmap,
     activePanel: s.activePanel,
-    elevationStyle: s.elevationStyle,
-    contourInterval: s.contourInterval,
     hexBorderMode: s.hexBorderMode,
     terrainDisplacement: s.terrainDisplacement,
     terrainNoiseFrequency: s.terrainNoiseFrequency,
@@ -744,7 +723,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     megaHexOriginQ: s.megaHexOriginQ,
     megaHexOriginR: s.megaHexOriginR,
   }),
-  version: 38,
+  version: 39,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

@@ -260,7 +260,7 @@ export const createRoadsSlice = (set: Set, get: () => MapStore): RoadsSlice => (
     }
   },
 
-  setRoadNodeEditMode: (v) => set({ roadNodeEditMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, terrainPaintMode: false, elevationPaintMode: false } : {}) }),
+  setRoadNodeEditMode: (v) => set({ roadNodeEditMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, terrainPaintMode: false } : {}) }),
   deleteRoadControlOverride: (key) => set(s => {
     const { [key]: _a, ...restOverrides } = s.roadControlOverrides
     const { [key]: _b, ...restBindings } = s.roadSnapBindings

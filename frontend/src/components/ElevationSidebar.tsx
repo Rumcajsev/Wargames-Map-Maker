@@ -12,8 +12,8 @@ export function ElevationSidebar() {
     setShowElevationDebug,
   } = useMapStore()
 
-  const hasData = generatedHexes.some(h => h.elevation_class != null)
-  const classifiedCount = generatedHexes.filter(h => h.elevation_class != null).length
+  const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
+  const fetchedCount = generatedHexes.filter(h => h.elevation_avg_m != null).length
   const isLoading = elevationStatus === 'loading'
   const noHexes = generatedHexes.length === 0
 
@@ -68,7 +68,7 @@ export function ElevationSidebar() {
 
         {elevationStatus === 'done' && (
           <div style={{ fontSize: 10, color: '#4a4a6a' }}>
-            {classifiedCount} / {generatedHexes.length} hexes classified
+            {fetchedCount} / {generatedHexes.length} hexes with elevation data
           </div>
         )}
       </div>
