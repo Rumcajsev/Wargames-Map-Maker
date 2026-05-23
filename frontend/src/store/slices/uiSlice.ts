@@ -645,6 +645,19 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       if (p.hillsMedianFloorM === undefined) p.hillsMedianFloorM = 200
     }
   }
+  if (fromVersion < 42) {
+    const p = s.classificationParams as Record<string, unknown> | undefined
+    if (p) {
+      if (p.rangeFloorM === undefined) p.rangeFloorM = p.hillsFloorM ?? 50
+      if (p.medianFloorM === undefined) p.medianFloorM = p.hillsMedianFloorM ?? 300
+      delete p.mountainsFloorM
+      delete p.hillsFloorM
+      delete p.mountainsMedianPct
+      delete p.hillsMedianPct
+      delete p.mountainsMedianFloorM
+      delete p.hillsMedianFloorM
+    }
+  }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }

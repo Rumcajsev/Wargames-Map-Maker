@@ -22,17 +22,14 @@ export function classifyElevation(
     return hexes.map(h => ({ ...h, elevation_class: null }))
   }
 
-  // Build sorted arrays for each signal
   const rangesSorted = active.map(h => h.elevation_range_m!).sort((a, b) => a - b)
   const mediansSorted = active.map(h => h.elevation_median_m!).sort((a, b) => a - b)
 
-  // Range thresholds (ruggedness)
+  // Same % thresholds applied to both signals
   const mRangeMin = pctThreshold(rangesSorted, params.mountainsPct)
   const hRangeMin = pctThreshold(rangesSorted, params.mountainsPct + params.hillsPct)
-
-  // Median thresholds (absolute height)
-  const mMedianMin = pctThreshold(mediansSorted, params.mountainsMedianPct)
-  const hMedianMin = pctThreshold(mediansSorted, params.mountainsMedianPct + params.hillsMedianPct)
+  const mMedianMin = pctThreshold(mediansSorted, params.mountainsPct)
+  const hMedianMin = pctThreshold(mediansSorted, params.mountainsPct + params.hillsPct)
 
   return hexes.map(h => {
     if (
@@ -46,17 +43,20 @@ export function classifyElevation(
     const range = h.elevation_range_m
     const median = h.elevation_median_m
 
-    // Classify by ruggedness
+    // Ruggedness signal — only active if range meets the floor
     let byRange: ElevClass = 'flat'
-    if (range >= mRangeMin && range >= params.mountainsFloorM) byRange = 'mountains'
-    else if (range >= hRangeMin && range >= params.hillsFloorM) byRange = 'hills'
+    if (range >= params.rangeFloorM) {
+      if (range >= mRangeMin) byRange = 'mountains'
+      else if (range >= hRangeMin) byRange = 'hills'
+    }
 
-    // Classify by absolute height
+    // Height signal — only active if median meets the floor
     let byMedian: ElevClass = 'flat'
-    if (median >= mMedianMin && median >= params.mountainsMedianFloorM) byMedian = 'mountains'
-    else if (median >= hMedianMin && median >= params.hillsMedianFloorM) byMedian = 'hills'
+    if (median >= params.medianFloorM) {
+      if (median >= mMedianMin) byMedian = 'mountains'
+      else if (median >= hMedianMin) byMedian = 'hills'
+    }
 
-    // Take the higher of the two
     const result: ElevClass = RANK[byRange] >= RANK[byMedian] ? byRange : byMedian
     return { ...h, elevation_class: result }
   })
