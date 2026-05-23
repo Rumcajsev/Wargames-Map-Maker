@@ -179,6 +179,9 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       .sort((a, b) => (BLOB_Z[a] ?? 5) - (BLOB_Z[b] ?? 5))
 
     for (const terrain of allTerrains) {
+      const isVegetation = terrain === 'woods' || terrain === 'light_woods'
+      if (isVegetation && params.mapStyle === 'historical_simple') continue
+
       const defaultPolys = defaultBlobMap.get(terrain) ?? []
 
       // a. Fill default polys
@@ -329,6 +332,8 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const hexTerrainSet = terrainToHexes.get(chain.terrain)
       const polys = buildEdgeBlobPolys(chain, hexVertMap, chainParams, R, hexTerrainSet)
       if (polys.length === 0) continue
+      const isEdgeVegetation = chain.terrain === 'woods' || chain.terrain === 'light_woods'
+      if (isEdgeVegetation && params.mapStyle === 'historical_simple') continue
       const color = override?.color ?? terrainColors[chain.terrain] ?? '#cccccc'
       tCtx.fillStyle = color
       tCtx.beginPath()
