@@ -260,12 +260,14 @@ export interface RoadTierStyle {
   outerW: number
   caseDash: RoadDashStyle
   fillDash: RoadDashStyle
+  roughness: number
+  bowing: number
 }
 
 export const DEFAULT_ROAD_TIER_STYLES: [RoadTierStyle, RoadTierStyle, RoadTierStyle] = [
-  { outer: '#ffe8a8', inner: '#b07820', outerW: 4.5, caseDash: 'solid', fillDash: 'solid' },
-  { outer: '#f0e0b8', inner: '#8a5c2a', outerW: 3.0, caseDash: 'solid', fillDash: 'solid' },
-  { outer: '#d8d8c0', inner: '#606060', outerW: 2.0, caseDash: 'solid', fillDash: 'solid' },
+  { outer: '#ffe8a8', inner: '#b07820', outerW: 4.5, caseDash: 'solid', fillDash: 'solid', roughness: 0.3, bowing: 0.5 },
+  { outer: '#f0e0b8', inner: '#8a5c2a', outerW: 3.0, caseDash: 'solid', fillDash: 'solid', roughness: 0.3, bowing: 0.5 },
+  { outer: '#d8d8c0', inner: '#606060', outerW: 2.0, caseDash: 'solid', fillDash: 'solid', roughness: 0.3, bowing: 0.5 },
 ]
 
 export interface RailStyle {
@@ -754,7 +756,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageOpacity: s.mapImageOpacity,
     mapImageConfidenceVisible: s.mapImageConfidenceVisible,
   }),
-  version: 44,
+  version: 45,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

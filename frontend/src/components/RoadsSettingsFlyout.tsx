@@ -178,6 +178,20 @@ export function RoadsSettingsFlyout(props: Props) {
             {!isHistorical && dashRow('Fill stroke', s.fillDash, v => setRoadTierStyle(tier, { fillDash: v }))}
             {colorRow(isHistorical ? 'Color' : 'Casing', s.outer, PALETTE_ROAD_CASING, v => setRoadTierStyle(tier, { outer: v }))}
             {dashRow(isHistorical ? 'Stroke' : 'Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
+            {isHistorical && <>
+              <div>
+                {row('Roughness', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{s.roughness.toFixed(2)}</span>)}
+                <input type="range" min={0} max={3} step={0.05} value={s.roughness}
+                  onChange={e => setRoadTierStyle(tier, { roughness: parseFloat(e.target.value) })}
+                  style={{ width: '100%', marginBottom: 8 }} />
+              </div>
+              <div>
+                {row('Bowing', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{s.bowing.toFixed(2)}</span>)}
+                <input type="range" min={0} max={5} step={0.1} value={s.bowing}
+                  onChange={e => setRoadTierStyle(tier, { bowing: parseFloat(e.target.value) })}
+                  style={{ width: '100%', marginBottom: 8 }} />
+              </div>
+            </>}
           </div>
         )
       })()}

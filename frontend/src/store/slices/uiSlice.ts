@@ -678,6 +678,15 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 44) {
     if (!s.dataSource) s.dataSource = 'osm'
   }
+  if (fromVersion < 45) {
+    const tiers = s.roadTierStyles as Array<Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const t of tiers) {
+        if (t.roughness === undefined) t.roughness = 0.3
+        if (t.bowing === undefined) t.bowing = 0.5
+      }
+    }
+  }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }
