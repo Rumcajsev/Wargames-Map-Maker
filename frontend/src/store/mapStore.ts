@@ -17,6 +17,7 @@ import { type BridgesSlice, createBridgesSlice } from './slices/bridgesSlice'
 import { type MegaHexSlice, createMegaHexSlice } from './slices/megaHexSlice'
 import { type AreasSlice, createAreasSlice } from './slices/areasSlice'
 import { type PresetsSlice, createPresetsSlice } from './slices/presetsSlice'
+import { type MapImageSlice, createMapImageSlice } from './slices/mapImageSlice'
 
 export interface RoadGeomOverride {
   wiggleAmp: number
@@ -93,6 +94,7 @@ export type HexEdgeMode = 'whole' | 'half'
 export type ActiveTool =
   | { type: 'none' }
   | { type: 'terrain'; brush: string }
+  | { type: 'elevation'; brush: 'flat' | 'hills' | 'mountains' }
   | { type: 'lake' }
   | { type: 'road'; tier: 0 | 1 | 2; erasing: boolean }
   | { type: 'rail'; erasing: boolean }
@@ -118,6 +120,7 @@ export type ActiveTool =
   | { type: 'mega-hex-origin' }
   | { type: 'areas-draw' }
   | { type: 'areas-erase' }
+  | { type: 'align-image' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -149,7 +152,10 @@ export interface GeneratedHex {
   elevation_min_m: number | null
   elevation_range_m: number | null
   elevation_class: 'flat' | 'hills' | 'mountains' | null
+  elevation_manual_override?: boolean
   coastline_clip?: [number, number][][] | null
+  ai_confidence?: number
+  ai_notes?: string
 }
 
 export function hexTerrainLayers(h: GeneratedHex): string[] {
@@ -487,7 +493,7 @@ export function railEdgeCanonicalKey(q1: number, r1: number, q2: number, r2: num
 }
 
 export interface UndoSnapshot {
-  terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean; isLake: boolean }>
+  terrainHexes: Array<{ q: number; r: number; terrain: string; manual_override: boolean; isLake: boolean; elevation_class: 'flat' | 'hills' | 'mountains' | null; elevation_manual_override: boolean }>
   roadEdges: RoadEdge[]
   railEdges: RailEdge[]
   riverEdges: { q1: number; r1: number; q2: number; r2: number }[]
@@ -518,7 +524,8 @@ export type MapStore =
   BridgesSlice &
   MegaHexSlice &
   AreasSlice &
-  PresetsSlice
+  PresetsSlice &
+  MapImageSlice
 
 export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createSetupSlice(set, get),
@@ -537,6 +544,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createMegaHexSlice(set),
   ...createAreasSlice(set, get),
   ...createPresetsSlice(set, get),
+  ...createMapImageSlice(set, get),
 }), {
   name: 'ig2-map-store',
   storage: {
@@ -741,8 +749,12 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     megaHexLineWidth: s.megaHexLineWidth,
     megaHexOriginQ: s.megaHexOriginQ,
     megaHexOriginR: s.megaHexOriginR,
+    dataSource: s.dataSource,
+    mapImageTransform: s.mapImageTransform,
+    mapImageOpacity: s.mapImageOpacity,
+    mapImageConfidenceVisible: s.mapImageConfidenceVisible,
   }),
-  version: 43,
+  version: 44,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

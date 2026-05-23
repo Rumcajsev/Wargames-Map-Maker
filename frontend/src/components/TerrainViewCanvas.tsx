@@ -132,6 +132,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection,
     terrainColors, terrainTextureScales,
     terrainPaintMode, terrainPaintBrush, overrideHexTerrain, addHexTerrainLayer, removeHexTerrainLayer, resetHexOverride,
+    elevationPaintMode, elevationPaintBrush, overrideHexElevation,
     terrainLayersEnabled,
     roadEdges, railEdges, rawRoadWays, rawRailWays, roadTierStyles, railStyle,
     showRawOsmRoads, osmHighlightTier, osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
@@ -229,6 +230,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const terrainPaintModeRef = useRef(terrainPaintMode)
   const terrainPaintBrushRef = useRef(terrainPaintBrush)
   const overrideHexTerrainRef = useRef(overrideHexTerrain)
+  const elevationPaintModeRef = useRef(elevationPaintMode)
+  const elevationPaintBrushRef = useRef(elevationPaintBrush)
+  const overrideHexElevationRef = useRef(overrideHexElevation)
   const addHexTerrainLayerRef = useRef(addHexTerrainLayer)
   const terrainEdgePaintEnabledRef = useRef(terrainEdgePaintEnabled)
   const paintEdgeBlobRef = useRef(paintEdgeBlob)
@@ -498,6 +502,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   terrainPaintModeRef.current = terrainPaintMode
   terrainPaintBrushRef.current = terrainPaintBrush
   overrideHexTerrainRef.current = overrideHexTerrain
+  elevationPaintModeRef.current = elevationPaintMode
+  elevationPaintBrushRef.current = elevationPaintBrush
+  overrideHexElevationRef.current = overrideHexElevation
   addHexTerrainLayerRef.current = addHexTerrainLayer
   terrainLayersEnabledRef.current = terrainLayersEnabled
   roadEdgesRef.current = roadEdges
@@ -594,6 +601,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   terrainLayersEnabledRef.current = terrainLayersEnabled
   resetHexOverrideRef.current = resetHexOverride
   removeHexTerrainLayerRef.current = removeHexTerrainLayer
+  elevationPaintModeRef.current = elevationPaintMode
+  elevationPaintBrushRef.current = elevationPaintBrush
+  overrideHexElevationRef.current = overrideHexElevation
   roadWiggleAmpRef.current = roadWiggleAmp
   roadWiggleFreqRef.current = roadWiggleFreq
   roadSmoothingRef.current = roadSmoothing
@@ -2084,6 +2094,24 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       _drawExcludedHexOverlay(ctx, projected, excludedSet, mapBgColorRef.current)
     }
 
+    // Elevation paint hover highlight
+    if (!isExport && elevationPaintModeRef.current) {
+      const hoverTarget = paintHoverTargetRef.current
+      if (hoverTarget?.type === 'hex') {
+        const brushColor: Record<string, string> = { flat: '#3a7a3a', hills: '#7a7a30', mountains: '#7a4a20' }
+        ctx.save()
+        ctx.globalAlpha = 0.45
+        ctx.fillStyle = brushColor[elevationPaintBrushRef.current] ?? '#888888'
+        ctx.beginPath()
+        const { verts } = hoverTarget
+        ctx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i][0], verts[i][1])
+        ctx.closePath()
+        ctx.fill()
+        ctx.restore()
+      }
+    }
+
     // Paint hover highlight (screen only — shows what clicking would paint)
     if (!isExport && terrainPaintModeRef.current) {
       const hoverTarget = paintHoverTargetRef.current
@@ -2483,7 +2511,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const onDown = (e: MouseEvent) => {
       if (e.button !== 1 && e.button !== 0) return
       if (e.button === 0 && (e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (e.button === 0 && (terrainPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current || activeToolRef.current.type === 'hex-mask' || activeToolRef.current.type === 'mega-hex-origin')) return
+      if (e.button === 0 && (terrainPaintModeRef.current || elevationPaintModeRef.current || roadPaintModeRef.current || railPaintModeRef.current || riverEditModeRef.current || lakePaintModeRef.current || activeToolRef.current.type === 'hex-mask' || activeToolRef.current.type === 'mega-hex-origin')) return
       if (e.button === 0 && activePanelRef.current === 'highlights' && (highlightPaintModeRef.current || highlightLineEraserRef.current)) return
       if (e.button === 0 && activePanelRef.current === 'areas' && (activeToolRef.current.type === 'areas-draw' || activeToolRef.current.type === 'areas-erase')) return
       if (e.button === 0 && draggingCpKeyRef.current) return
@@ -2621,13 +2649,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     return null
   }, [clientToLogical])
 
-  // Clear hover when terrain paint mode is deactivated
+  // Clear hover when paint mode is deactivated
   useEffect(() => {
-    if (!terrainPaintMode && paintHoverTargetRef.current !== null) {
+    if (!terrainPaintMode && !elevationPaintMode && paintHoverTargetRef.current !== null) {
       paintHoverTargetRef.current = null
       draw()
     }
-  }, [terrainPaintMode, draw])
+  }, [terrainPaintMode, elevationPaintMode, draw])
 
   useEffect(() => {
     const el = containerRef.current
@@ -2645,11 +2673,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const key = `${target.q},${target.r}`
         if (key !== lastPaintedKeyRef.current) {
           lastPaintedKeyRef.current = key
-          const brush = terrainPaintBrushRef.current
-          if (terrainLayersEnabledRef.current && brush !== 'clear') {
-            addHexTerrainLayerRef.current(target.q, target.r, brush)
+          if (elevationPaintModeRef.current) {
+            overrideHexElevationRef.current(target.q, target.r, elevationPaintBrushRef.current)
           } else {
-            overrideHexTerrainRef.current(target.q, target.r, brush)
+            const brush = terrainPaintBrushRef.current
+            if (terrainLayersEnabledRef.current && brush !== 'clear') {
+              addHexTerrainLayerRef.current(target.q, target.r, brush)
+            } else {
+              overrideHexTerrainRef.current(target.q, target.r, brush)
+            }
           }
         }
       } else {
@@ -2668,7 +2700,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return
       if ((e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (!terrainPaintModeRef.current) return
+      if (!terrainPaintModeRef.current && !elevationPaintModeRef.current) return
       isPaintingRef.current = true
       lastPaintedKeyRef.current = null
       lastPaintedEdgeKeyRef.current = null
@@ -2679,7 +2711,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     const onMove = (e: MouseEvent) => {
-      if (!terrainPaintModeRef.current) {
+      if (!terrainPaintModeRef.current && !elevationPaintModeRef.current) {
         if (paintHoverTargetRef.current !== null) {
           paintHoverTargetRef.current = null
           draw()
@@ -2694,7 +2726,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     const onUp = () => {
-      if (isPaintingRef.current && terrainPaintModeRef.current) setIsTerrainPainting(false)
+      if (isPaintingRef.current && (terrainPaintModeRef.current || elevationPaintModeRef.current)) setIsTerrainPainting(false)
       isPaintingRef.current = false
     }
 

@@ -8,10 +8,16 @@ export type ElevationSlice = {
   elevationProgress: GenerateProgress | null
   showElevationDebug: boolean
   classificationParams: ClassificationParams
+  elevationPaintMode: boolean
+  elevationPaintBrush: 'flat' | 'hills' | 'mountains'
   fetchElevation: () => Promise<void>
   setShowElevationDebug: (v: boolean) => void
   setClassificationParam: (key: keyof ClassificationParams, v: number) => void
   classifyElevation: () => void
+  setElevationPaintMode: (v: boolean) => void
+  setElevationPaintBrush: (v: 'flat' | 'hills' | 'mountains') => void
+  overrideHexElevation: (q: number, r: number, cls: 'flat' | 'hills' | 'mountains') => void
+  clearElevationOverrides: () => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -22,6 +28,8 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   elevationProgress: null,
   showElevationDebug: false,
   classificationParams: { ...DEFAULT_CLASSIFICATION_PARAMS },
+  elevationPaintMode: false,
+  elevationPaintBrush: 'hills',
 
   fetchElevation: async () => {
     const { generatedHexes, generatedMetadata, hexOrientation } = get()
@@ -94,5 +102,28 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   classifyElevation: () => {
     const { generatedHexes, classificationParams } = get()
     set({ generatedHexes: _classify(generatedHexes, classificationParams) })
+  },
+
+  setElevationPaintMode: (v) => set({
+    elevationPaintMode: v,
+    ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}),
+  }),
+
+  setElevationPaintBrush: (v) => set({ elevationPaintBrush: v }),
+
+  overrideHexElevation: (q, r, cls) => {
+    const { generatedHexes } = get()
+    const updated = generatedHexes.map(h =>
+      h.q === q && h.r === r
+        ? { ...h, elevation_class: cls, elevation_manual_override: true }
+        : h
+    )
+    set({ generatedHexes: updated })
+  },
+
+  clearElevationOverrides: () => {
+    const { generatedHexes, classificationParams } = get()
+    const cleared = generatedHexes.map(h => ({ ...h, elevation_manual_override: false }))
+    set({ generatedHexes: _classify(cleared, classificationParams) })
   },
 })

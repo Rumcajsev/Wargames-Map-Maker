@@ -131,6 +131,9 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     updates.terrainPaintMode = tool.type === 'terrain'
     if (tool.type === 'terrain') updates.terrainPaintBrush = tool.brush
 
+    updates.elevationPaintMode = tool.type === 'elevation'
+    if (tool.type === 'elevation') updates.elevationPaintBrush = tool.brush
+
     updates.lakePaintMode = tool.type === 'lake'
 
     updates.roadPaintMode = tool.type === 'road'
@@ -665,6 +668,15 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 43) {
     if (!s.mapStyle) s.mapStyle = 'standard'
+    const hexes = s.generatedHexes as Array<Record<string, unknown>> | undefined
+    if (hexes) {
+      for (const h of hexes) {
+        if (h.elevation_manual_override === undefined) h.elevation_manual_override = false
+      }
+    }
+  }
+  if (fromVersion < 44) {
+    if (!s.dataSource) s.dataSource = 'osm'
   }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'

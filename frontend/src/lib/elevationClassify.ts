@@ -13,7 +13,8 @@ export function classifyElevation(
   params: ClassificationParams,
 ): GeneratedHex[] {
   const active = hexes.filter(
-    h => h.terrain !== 'sea' && !h.isLake
+    h => !h.elevation_manual_override
+      && h.terrain !== 'sea' && !h.isLake
       && h.elevation_range_m != null
       && h.elevation_median_m != null
   )
@@ -32,6 +33,7 @@ export function classifyElevation(
   const hMedianMin = pctThreshold(mediansSorted, params.mountainsPct + params.hillsPct)
 
   return hexes.map(h => {
+    if (h.elevation_manual_override) return h
     if (
       h.terrain === 'sea' || h.isLake
       || h.elevation_range_m == null

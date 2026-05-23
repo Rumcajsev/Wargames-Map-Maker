@@ -382,6 +382,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
               elevation_min_m: null,
               elevation_range_m: null,
               elevation_class: null,
+              elevation_manual_override: false,
               coastline_clip: null,
             }))
             if (get().blankMap) {
@@ -567,7 +568,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setFieldPersistence: (v) => set({ fieldPersistence: v }),
   setFieldWildness: (terrain, v) => set((s) => ({ fieldWildness: { ...s.fieldWildness, [terrain]: v } })),
 
-  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, lakePaintMode: false } : {}) }),
+  setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, lakePaintMode: false, elevationPaintMode: false } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
   setTerrainEdgePaintEnabled: (v) => set({ terrainEdgePaintEnabled: v }),
 
@@ -601,7 +602,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     return { edgeBlobOverrides: { ...s.edgeBlobOverrides, [key]: cleaned } }
   }),
 
-  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false } : {}) }),
+  setLakePaintMode: (v) => set({ lakePaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false, elevationPaintMode: false } : {}) }),
   setAutoLakesEnabled: (v) => {
     const { generatedHexes, lakeSensitivity } = get()
     const updated = generatedHexes.map((h) =>

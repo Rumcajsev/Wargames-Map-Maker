@@ -33,9 +33,16 @@ export function ElevationSidebar() {
     elevationProgress,
     showElevationDebug,
     classificationParams,
+    elevationPaintMode,
+    elevationPaintBrush,
     fetchElevation,
     setShowElevationDebug,
     setClassificationParam,
+    setElevationPaintMode,
+    setElevationPaintBrush,
+    overrideHexElevation: _override,
+    clearElevationOverrides,
+    setActiveTool,
   } = useMapStore()
 
   const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
@@ -43,8 +50,17 @@ export function ElevationSidebar() {
   const isLoading = elevationStatus === 'loading'
   const noHexes = generatedHexes.length === 0
 
+  const overrideCount = hasData ? generatedHexes.filter(h => h.elevation_manual_override).length : 0
   const flatCount = hasData ? generatedHexes.filter(h => h.elevation_class === 'flat').length : 0
   const hillsCount = hasData ? generatedHexes.filter(h => h.elevation_class === 'hills').length : 0
+
+  const togglePaint = (brush: 'flat' | 'hills' | 'mountains') => {
+    if (elevationPaintMode && elevationPaintBrush === brush) {
+      setActiveTool({ type: 'none' })
+    } else {
+      setActiveTool({ type: 'elevation', brush })
+    }
+  }
   const mountainsCount = hasData ? generatedHexes.filter(h => h.elevation_class === 'mountains').length : 0
   const pctSum = classificationParams.mountainsPct + classificationParams.hillsPct
 
@@ -156,6 +172,57 @@ export function ElevationSidebar() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Manual paint ── */}
+      {hasData && (
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Paint</div>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+            {(['flat', 'hills', 'mountains'] as const).map(brush => {
+              const colors: Record<string, { border: string; active: string; text: string }> = {
+                flat:      { border: '#3a7a3a', active: '#3a7a3a', text: '#8aba8a' },
+                hills:     { border: '#7a7a30', active: '#7a7a30', text: '#baba60' },
+                mountains: { border: '#7a4a20', active: '#7a4a20', text: '#ba8a60' },
+              }
+              const c = colors[brush]
+              const isActive = elevationPaintMode && elevationPaintBrush === brush
+              return (
+                <button
+                  key={brush}
+                  onClick={() => togglePaint(brush)}
+                  style={{
+                    flex: 1,
+                    padding: '4px 0',
+                    background: isActive ? c.active : 'none',
+                    border: `1px solid ${c.border}`,
+                    color: isActive ? '#fff' : c.text,
+                    borderRadius: 3,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 10,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {brush}
+                </button>
+              )
+            })}
+          </div>
+          {overrideCount > 0 && (
+            <button
+              onClick={clearElevationOverrides}
+              style={{
+                width: '100%', padding: '3px 0',
+                background: 'none', border: '1px solid #3a3a5a',
+                color: '#6a6a8a', borderRadius: 3,
+                cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+              }}
+            >
+              Clear {overrideCount} manual override{overrideCount !== 1 ? 's' : ''}
+            </button>
+          )}
         </div>
       )}
 

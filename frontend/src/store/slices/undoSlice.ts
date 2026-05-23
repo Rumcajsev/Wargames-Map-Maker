@@ -12,6 +12,23 @@ export type UndoSlice = {
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
 
+const snapHex = ({ q, r, terrain, manual_override, isLake, elevation_class, elevation_manual_override }: Parameters<typeof snapHex>[0]) => ({
+  q, r, terrain,
+  manual_override: manual_override ?? false,
+  isLake: isLake ?? false,
+  elevation_class: elevation_class ?? null,
+  elevation_manual_override: elevation_manual_override ?? false,
+})
+
+const restoreHex = (h: ReturnType<typeof snapHex>, full: MapStore['generatedHexes'][number]) => ({
+  ...full,
+  terrain: h.terrain,
+  manual_override: h.manual_override,
+  isLake: h.isLake,
+  elevation_class: h.elevation_class,
+  elevation_manual_override: h.elevation_manual_override,
+})
+
 export const createUndoSlice = (set: Set, get: () => MapStore): UndoSlice => ({
   undoStack: [],
   redoStack: [],
@@ -19,9 +36,7 @@ export const createUndoSlice = (set: Set, get: () => MapStore): UndoSlice => ({
   pushUndoSnapshot: () => {
     const { generatedHexes, roadEdges, railEdges, riverEdges, settlements, areas, areaHexes, undoStack } = get()
     const snap: UndoSnapshot = {
-      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override, isLake }) => ({
-        q, r, terrain, manual_override: manual_override ?? false, isLake: isLake ?? false,
-      })),
+      terrainHexes: generatedHexes.map(snapHex),
       roadEdges: [...roadEdges],
       railEdges: [...railEdges],
       riverEdges: [...riverEdges],
@@ -37,9 +52,7 @@ export const createUndoSlice = (set: Set, get: () => MapStore): UndoSlice => ({
     if (undoStack.length === 0) return
     const prev = undoStack[undoStack.length - 1]
     const current: UndoSnapshot = {
-      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override, isLake }) => ({
-        q, r, terrain, manual_override: manual_override ?? false, isLake: isLake ?? false,
-      })),
+      terrainHexes: generatedHexes.map(snapHex),
       roadEdges: [...roadEdges],
       railEdges: [...railEdges],
       riverEdges: [...riverEdges],
@@ -47,15 +60,14 @@ export const createUndoSlice = (set: Set, get: () => MapStore): UndoSlice => ({
       areas: [...areas],
       areaHexes: { ...areaHexes },
     }
-    const hexMap = new Map(prev.terrainHexes.map((h) => [`${h.q},${h.r}`, h]))
-    const restoredHexes = generatedHexes.map((h) => {
-      const snap = hexMap.get(`${h.q},${h.r}`)
-      return snap ? { ...h, terrain: snap.terrain, manual_override: snap.manual_override, isLake: snap.isLake } : h
-    })
+    const hexMap = new Map(prev.terrainHexes.map(h => [`${h.q},${h.r}`, h]))
     set({
       undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, current],
-      generatedHexes: restoredHexes,
+      generatedHexes: generatedHexes.map(h => {
+        const snap = hexMap.get(`${h.q},${h.r}`)
+        return snap ? restoreHex(snap, h) : h
+      }),
       roadEdges: prev.roadEdges,
       railEdges: prev.railEdges ?? railEdges,
       riverEdges: prev.riverEdges ?? riverEdges,
@@ -70,9 +82,7 @@ export const createUndoSlice = (set: Set, get: () => MapStore): UndoSlice => ({
     if (redoStack.length === 0) return
     const next = redoStack[redoStack.length - 1]
     const current: UndoSnapshot = {
-      terrainHexes: generatedHexes.map(({ q, r, terrain, manual_override, isLake }) => ({
-        q, r, terrain, manual_override: manual_override ?? false, isLake: isLake ?? false,
-      })),
+      terrainHexes: generatedHexes.map(snapHex),
       roadEdges: [...roadEdges],
       railEdges: [...railEdges],
       riverEdges: [...riverEdges],
@@ -80,15 +90,14 @@ export const createUndoSlice = (set: Set, get: () => MapStore): UndoSlice => ({
       areas: [...areas],
       areaHexes: { ...areaHexes },
     }
-    const hexMap = new Map(next.terrainHexes.map((h) => [`${h.q},${h.r}`, h]))
-    const restoredHexes = generatedHexes.map((h) => {
-      const snap = hexMap.get(`${h.q},${h.r}`)
-      return snap ? { ...h, terrain: snap.terrain, manual_override: snap.manual_override, isLake: snap.isLake } : h
-    })
+    const hexMap = new Map(next.terrainHexes.map(h => [`${h.q},${h.r}`, h]))
     set({
       redoStack: redoStack.slice(0, -1),
       undoStack: [...undoStack, current],
-      generatedHexes: restoredHexes,
+      generatedHexes: generatedHexes.map(h => {
+        const snap = hexMap.get(`${h.q},${h.r}`)
+        return snap ? restoreHex(snap, h) : h
+      }),
       roadEdges: next.roadEdges,
       railEdges: next.railEdges ?? railEdges,
       riverEdges: next.riverEdges ?? riverEdges,
