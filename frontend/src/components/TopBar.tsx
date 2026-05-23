@@ -12,7 +12,7 @@ const TABS = [
   { id: 'display', label: 'Display' },
 ] as const
 
-export function TopBar({ onExportPDF }: { onExportPDF: () => Promise<void> }) {
+export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Promise<void>; onOpenPresets: () => void }) {
   const { resetToSetup, activePanel, setActivePanel, saveProject, restoreProject } = useMapStore()
   const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -113,6 +113,28 @@ export function TopBar({ onExportPDF }: { onExportPDF: () => Promise<void> }) {
       })}
 
       <div style={{ flex: 1 }} />
+
+      <button
+        onClick={onOpenPresets}
+        style={{
+          height: '100%',
+          padding: '0 14px',
+          background: 'none',
+          color: '#6a6a8a',
+          border: 'none',
+          borderLeft: '1px solid #1e1f2e',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#6a6a8a')}
+      >
+        Styles
+      </button>
 
       <input
         ref={fileInputRef}

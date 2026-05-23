@@ -4,7 +4,7 @@ import type { PaperSize, Orientation, HexOrientation, HexEdgeMode, MapMode, Dipt
 
 const PAPER_SIZES: PaperSize[] = ['A4', 'A3', 'A2', 'A1']
 
-export function SetupPanel() {
+export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
   const {
     paperSize, orientation, mapMode, diptychJoin,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
@@ -195,6 +195,27 @@ export function SetupPanel() {
           <span style={{ color: '#b0b0c8', fontSize: 12 }}>Blank map</span>
           <span style={{ color: '#5a5a7a', fontSize: 11 }}>— all clear, no OSM</span>
         </label>
+        {onOpenPresets && (
+          <button
+            onClick={onOpenPresets}
+            style={{
+              width: '100%',
+              padding: '7px 0',
+              background: 'none',
+              color: '#6a6a8a',
+              border: '1px solid #2a2a4a',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: 12,
+              marginBottom: 6,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#a0a0c0'; e.currentTarget.style.borderColor = '#4a4a7a' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#6a6a8a'; e.currentTarget.style.borderColor = '#2a2a4a' }}
+          >
+            Style Presets…
+          </button>
+        )}
         <button
           onClick={generateMap}
           disabled={generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0}

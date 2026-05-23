@@ -16,6 +16,7 @@ import { type UiSlice, createUiSlice, migratePersisted, rehydrateState } from '.
 import { type BridgesSlice, createBridgesSlice } from './slices/bridgesSlice'
 import { type MegaHexSlice, createMegaHexSlice } from './slices/megaHexSlice'
 import { type AreasSlice, createAreasSlice } from './slices/areasSlice'
+import { type PresetsSlice, createPresetsSlice } from './slices/presetsSlice'
 
 export interface RoadGeomOverride {
   wiggleAmp: number
@@ -516,7 +517,8 @@ export type MapStore =
   UiSlice &
   BridgesSlice &
   MegaHexSlice &
-  AreasSlice
+  AreasSlice &
+  PresetsSlice
 
 export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createSetupSlice(set, get),
@@ -534,6 +536,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createBridgesSlice(set, get),
   ...createMegaHexSlice(set),
   ...createAreasSlice(set, get),
+  ...createPresetsSlice(set, get),
 }), {
   name: 'ig2-map-store',
   storage: {

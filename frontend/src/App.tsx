@@ -1,8 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useMapStore } from './store/mapStore'
 import { SetupPanel } from './components/SetupPanel'
 import { MapView } from './components/MapView'
 import { TopBar } from './components/TopBar'
+import { PresetsPanel } from './components/PresetsPanel'
 import { TerrainSidebar } from './components/TerrainSidebar'
 import { RoadsSidebar } from './components/RoadsSidebar'
 import { RiversSidebar } from './components/RiversSidebar'
@@ -16,6 +17,7 @@ import { TerrainViewCanvas, type TerrainViewCanvasHandle } from './components/Te
 function App() {
   const { step, activePanel, undo, redo, generateStatus, generateProgress } = useMapStore()
   const canvasHandleRef = useRef<TerrainViewCanvasHandle>(null)
+  const [presetsOpen, setPresetsOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -53,14 +55,15 @@ function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
+      {presetsOpen && <PresetsPanel onClose={() => setPresetsOpen(false)} />}
       {step === 'setup' ? (
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <SetupPanel />
+          <SetupPanel onOpenPresets={() => setPresetsOpen(true)} />
           <MapView />
         </div>
       ) : (
         <>
-          <TopBar onExportPDF={handleExportPDF} />
+          <TopBar onExportPDF={handleExportPDF} onOpenPresets={() => setPresetsOpen(true)} />
           {generateStatus === 'loading' && generateProgress && (
             <div style={{ height: 3, background: '#1a2a22', flexShrink: 0 }}>
               <div style={{ height: '100%', width: `${generateProgress.progress}%`, background: '#4a9a6a', transition: 'width 0.25s ease' }} />
