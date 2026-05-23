@@ -6,6 +6,7 @@ import { buildTerrainBlobsV2, buildSmoothedRing, getCoastlineRuns, bleedPolygon 
 import { catmullRom } from './geometry'
 import { makePermutation } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams } from './edgeBlobs'
+import { drawHistoricalVegetation } from './drawHistoricalVegetation'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -51,6 +52,7 @@ export type DrawTerrainParams = {
   edgeBlobParams: EdgeBlobParams
   edgeBlobOverrides: Record<string, BlobOverride>
   hexVertMap: Map<string, [number, number][]>
+  mapStyle: 'standard' | 'historical_simple'
 }
 
 export type { EdgeBlobParams, EdgeBlobChain }
@@ -346,6 +348,11 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         applyTextureOverlay(tCtx, marshTexture, polys, R, texScale, R * 0.12)
       }
     }
+  }
+
+  // ── 5c. Historical vegetation icons ─────────────────────────────────────────
+  if (params.mapStyle === 'historical_simple') {
+    drawHistoricalVegetation(tCtx, { blobs: defaultTerrainBlobs, R })
   }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
