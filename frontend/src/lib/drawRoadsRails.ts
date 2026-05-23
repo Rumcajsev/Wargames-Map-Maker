@@ -37,16 +37,17 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     const chainsByTier: [[number,number][][], [number,number][][], [number,number][][]] = [[], [], []]
     for (const { tier, chain } of roadChains) chainsByTier[tier].push(chain)
 
-    rCtx.lineCap = 'round'
     rCtx.lineJoin = 'round'
     for (const tier of [2, 1, 0] as const) {
       const s = tierStyles[tier]
+      rCtx.lineCap = s.caseDash === 'solid' ? 'round' : 'butt'
       rCtx.strokeStyle = s.outer
       rCtx.lineWidth = s.outerW
       rCtx.setLineDash(dashPattern(s.caseDash, s.outerW))
       for (const chain of chainsByTier[tier]) drawChain(chain)
     }
     rCtx.setLineDash([])
+    rCtx.lineCap = 'round'
     for (const { pos, tier } of junctions) {
       const [x, y] = project(pos[0], pos[1])
       const s = tierStyles[tier]
@@ -55,12 +56,14 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     }
     for (const tier of [2, 1, 0] as const) {
       const s = tierStyles[tier]
+      rCtx.lineCap = s.fillDash === 'solid' ? 'round' : 'butt'
       rCtx.strokeStyle = s.inner
       rCtx.lineWidth = s.outerW * 0.5
       rCtx.setLineDash(dashPattern(s.fillDash, s.outerW * 0.5))
       for (const chain of chainsByTier[tier]) drawChain(chain)
     }
     rCtx.setLineDash([])
+    rCtx.lineCap = 'round'
     for (const { pos, tier } of junctions) {
       const [x, y] = project(pos[0], pos[1])
       const s = tierStyles[tier]
