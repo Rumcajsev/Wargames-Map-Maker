@@ -1,7 +1,13 @@
 /** Road and rail layer rendering. Pure canvas operations — no React or store imports. */
 
-import type { RoadTierStyle, RailStyle } from '../store/mapStore'
+import type { RoadTierStyle, RailStyle, RoadDashStyle } from '../store/mapStore'
 import { offsetPolyline } from './geometry'
+
+function dashPattern(style: RoadDashStyle, w: number): number[] {
+  if (style === 'dashed') return [w * 2.5, w * 1.5]
+  if (style === 'dotted') return [w * 0.5, w * 1.5]
+  return []
+}
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -37,8 +43,10 @@ export function drawRoadsAndRails(rCtx: Ctx, {
       const s = tierStyles[tier]
       rCtx.strokeStyle = s.outer
       rCtx.lineWidth = s.outerW
+      rCtx.setLineDash(dashPattern(s.caseDash, s.outerW))
       for (const chain of chainsByTier[tier]) drawChain(chain)
     }
+    rCtx.setLineDash([])
     for (const { pos, tier } of junctions) {
       const [x, y] = project(pos[0], pos[1])
       const s = tierStyles[tier]
@@ -49,8 +57,10 @@ export function drawRoadsAndRails(rCtx: Ctx, {
       const s = tierStyles[tier]
       rCtx.strokeStyle = s.inner
       rCtx.lineWidth = s.outerW * 0.5
+      rCtx.setLineDash(dashPattern(s.fillDash, s.outerW * 0.5))
       for (const chain of chainsByTier[tier]) drawChain(chain)
     }
+    rCtx.setLineDash([])
     for (const { pos, tier } of junctions) {
       const [x, y] = project(pos[0], pos[1])
       const s = tierStyles[tier]

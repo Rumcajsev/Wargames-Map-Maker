@@ -243,16 +243,20 @@ export const DEFAULT_THRESHOLDS: Record<string, number> = {
   clear: 0,
 }
 
+export type RoadDashStyle = 'solid' | 'dashed' | 'dotted'
+
 export interface RoadTierStyle {
   outer: string
   inner: string
   outerW: number
+  caseDash: RoadDashStyle
+  fillDash: RoadDashStyle
 }
 
 export const DEFAULT_ROAD_TIER_STYLES: [RoadTierStyle, RoadTierStyle, RoadTierStyle] = [
-  { outer: '#ffe8a8', inner: '#b07820', outerW: 4.5 },
-  { outer: '#f0e0b8', inner: '#8a5c2a', outerW: 3.0 },
-  { outer: '#d8d8c0', inner: '#606060', outerW: 2.0 },
+  { outer: '#ffe8a8', inner: '#b07820', outerW: 4.5, caseDash: 'solid', fillDash: 'solid' },
+  { outer: '#f0e0b8', inner: '#8a5c2a', outerW: 3.0, caseDash: 'solid', fillDash: 'solid' },
+  { outer: '#d8d8c0', inner: '#606060', outerW: 2.0, caseDash: 'solid', fillDash: 'solid' },
 ]
 
 export interface RailStyle {
@@ -737,7 +741,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     megaHexOriginQ: s.megaHexOriginQ,
     megaHexOriginR: s.megaHexOriginR,
   }),
-  version: 36,
+  version: 37,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

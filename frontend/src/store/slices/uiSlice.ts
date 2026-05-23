@@ -589,6 +589,15 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     s.bridgeTiers = []
     s.bridgeOverrides = {}
   }
+  if (fromVersion < 37) {
+    const tiers = s.roadTierStyles as Array<Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const t of tiers) {
+        if (t.caseDash === undefined) t.caseDash = 'solid'
+        if (t.fillDash === undefined) t.fillDash = 'solid'
+      }
+    }
+  }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }

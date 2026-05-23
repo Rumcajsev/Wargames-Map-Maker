@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useMapStore, DEFAULT_ROAD_TIER_STYLES, DEFAULT_RAIL_STYLE } from '../store/mapStore'
+import type { RoadDashStyle } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_ROAD_SURFACE, PALETTE_ROAD_CASING, PALETTE_RAIL_LIGHT, PALETTE_RAIL_DARK } from '../palettes'
 
@@ -59,7 +60,7 @@ export function RoadsSettingsFlyout(props: Props) {
     }
   }
 
-  const flyoutHeight = type === 'rail' ? 520 : 480
+  const flyoutHeight = type === 'rail' ? 520 : 580
   const top = Math.min(anchorY, window.innerHeight - flyoutHeight - 8)
 
   const row = (label: string, value: React.ReactNode) => (
@@ -138,6 +139,27 @@ export function RoadsSettingsFlyout(props: Props) {
 
       {isRoad && tier !== null && (() => {
         const s = roadTierStyles[tier]
+        const dashRow = (label: string, value: RoadDashStyle, onChange: (v: RoadDashStyle) => void) => (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>{label}</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['solid', 'dashed', 'dotted'] as const).map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => onChange(opt)}
+                  style={{
+                    flex: 1, padding: '3px 0', fontSize: 10,
+                    background: value === opt ? '#1e2a1e' : 'none',
+                    border: `1px solid ${value === opt ? '#4a8a5a' : '#2a2a4a'}`,
+                    color: value === opt ? '#90c090' : '#5a5a7a',
+                    borderRadius: 3, cursor: 'pointer',
+                    fontFamily: 'ui-monospace, monospace',
+                  }}
+                >{opt}</button>
+              ))}
+            </div>
+          </div>
+        )
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div>
@@ -150,7 +172,9 @@ export function RoadsSettingsFlyout(props: Props) {
               />
             </div>
             {colorRow('Surface', s.inner, PALETTE_ROAD_SURFACE, v => setRoadTierStyle(tier, { inner: v }))}
+            {dashRow('Fill stroke', s.fillDash, v => setRoadTierStyle(tier, { fillDash: v }))}
             {colorRow('Casing', s.outer, PALETTE_ROAD_CASING, v => setRoadTierStyle(tier, { outer: v }))}
+            {dashRow('Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
           </div>
         )
       })()}
