@@ -53,6 +53,7 @@ export function drawHistoricalVegetation(ctx: Ctx, params: DrawHistoricalVegetat
 
   // ── Watercolor wash for woods only ────────────────────────────────────────
   ctx.save()
+  ctx.filter = `blur(${(R * 0.35).toFixed(1)}px)`
   ctx.fillStyle = 'rgba(120, 165, 70, 0.22)'
   for (const { terrain, polys } of blobs) {
     if (terrain !== 'woods') continue
