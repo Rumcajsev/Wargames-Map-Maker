@@ -49,6 +49,8 @@ export const STYLE_PRESET_KEYS: string[] = [
   'showPaperTexture', 'paperTextureOpacity', 'showPaperVignette',
   'mapBgColor', 'mapBorderEnabled', 'mapBorderColor', 'mapBorderWidth', 'clipToHexGrid',
   'megaHexEnabled', 'megaHexRadius', 'megaHexColor', 'megaHexOpacity', 'megaHexLineWidth',
+  // Global style
+  'mapStyle',
   // Elevation display
   'elevationStyle', 'contourInterval', 'elevationThresholds',
   'showReliefHeatmap', 'showElevHeatmap',

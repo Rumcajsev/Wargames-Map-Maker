@@ -13,7 +13,7 @@ const TABS = [
 ] as const
 
 export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Promise<void>; onOpenPresets: () => void }) {
-  const { resetToSetup, activePanel, setActivePanel, saveProject, restoreProject } = useMapStore()
+  const { resetToSetup, activePanel, setActivePanel, saveProject, restoreProject, mapStyle, setMapStyle } = useMapStore()
   const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -113,6 +113,34 @@ export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Prom
       })}
 
       <div style={{ flex: 1 }} />
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        padding: '0 12px',
+        borderLeft: '1px solid #1e1f2e',
+        height: '100%',
+      }}>
+        {(['standard', 'historical_simple'] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setMapStyle(s)}
+            style={{
+              padding: '3px 10px',
+              background: mapStyle === s ? '#2a3a4a' : 'none',
+              color: mapStyle === s ? '#a8d8b8' : '#6a6a8a',
+              border: mapStyle === s ? '1px solid #3a5a6a' : '1px solid transparent',
+              borderRadius: 3,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: 11,
+            }}
+          >
+            {s === 'standard' ? 'Standard' : 'Historical'}
+          </button>
+        ))}
+      </div>
 
       <button
         onClick={onOpenPresets}

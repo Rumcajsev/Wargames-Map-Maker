@@ -73,6 +73,8 @@ export type UiSlice = {
   setClipToHexGrid: (v: boolean) => void
   toggleExcludedHex: (key: string, mode: 'exclude' | 'include') => void
   resetExcludedHexes: () => void
+  mapStyle: 'standard' | 'historical_simple'
+  setMapStyle: (v: 'standard' | 'historical_simple') => void
   applyMapPreset: (preset: 'default') => void
   saveProject: () => void
   restoreProject: (data: unknown) => void
@@ -86,6 +88,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanHexes: [],
   urbanStyle: { ...DEFAULT_URBAN_STYLE },
   urbanPaintMode: null,
+  mapStyle: 'standard',
   hexBorderMode: 'full',
   hexNumbersEnabled: false,
   hexNumberStartCorner: 'top-left',
@@ -254,6 +257,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     }
   }),
   resetExcludedHexes: () => set({ excludedHexKeys: [] }),
+  setMapStyle: (v) => set({ mapStyle: v }),
 
   applyMapPreset: (preset) => {
     const presets = {
@@ -316,6 +320,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         canalWidthScale: s.canalWidthScale,
         elevationStatus: s.elevationStatus,
         classificationParams: s.classificationParams,
+        mapStyle: s.mapStyle,
         activePanel: s.activePanel, hexBorderMode: s.hexBorderMode,
         terrainDisplacement: s.terrainDisplacement, terrainNoiseFrequency: s.terrainNoiseFrequency,
         terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
@@ -657,6 +662,9 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       delete p.mountainsMedianFloorM
       delete p.hillsMedianFloorM
     }
+  }
+  if (fromVersion < 43) {
+    if (!s.mapStyle) s.mapStyle = 'standard'
   }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
