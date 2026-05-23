@@ -18,10 +18,11 @@ export type DrawRoadsRailsParams = {
   tierStyles: [RoadTierStyle, RoadTierStyle, RoadTierStyle]
   railStyle: RailStyle
   project: (lon: number, lat: number) => [number, number]
+  mapStyle?: 'standard' | 'historical_simple'
 }
 
 export function drawRoadsAndRails(rCtx: Ctx, {
-  roadChains, junctions, railChains, tierStyles, railStyle, project,
+  roadChains, junctions, railChains, tierStyles, railStyle, project, mapStyle,
 }: DrawRoadsRailsParams) {
   rCtx.save()
   const drawChain = (chain: [number, number][]) => {
@@ -37,38 +38,50 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     const chainsByTier: [[number,number][][], [number,number][][], [number,number][][]] = [[], [], []]
     for (const { tier, chain } of roadChains) chainsByTier[tier].push(chain)
 
-    rCtx.lineJoin = 'round'
-    for (const tier of [2, 1, 0] as const) {
-      const s = tierStyles[tier]
-      rCtx.lineCap = s.caseDash === 'dashed' ? 'butt' : 'round'
-      rCtx.strokeStyle = s.outer
-      rCtx.lineWidth = s.outerW
-      rCtx.setLineDash(dashPattern(s.caseDash, s.outerW))
-      for (const chain of chainsByTier[tier]) drawChain(chain)
-    }
-    rCtx.setLineDash([])
-    rCtx.lineCap = 'round'
-    for (const { pos, tier } of junctions) {
-      const [x, y] = project(pos[0], pos[1])
-      const s = tierStyles[tier]
-      rCtx.beginPath(); rCtx.arc(x, y, s.outerW / 2, 0, Math.PI * 2)
-      rCtx.fillStyle = s.outer; rCtx.fill()
-    }
-    for (const tier of [2, 1, 0] as const) {
-      const s = tierStyles[tier]
-      rCtx.lineCap = s.fillDash === 'dashed' ? 'butt' : 'round'
-      rCtx.strokeStyle = s.inner
-      rCtx.lineWidth = s.outerW * 0.5
-      rCtx.setLineDash(dashPattern(s.fillDash, s.outerW * 0.5))
-      for (const chain of chainsByTier[tier]) drawChain(chain)
-    }
-    rCtx.setLineDash([])
-    rCtx.lineCap = 'round'
-    for (const { pos, tier } of junctions) {
-      const [x, y] = project(pos[0], pos[1])
-      const s = tierStyles[tier]
-      rCtx.beginPath(); rCtx.arc(x, y, s.outerW * 0.25, 0, Math.PI * 2)
-      rCtx.fillStyle = s.inner; rCtx.fill()
+    if (mapStyle === 'historical_simple') {
+      // Single ink stroke — color and width only, no casing
+      rCtx.lineCap = 'round'
+      rCtx.lineJoin = 'round'
+      for (const tier of [2, 1, 0] as const) {
+        const s = tierStyles[tier]
+        rCtx.strokeStyle = s.outer
+        rCtx.lineWidth = s.outerW * 0.4
+        for (const chain of chainsByTier[tier]) drawChain(chain)
+      }
+    } else {
+      rCtx.lineJoin = 'round'
+      for (const tier of [2, 1, 0] as const) {
+        const s = tierStyles[tier]
+        rCtx.lineCap = s.caseDash === 'dashed' ? 'butt' : 'round'
+        rCtx.strokeStyle = s.outer
+        rCtx.lineWidth = s.outerW
+        rCtx.setLineDash(dashPattern(s.caseDash, s.outerW))
+        for (const chain of chainsByTier[tier]) drawChain(chain)
+      }
+      rCtx.setLineDash([])
+      rCtx.lineCap = 'round'
+      for (const { pos, tier } of junctions) {
+        const [x, y] = project(pos[0], pos[1])
+        const s = tierStyles[tier]
+        rCtx.beginPath(); rCtx.arc(x, y, s.outerW / 2, 0, Math.PI * 2)
+        rCtx.fillStyle = s.outer; rCtx.fill()
+      }
+      for (const tier of [2, 1, 0] as const) {
+        const s = tierStyles[tier]
+        rCtx.lineCap = s.fillDash === 'dashed' ? 'butt' : 'round'
+        rCtx.strokeStyle = s.inner
+        rCtx.lineWidth = s.outerW * 0.5
+        rCtx.setLineDash(dashPattern(s.fillDash, s.outerW * 0.5))
+        for (const chain of chainsByTier[tier]) drawChain(chain)
+      }
+      rCtx.setLineDash([])
+      rCtx.lineCap = 'round'
+      for (const { pos, tier } of junctions) {
+        const [x, y] = project(pos[0], pos[1])
+        const s = tierStyles[tier]
+        rCtx.beginPath(); rCtx.arc(x, y, s.outerW * 0.25, 0, Math.PI * 2)
+        rCtx.fillStyle = s.inner; rCtx.fill()
+      }
     }
   }
 

@@ -1408,17 +1408,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     ctx.rect(px, py, pw, ph)
     ctx.clip()
 
-    // Historical map image overlay — screen only, drawn first so hex grid renders on top
-    if (!isExport && mapImageElementRef.current) {
-      drawMapImageOverlay({
-        ctx,
-        image: mapImageElementRef.current,
-        transform: mapImageTransformRef.current,
-        opacity: mapImageOpacityRef.current,
-        px, py, pw, ph,
-      })
-    }
-
     // Blit terrain layer for screen rendering
     if (!isExport && terrainLayerRef.current) {
       ctx.drawImage(terrainLayerRef.current, px, py, pw, ph)
@@ -1473,6 +1462,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           : []
       }
       _drawTerrain(ctx, { ...terrainParams, defaultTerrainBlobs: exportTerrainBlobs, defaultLakeBlobs: exportLakeBlobs })
+    }
+
+    // Historical map image overlay — screen only, drawn after terrain so hex borders render on top
+    if (!isExport && mapImageElementRef.current) {
+      drawMapImageOverlay({
+        ctx,
+        image: mapImageElementRef.current,
+        transform: mapImageTransformRef.current,
+        opacity: mapImageOpacityRef.current,
+        px, py, pw, ph,
+      })
     }
 
     // Hex borders — offscreen cached; suppressed in areas mode
@@ -1925,7 +1925,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           ctx.beginPath()
           ctx.rect(px, py, pw, ph)
           ctx.clip()
-          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
+          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project, mapStyle: mapStyleRef.current })
           ctx.restore()
         } else {
           const papW = Math.ceil(pw), papH = Math.ceil(ph)
@@ -1940,7 +1940,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             oCtx.beginPath()
             oCtx.rect(px, py, pw, ph)
             oCtx.clip()
-            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
+            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project, mapStyle: mapStyleRef.current })
             oCtx.restore()
             roadsLayerRef.current = offscreen
             roadsDirtyRef.current = false
@@ -1953,7 +1953,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isExport) {
         const scaledTierStyles = tierStyles.map(s => ({ ...s, outerW: s.outerW * lineScale })) as [RoadTierStyle, RoadTierStyle, RoadTierStyle]
         const scaledRailStyle = { ...railStyleRef.current, thickness: railStyleRef.current.thickness * lineScale }
-        _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles: scaledTierStyles, railStyle: scaledRailStyle, project })
+        _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles: scaledTierStyles, railStyle: scaledRailStyle, project, mapStyle: mapStyleRef.current })
       }
 
       // Debug: raw OSM way overlay (screen-only, never exported)
@@ -2437,7 +2437,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
   useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, smoothedRailData, riverEdges, canalEdges, generatedHexes])
-  useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailData, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railControlOverrides, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, railSelectMode, showRawOsmRoads])
+  useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailData, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railControlOverrides, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, railSelectMode, showRawOsmRoads, mapStyle])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
