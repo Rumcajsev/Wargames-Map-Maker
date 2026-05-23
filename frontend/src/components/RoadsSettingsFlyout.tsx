@@ -180,14 +180,14 @@ export function RoadsSettingsFlyout(props: Props) {
             {dashRow(isHistorical ? 'Stroke' : 'Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
             {isHistorical && <>
               <div>
-                {row('Roughness', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{s.roughness.toFixed(2)}</span>)}
-                <input type="range" min={0} max={3} step={0.05} value={s.roughness}
+                {row('Roughness', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{(s.roughness ?? 0.3).toFixed(2)}</span>)}
+                <input type="range" min={0} max={3} step={0.05} value={s.roughness ?? 0.3}
                   onChange={e => setRoadTierStyle(tier, { roughness: parseFloat(e.target.value) })}
                   style={{ width: '100%', marginBottom: 8 }} />
               </div>
               <div>
-                {row('Bowing', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{s.bowing.toFixed(2)}</span>)}
-                <input type="range" min={0} max={5} step={0.1} value={s.bowing}
+                {row('Bowing', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{(s.bowing ?? 0.5).toFixed(2)}</span>)}
+                <input type="range" min={0} max={5} step={0.1} value={s.bowing ?? 0.5}
                   onChange={e => setRoadTierStyle(tier, { bowing: parseFloat(e.target.value) })}
                   style={{ width: '100%', marginBottom: 8 }} />
               </div>
