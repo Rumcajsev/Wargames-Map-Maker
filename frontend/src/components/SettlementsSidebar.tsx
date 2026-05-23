@@ -51,6 +51,7 @@ export function SettlementsSidebar() {
     toggleSettlementPlaced,
     settlementsLimit, setSettlementsLimit,
     placeAllSettlements, removeAllSettlements,
+    dataSource,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<SettlementTier | null>(null)
@@ -240,7 +241,7 @@ export function SettlementsSidebar() {
         </div>
 
         {/* From OSM */}
-        <div style={sectionStyle}>
+        {dataSource === 'osm' && <div style={sectionStyle}>
           <div style={labelStyle}>From OSM</div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -349,7 +350,7 @@ export function SettlementsSidebar() {
               </div>
             </div>
           )}
-        </div>
+        </div>}
 
       </div>
     </>

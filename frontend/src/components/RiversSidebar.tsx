@@ -243,6 +243,7 @@ export function RiversSidebar() {
     osmRiverWays, riversOsmStatus, riversOsmError,
     hoveredOsmRiverIdx, appliedOsmRiverIndices,
     fetchRivers, toggleOsmRiver, setHoveredOsmRiverIdx, clearOsmRivers,
+    dataSource,
   } = useMapStore()
 
   const [openSettings, setOpenSettings] = useState<'river' | 'canal' | 'lake' | null>(null)
@@ -275,7 +276,7 @@ export function RiversSidebar() {
       <div style={sidebarStyle}>
 
         {/* ── Fetch from OSM ── */}
-        <div style={sectionStyle}>
+        {dataSource === 'osm' && <div style={sectionStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <div style={labelStyle}>From OSM</div>
             {riversOsmStatus !== 'idle' && (
@@ -348,7 +349,7 @@ export function RiversSidebar() {
               })}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* ── Draw tools ── */}
         <div style={sectionStyle}>

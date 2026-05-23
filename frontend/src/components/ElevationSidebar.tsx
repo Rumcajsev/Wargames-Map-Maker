@@ -43,6 +43,7 @@ export function ElevationSidebar() {
     overrideHexElevation: _override,
     clearElevationOverrides,
     setActiveTool,
+    dataSource,
   } = useMapStore()
 
   const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
@@ -68,7 +69,7 @@ export function ElevationSidebar() {
     <div style={sidebarStyle}>
 
       {/* ── Fetch ── */}
-      <div style={sectionStyle}>
+      {dataSource === 'osm' && <div style={sectionStyle}>
         <div style={labelStyle}>Elevation data</div>
 
         <button
@@ -116,7 +117,7 @@ export function ElevationSidebar() {
             {fetchedCount} / {generatedHexes.length} hexes with elevation data
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ── Classification ── */}
       {hasData && (

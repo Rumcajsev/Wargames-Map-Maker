@@ -13,7 +13,7 @@ const TABS = [
 ] as const
 
 export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Promise<void>; onOpenPresets: () => void }) {
-  const { resetToSetup, activePanel, setActivePanel, saveProject, restoreProject, mapStyle, setMapStyle } = useMapStore()
+  const { resetToSetup, activePanel, setActivePanel, saveProject, restoreProject, mapStyle, setMapStyle, openMapImageModal, clearMapImage, dataSource } = useMapStore()
   const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -113,6 +113,53 @@ export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Prom
       })}
 
       <div style={{ flex: 1 }} />
+
+      {dataSource === 'map_image' && (
+        <button
+          onClick={clearMapImage}
+          style={{
+            height: '100%',
+            padding: '0 14px',
+            background: 'none',
+            color: '#c06060',
+            border: 'none',
+            borderRight: '1px solid #1e1f2e',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#e08080')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#c06060')}
+        >
+          ✕ Clear import
+        </button>
+      )}
+
+      <button
+        onClick={openMapImageModal}
+        style={{
+          height: '100%',
+          padding: '0 14px',
+          background: 'none',
+          color: dataSource === 'map_image' ? '#5a9e6f' : '#6a6a8a',
+          border: 'none',
+          borderRight: '1px solid #1e1f2e',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#a0c0b0')}
+        onMouseLeave={e => (e.currentTarget.style.color = dataSource === 'map_image' ? '#5a9e6f' : '#6a6a8a')}
+      >
+        Import map
+      </button>
 
       <div style={{
         display: 'flex',

@@ -151,11 +151,13 @@ export function RoadsSidebar() {
     osmSpotlightMode, osmSpotlightRadius, osmSpotlightTiers,
     setOsmSpotlightMode, setOsmSpotlightRadius, setOsmSpotlightTiers,
     osmRailHexPaths, osmRailHighlight, setOsmRailHighlight, applyOsmRails,
+    roadWiggleAmp, roadWiggleFreq,
     roadSelectMode, roadSegmentProps, roadHopProps,
     selectedRoadSegmentKeys, setSelectedRoadSegmentKeys, toggleRoadSegmentSelection,
     selectedRoadHopKey, setSelectedRoadHopKey,
     setRoadSegmentProp, clearRoadSegmentProp, setRoadHopProp, clearRoadHopProp,
     railNodeEditMode,
+    railWiggleAmp, railWiggleFreq,
     railSelectMode, railSegmentProps, railHopProps,
     selectedRailSegmentKeys, setSelectedRailSegmentKeys, toggleRailSegmentSelection,
     selectedRailHopKey, setSelectedRailHopKey,
@@ -163,6 +165,7 @@ export function RoadsSidebar() {
     bridgesEnabled, setBridgesEnabled,
     bridgeStyle, setBridgeStyle,
     bridgeTiers, updateBridgeTier, addBridgeTier, removeBridgeTier,
+    dataSource,
   } = useMapStore()
 
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
@@ -419,7 +422,7 @@ export function RoadsSidebar() {
         </div>
 
         {/* ── OSM fetch ── */}
-        <div style={sectionStyle}>
+        {dataSource === 'osm' && <div style={sectionStyle}>
           <div style={labelStyle}>From OSM</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div>
@@ -654,7 +657,7 @@ export function RoadsSidebar() {
               )}
             </div>
           </div>
-        </div>
+        </div>}
 
         {selectedRoadSegmentKeys.length > 0 && (
           <RoadSegmentPanel

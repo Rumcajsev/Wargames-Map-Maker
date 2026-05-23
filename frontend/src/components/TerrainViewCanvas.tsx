@@ -34,6 +34,7 @@ import { detectBridges } from '../lib/detectBridges'
 import { drawBridges as _drawBridges } from '../lib/drawBridges'
 import { drawMegaHexGrid as _drawMegaHexGrid } from '../lib/drawMegaHexGrid'
 import { drawElevationDebug as _drawElevationDebug } from '../lib/drawElevationDebug'
+import { drawMapImageOverlay, drawConfidenceOverlay } from '../lib/drawMapImageOverlay'
 import type { BridgePoint } from '../lib/detectBridges'
 import { drawRoadHandles as _drawRoadHandles, drawRailHandles as _drawRailHandles, drawRiverHandles as _drawRiverHandles } from '../lib/drawEditHandles'
 import { drawPaperBackground as _drawPaperBackground, drawPaperMargin as _drawPaperMargin } from '../lib/drawPaperChrome'
@@ -56,6 +57,7 @@ type CtxItem = { label: string; action: () => void; danger?: boolean; color?: st
 
 export type TerrainViewCanvasHandle = {
   exportBlob: () => Promise<{ blob: Blob; paperMm: [number, number] } | null>
+  getPaperRect: () => { pw: number; ph: number; px: number; py: number } | null
 }
 
 export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function TerrainViewCanvas(_, ref) {
@@ -215,6 +217,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     megaHexOriginQ, megaHexOriginR, setMegaHexOrigin,
     areasMode, areas, areaHexes, areasStyle, activeAreaId,
     paintHexArea, eraseHexArea, addArea,
+    mapImageDataUrl, mapImageTransform, mapImageOpacity, mapImageConfidenceVisible, setMapImageTransform,
   } = useMapStore()
   // dev-only: expose store for dry-run console injection
   useEffect(() => { (window as any).__mapStore = useMapStore }, [])
@@ -932,6 +935,18 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const toggleExcludedHexRef = useRef(toggleExcludedHex)
   toggleExcludedHexRef.current = toggleExcludedHex
 
+  const mapImageElementRef = useRef<HTMLImageElement | null>(null)
+  const mapImageDataUrlRef = useRef(mapImageDataUrl)
+  mapImageDataUrlRef.current = mapImageDataUrl
+  const mapImageTransformRef = useRef(mapImageTransform)
+  mapImageTransformRef.current = mapImageTransform
+  const mapImageOpacityRef = useRef(mapImageOpacity)
+  mapImageOpacityRef.current = mapImageOpacity
+  const mapImageConfidenceVisibleRef = useRef(mapImageConfidenceVisible)
+  mapImageConfidenceVisibleRef.current = mapImageConfidenceVisible
+  const setMapImageTransformRef = useRef(setMapImageTransform)
+  setMapImageTransformRef.current = setMapImageTransform
+
   const hexNumberMap = useMemo(
     () => hexNumbersEnabled && generatedHexes.length > 0
       ? buildHexNumberMap(generatedHexes, hexOrientation, hexNumberStartCorner)
@@ -1392,6 +1407,18 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     ctx.beginPath()
     ctx.rect(px, py, pw, ph)
     ctx.clip()
+
+    // Historical map image overlay — screen only, drawn first so hex grid renders on top
+    if (!isExport && mapImageElementRef.current) {
+      drawMapImageOverlay({
+        ctx,
+        image: mapImageElementRef.current,
+        transform: mapImageTransformRef.current,
+        opacity: mapImageOpacityRef.current,
+        px, py, pw, ph,
+      })
+    }
+
     // Blit terrain layer for screen rendering
     if (!isExport && terrainLayerRef.current) {
       ctx.drawImage(terrainLayerRef.current, px, py, pw, ph)
@@ -1511,6 +1538,23 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // Elevation debug overlay — screen only, never exported
     if (!isExport && showElevationDebugRef.current) {
       _drawElevationDebug({ ctx, projected, R })
+    }
+
+    // AI confidence overlay — screen only, tints low-confidence hexes orange
+    if (!isExport && mapImageConfidenceVisibleRef.current) {
+      const hexCenters = new Map<string, [number, number]>()
+      for (const p of projected) {
+        const [lon, lat] = (p.hex as GeneratedHex).center
+        hexCenters.set(`${p.hex.q},${p.hex.r}`, projectToCanvas(lon, lat, meta, pw, ph, px, py))
+      }
+      drawConfidenceOverlay({
+        ctx,
+        hexes: hexesRef.current as GeneratedHex[],
+        hexLayout: { flatTop: meta.hex_orientation !== 'pointy' },
+        outerRadiusPx: R,
+        hexCenters,
+        threshold: 0.65,
+      })
     }
 
     // Hex highlights — offscreen cached (joined highlights + line highlights)
@@ -2400,6 +2444,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
+
+  useEffect(() => {
+    if (!mapImageDataUrl) { mapImageElementRef.current = null; draw(); return }
+    const img = new Image()
+    img.onload = () => { mapImageElementRef.current = img; draw() }
+    img.src = mapImageDataUrl
+  }, [mapImageDataUrl, draw])
+
+  useEffect(() => { draw() }, [mapImageTransform, mapImageOpacity, mapImageConfidenceVisible, draw])
 
   // Load terrain textures
   useEffect(() => {
@@ -4163,6 +4216,17 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   }, [isEdgePaintActive])
 
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Align-image drag
+    if (alignImageDragRef.current) {
+      const drag = alignImageDragRef.current
+      const { w: cssW } = frameDimsRef.current
+      const { pw } = paperDimsRef.current ?? { pw: cssW }
+      const zoom = zoomRef.current
+      const dx = (e.clientX - drag.startX) / zoom / pw
+      const dy = (e.clientY - drag.startY) / zoom / pw
+      setMapImageTransformRef.current({ translateX: drag.startTX + dx, translateY: drag.startTY + dy })
+      return
+    }
     if (osmSpotlightModeRef.current) {
       const logical = clientToLogical(e.clientX, e.clientY)
       if (logical) {
@@ -4685,10 +4749,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
   }, [clientToLogical, draw])
 
+  const alignImageDragRef = useRef<{ startX: number; startY: number; startTX: number; startTY: number } | null>(null)
+
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 0) return
     if (editingLabelRef.current) return
     draggedRef.current = false
+
+    // Align-image drag — move historical map overlay
+    if (activeToolRef.current.type === 'align-image') {
+      const t = mapImageTransformRef.current
+      alignImageDragRef.current = { startX: e.clientX, startY: e.clientY, startTX: t.translateX, startTY: t.translateY }
+      const onUp = () => { alignImageDragRef.current = null; window.removeEventListener('mouseup', onUp) }
+      window.addEventListener('mouseup', onUp)
+      return
+    }
 
     // Label drag — detect if mousedown is over a placed label in label-place mode
     if (activeToolRef.current.type === 'label-place' && activePanelRef.current === 'highlights') {
@@ -4785,6 +4860,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         resolve({ blob, paperMm: meta.paper_mm as [number, number] })
       }, 'image/png')
     }),
+    getPaperRect: () => {
+      const meta = metaRef.current
+      const { w, h } = frameDimsRef.current
+      if (!meta || w === 0) return null
+      return computePaper(w, h, meta)
+    },
   }))
 
   useEffect(() => {

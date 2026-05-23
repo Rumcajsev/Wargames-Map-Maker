@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RailsConfig, RiversConfig, ElevationConfig, HexLookupConfig, SettlementRoadsConfig, MotorwayHexesConfig
+from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RailsConfig, RiversConfig, ElevationConfig, HexLookupConfig, SettlementRoadsConfig, MotorwayHexesConfig, MapImageClassifyConfig
 from services.hex_grid import generate_hex_grid
 from services.terrain import generate_terrain, classify_hex, terrain_stream_generator
 from services.elevation_tiles import elevation_stream_generator
@@ -94,6 +94,16 @@ async def elevation_stream(config: ElevationConfig) -> StreamingResponse:
     hexes = [dict(h) for h in config.hexes]
     return StreamingResponse(
         elevation_stream_generator(hexes, config),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/map-image-stream")
+async def map_image_stream(config: MapImageClassifyConfig) -> StreamingResponse:
+    from services.map_image import map_image_stream_generator
+    return StreamingResponse(
+        map_image_stream_generator(config.image_b64, [dict(hc) for hc in config.hex_crops]),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
