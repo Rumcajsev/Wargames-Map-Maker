@@ -349,7 +349,7 @@ export function hopKey(v0: [number, number], v1: [number, number]): string {
 
 type HopProps = { wiggleAmp?: number; wiggleFreq?: number; width?: number; taper?: number }
 
-type SegWiggleProps = Record<string, { wiggleAmp?: number; wiggleFreq?: number }>
+type SegWiggleProps = Record<string, { wiggleAmp?: number; wiggleFreq?: number; pathSmoothing?: number }>
 
 export function buildRiverChainsV2(
   edges: { q1: number; r1: number; q2: number; r2: number }[],
@@ -442,6 +442,10 @@ export function buildRiverChainsV2(
   }
   interDist = distSamples > 0 ? interDist / distSamples : 1e-4
 
+  // cos(lat) correction so wiggleChain perpendiculars are truly perpendicular on the projected canvas.
+  const avgLat = hexes.length > 0 ? hexes.reduce((s, h) => s + h.center[1], 0) / hexes.length : 0
+  const cosLat = Math.cos(avgLat * Math.PI / 180)
+
   const steps = Math.max(2, Math.round(smoothing))
   const globalAmp = wiggleAmpFactor * interDist
   const globalFreq = wiggleFreqFactor / interDist
@@ -449,7 +453,7 @@ export function buildRiverChainsV2(
   return rawSparse.map(({ pts, segKey }) => {
     const ctrlPts = overrides[segKey] ?? pts
     const relaxed = ctrlPts.slice() as [number, number][]
-    const laplacianIters = Math.round(pathSmoothing)
+    const laplacianIters = Math.round(segProps[segKey]?.pathSmoothing ?? pathSmoothing)
     for (let it = 0; it < laplacianIters; it++) {
       for (let i = 1; i < relaxed.length - 1; i++) {
         const avgX = (relaxed[i - 1][0] + relaxed[i + 1][0]) / 2
@@ -476,7 +480,7 @@ export function buildRiverChainsV2(
     const hasAnyOverride = hasSegWiggle || hopKeysList.some(k => hopProps[k]?.wiggleAmp !== undefined || hopProps[k]?.wiggleFreq !== undefined)
     let chain: [number, number][]
     if (!hasAnyOverride) {
-      chain = wiggleChain(baseChain, globalAmp, globalFreq)
+      chain = wiggleChain(baseChain, globalAmp, globalFreq, cosLat)
     } else {
       const dense = [...baseChain] as [number, number][]
       for (let h = 0; h < hopCount; h++) {
@@ -485,7 +489,7 @@ export function buildRiverChainsV2(
         const amp = (hp?.wiggleAmp ?? sp?.wiggleAmp ?? wiggleAmpFactor) * interDist
         const freq = (hp?.wiggleFreq ?? sp?.wiggleFreq ?? wiggleFreqFactor) / interDist
         const slice = baseChain.slice(s, e + 1)
-        const wiggled = wiggleChain(slice, amp, freq)
+        const wiggled = wiggleChain(slice, amp, freq, cosLat)
         for (let i = 0; i < wiggled.length; i++) dense[s + i] = wiggled[i]
       }
       chain = dense

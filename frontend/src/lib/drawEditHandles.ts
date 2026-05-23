@@ -189,40 +189,72 @@ export function drawRailHandles(p: DrawRailHandlesParams): void {
 export type DrawRiverHandlesParams = {
   ctx: Ctx
   zoom: number
-  hoveredChain: { kind: string; handles?: [number, number][] } | null
+  allChains: { segKey: string; baseChain: [number, number][] }[]
+  chainOverrides: Record<string, [number, number][]>
+  hoveredChain: { kind: string; id: string; handles?: [number, number][] } | null
   hoveredHandleIdx: number | null
-  draggingDensePt: { kind: string; handleIdx: number; handles: [number, number][] } | null
+  draggingDensePt: { kind: string; id: string; handleIdx: number; handles: [number, number][] } | null
   dragLiveDensePos: [number, number] | null
   project: (lon: number, lat: number) => [number, number]
 }
 
 export function drawRiverHandles(p: DrawRiverHandlesParams): void {
-  const { ctx, zoom, hoveredChain, hoveredHandleIdx, draggingDensePt, dragLiveDensePos, project } = p
+  const { ctx, zoom, allChains, chainOverrides, hoveredChain, hoveredHandleIdx, draggingDensePt, dragLiveDensePos, project } = p
 
   const handleScale = 1 / (zoom || 1)
   const dotR = 2.5 * handleScale
 
-  const hovChain = hoveredChain?.kind === 'river' ? hoveredChain : null
-  const hovHandleIdx = hovChain ? hoveredHandleIdx : null
   const denseDrag = draggingDensePt?.kind === 'river' ? draggingDensePt : null
-  const denseDragPos = dragLiveDensePos
-  const activeHandles = denseDrag
-    ? denseDrag.handles.map((pt, i) => i === denseDrag.handleIdx && denseDragPos ? denseDragPos : pt) as [number, number][]
-    : hovChain?.handles ?? null
-  if (!activeHandles) return
+  const hovChain = hoveredChain?.kind === 'river' ? hoveredChain : null
+  const activeId = denseDrag?.id ?? hovChain?.id ?? null
+  const activeHandleIdx = denseDrag ? denseDrag.handleIdx : hoveredHandleIdx
 
-  const activeHandleIdx = denseDrag ? denseDrag.handleIdx : hovHandleIdx
+  const sparseHandles = (chain: [number, number][]): [number, number][] => {
+    const out: [number, number][] = []
+    for (let i = 0; i < chain.length; i += 5) out.push(chain[i])
+    if (out[out.length - 1] !== chain[chain.length - 1]) out.push(chain[chain.length - 1])
+    return out
+  }
+
   ctx.save()
-  for (let i = 1; i < activeHandles.length - 1; i++) {
-    const [x, y] = project(activeHandles[i][0], activeHandles[i][1])
-    const isHovered = i === activeHandleIdx
-    ctx.beginPath()
-    ctx.arc(x, y, isHovered ? dotR * 1.8 : dotR, 0, Math.PI * 2)
-    ctx.fillStyle = isHovered ? '#ffcc44' : 'rgba(255,255,255,0.55)'
-    ctx.fill()
-    ctx.strokeStyle = isHovered ? '#cc8800' : 'rgba(60,140,200,0.8)'
-    ctx.lineWidth = handleScale * 0.8
-    ctx.stroke()
+  for (const c of allChains) {
+    const baseHandles = chainOverrides[c.segKey] ?? sparseHandles(c.baseChain)
+    const isActive = c.segKey === activeId
+
+    const handles = isActive && denseDrag
+      ? denseDrag.handles.map((pt, i) =>
+          i === denseDrag.handleIdx && dragLiveDensePos ? dragLiveDensePos : pt
+        ) as [number, number][]
+      : baseHandles
+
+    // Dashed baseline through all handles
+    if (handles.length >= 2) {
+      ctx.beginPath()
+      const [x0, y0] = project(handles[0][0], handles[0][1])
+      ctx.moveTo(x0, y0)
+      for (let i = 1; i < handles.length; i++) {
+        const [x, y] = project(handles[i][0], handles[i][1])
+        ctx.lineTo(x, y)
+      }
+      ctx.strokeStyle = isActive ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)'
+      ctx.lineWidth = handleScale
+      ctx.setLineDash([4 * handleScale, 4 * handleScale])
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+
+    // Dots for interior handles
+    for (let i = 1; i < handles.length - 1; i++) {
+      const [x, y] = project(handles[i][0], handles[i][1])
+      const isHovered = isActive && i === activeHandleIdx
+      ctx.beginPath()
+      ctx.arc(x, y, isHovered ? dotR * 1.8 : dotR, 0, Math.PI * 2)
+      ctx.fillStyle = isHovered ? '#ffcc44' : 'rgba(255,255,255,0.55)'
+      ctx.fill()
+      ctx.strokeStyle = isHovered ? '#cc8800' : 'rgba(60,140,200,0.8)'
+      ctx.lineWidth = handleScale * 0.8
+      ctx.stroke()
+    }
   }
   ctx.restore()
 }

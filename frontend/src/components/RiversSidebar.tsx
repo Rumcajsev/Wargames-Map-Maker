@@ -26,12 +26,16 @@ function SegmentPanel({ selectedKeys, segmentProps, baseWidthScale, accentColor,
   const firstProps = segmentProps[selectedKeys[0]]
   const widthVal = firstProps?.width ?? baseWidthScale
   const taperVal = firstProps?.taper ?? 0
+  const taperRange = firstProps?.taperRange ?? ([0, 1] as [number, number])
+  const taperFlipped = taperRange[0] > taperRange[1]
   const wiggleAmpVal = firstProps?.wiggleAmp ?? globalWiggleAmp
   const wiggleFreqVal = firstProps?.wiggleFreq ?? globalWiggleFreq
+  const pathSmoothVal = firstProps?.pathSmoothing ?? 0
   const anyWidthOverride = selectedKeys.some(k => segmentProps[k]?.width !== undefined)
   const anyTaperOverride = selectedKeys.some(k => segmentProps[k]?.taper !== undefined)
   const anyWiggleAmpOverride = selectedKeys.some(k => segmentProps[k]?.wiggleAmp !== undefined)
   const anyWiggleFreqOverride = selectedKeys.some(k => segmentProps[k]?.wiggleFreq !== undefined)
+  const anyPathSmoothOverride = selectedKeys.some(k => segmentProps[k]?.pathSmoothing !== undefined)
   return (
     <div style={sectionStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -51,24 +55,44 @@ function SegmentPanel({ selectedKeys, segmentProps, baseWidthScale, accentColor,
         onChange={e => setPropMany(selectedKeys, { width: Number(e.target.value) / 100 })}
         style={{ width: '100%', accentColor, marginBottom: 6 }}
       />
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
         <span style={{ fontSize: 11 }}>Taper</span>
-        <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyTaperOverride ? `${Math.round(taperVal*100)}% ●` : `${Math.round(taperVal*100)}%`}</span>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          <button
+            onClick={() => {
+              for (const key of selectedKeys) {
+                const tr = segmentProps[key]?.taperRange ?? ([0, 1] as [number, number])
+                setProp(key, { taperRange: [tr[1], tr[0]] })
+              }
+            }}
+            style={{ background: 'none', border: '1px solid #2a2b3e', borderRadius: 3, color: '#5a5a7a',
+              cursor: 'pointer', fontSize: 12, padding: '0px 4px', lineHeight: 1.4 }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#5a5a7a')}
+            title="Flip taper direction"
+          >⇄</button>
+          <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyTaperOverride ? `${Math.round(taperVal*100)}% ●` : `${Math.round(taperVal*100)}%`}</span>
+        </div>
       </div>
       <input type="range" min={0} max={100} step={5}
         value={Math.round(taperVal * 100)}
         onChange={e => {
           const taper = Number(e.target.value) / 100
           if (selectedKeys.length === 1) {
-            setProp(selectedKeys[0], { taper, taperRange: [0, 1] })
+            setProp(selectedKeys[0], { taper, taperRange: taperFlipped ? [1, 0] : [0, 1] })
           } else {
             const ranges = computeTaperRanges(selectedKeys, chains)
-            for (const key of selectedKeys) setProp(key, { taper, taperRange: ranges[key] ?? [0, 1] })
+            for (const key of selectedKeys) {
+              const tr = ranges[key] ?? ([0, 1] as [number, number])
+              setProp(key, { taper, taperRange: taperFlipped ? [tr[1], tr[0]] : tr })
+            }
           }
         }}
         style={{ width: '100%', accentColor, marginBottom: 2 }}
       />
-      <div style={{ color: '#4a6a8a', fontSize: 10, marginBottom: 6, lineHeight: 1.4 }}>Start is narrower, end is wider.</div>
+      <div style={{ color: '#4a6a8a', fontSize: 10, marginBottom: 6, lineHeight: 1.4 }}>
+        {taperFlipped ? 'Wide → narrow' : 'Narrow → wide'}
+      </div>
       {showWiggle && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -87,6 +111,15 @@ function SegmentPanel({ selectedKeys, segmentProps, baseWidthScale, accentColor,
           <input type="range" min={5} max={100} step={1}
             value={Math.round(wiggleFreqVal * 10)}
             onChange={e => setPropMany(selectedKeys, { wiggleFreq: Number(e.target.value) / 10 })}
+            style={{ width: '100%', accentColor, marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ fontSize: 11 }}>Path smooth</span>
+            <span style={{ color: '#5a5a7a', fontSize: 10 }}>{anyPathSmoothOverride ? `${pathSmoothVal} ●` : pathSmoothVal}</span>
+          </div>
+          <input type="range" min={0} max={50} step={1}
+            value={pathSmoothVal}
+            onChange={e => setPropMany(selectedKeys, { pathSmoothing: Number(e.target.value) })}
             style={{ width: '100%', accentColor, marginBottom: 6 }}
           />
         </>

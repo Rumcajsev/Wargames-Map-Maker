@@ -6,8 +6,10 @@ const permCache = new Map<number, Uint8Array>()
 const WIGGLE_PERM = makePermutation(17)
 
 /** Perlin-noise perpendicular wiggle for dense polylines.
- *  Endpoints are pinned; amplitude fades in/out over FADE points to avoid kinks at chain junctions. */
-export function wiggleChain(pts: [number, number][], amplitude: number, frequency: number): [number, number][] {
+ *  Endpoints are pinned; amplitude fades in/out over FADE points to avoid kinks at chain junctions.
+ *  xScale corrects for non-isometric coordinate spaces (e.g. lon/lat where xScale = cos(lat)):
+ *  the tangent is computed in isometric space so the perpendicular is truly perpendicular on screen. */
+export function wiggleChain(pts: [number, number][], amplitude: number, frequency: number, xScale = 1): [number, number][] {
   if (amplitude === 0 || pts.length < 3) return pts
   const n = pts.length
   const FADE = Math.max(4, Math.floor(n * 0.2))
@@ -15,11 +17,13 @@ export function wiggleChain(pts: [number, number][], amplitude: number, frequenc
     if (i === 0 || i === n - 1) return pt
     const fade = Math.min(i, n - 1 - i, FADE) / FADE
     const prev = pts[i - 1], next = pts[i + 1]
-    const dx = next[0] - prev[0], dy = next[1] - prev[1]
+    // Scale x into isometric space before computing tangent/perpendicular
+    const dx = (next[0] - prev[0]) * xScale, dy = next[1] - prev[1]
     const len = Math.hypot(dx, dy)
     if (len < 1e-6) return pt
     const noise = perlinNoise2D(pt[0] * frequency, pt[1] * frequency, WIGGLE_PERM)
-    return [pt[0] + (-dy / len) * noise * amplitude * fade, pt[1] + (dx / len) * noise * amplitude * fade] as [number, number]
+    // Perpendicular in isometric space: (-dy, dx). Convert x back to lon/lat: divide by xScale.
+    return [pt[0] + (-dy / len / xScale) * noise * amplitude * fade, pt[1] + (dx / len) * noise * amplitude * fade] as [number, number]
   })
 }
 
