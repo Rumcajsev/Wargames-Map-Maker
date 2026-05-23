@@ -39,15 +39,18 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     for (const { tier, chain } of roadChains) chainsByTier[tier].push(chain)
 
     if (mapStyle === 'historical_simple') {
-      // Single ink stroke — color and width only, no casing
-      rCtx.lineCap = 'round'
+      // Single ink stroke — color, width, and dash only
       rCtx.lineJoin = 'round'
       for (const tier of [2, 1, 0] as const) {
         const s = tierStyles[tier]
+        const w = s.outerW * 0.4
+        rCtx.lineCap = s.caseDash === 'dashed' ? 'butt' : 'round'
         rCtx.strokeStyle = s.outer
-        rCtx.lineWidth = s.outerW * 0.4
+        rCtx.lineWidth = w
+        rCtx.setLineDash(dashPattern(s.caseDash, w))
         for (const chain of chainsByTier[tier]) drawChain(chain)
       }
+      rCtx.setLineDash([])
     } else {
       rCtx.lineJoin = 'round'
       for (const tier of [2, 1, 0] as const) {
