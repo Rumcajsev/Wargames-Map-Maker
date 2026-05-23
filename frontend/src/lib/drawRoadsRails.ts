@@ -52,7 +52,8 @@ export function drawRoadsAndRails(rCtx: Ctx, {
           if (pts.length < 2) continue
           const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
           rc.path(d, {
-            roughness: 1.2,
+            roughness: 0.3,
+            bowing: 0.5,
             stroke: s.outer,
             strokeWidth: w,
             fill: 'none',
