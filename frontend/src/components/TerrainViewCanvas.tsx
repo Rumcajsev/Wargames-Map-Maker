@@ -207,7 +207,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     hexNumbersEnabled, hexNumberStartCorner, hexNumberEdge, hexNumberColor, hexNumberFontScale,
     mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
     excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
-    bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, setBridgeOverride,
+    bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, setBridgeOverride, clearBridgeOverride,
     megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth,
     megaHexOriginQ, megaHexOriginR, setMegaHexOrigin,
     areasMode, areas, areaHexes, areasStyle, activeAreaId,
@@ -262,6 +262,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const bridgeTiersRef = useRef(bridgeTiers)
   const bridgeOverridesRef = useRef(bridgeOverrides)
   const setBridgeOverrideRef = useRef(setBridgeOverride)
+  const clearBridgeOverrideRef = useRef(clearBridgeOverride)
   const megaHexEnabledRef = useRef(megaHexEnabled)
   const megaHexRadiusRef = useRef(megaHexRadius)
   const megaHexColorRef = useRef(megaHexColor)
@@ -514,6 +515,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   bridgeTiersRef.current = bridgeTiers
   bridgeOverridesRef.current = bridgeOverrides
   setBridgeOverrideRef.current = setBridgeOverride
+  clearBridgeOverrideRef.current = clearBridgeOverride
   megaHexEnabledRef.current = megaHexEnabled
   megaHexRadiusRef.current = megaHexRadius
   megaHexColorRef.current = megaHexColor
@@ -1588,9 +1590,21 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const roadChains = ROAD_V2 && smoothedRoadDataV2Ref.current
           ? smoothedRoadDataV2Ref.current.chains
           : smoothedRoadDataRef.current.chains
+        const riverHWFor = (segKey: string) => {
+          const p = riverSegmentPropsRef.current[segKey]
+          return p?.width !== undefined ? 1.4 * p.width : 1.4 * riverWidthScaleRef.current
+        }
+        const canalHWFor = (segKey: string) => {
+          const p = canalSegmentPropsRef.current[segKey]
+          return p?.width !== undefined ? 1.4 * p.width : 1.4 * canalWidthScaleRef.current
+        }
         detectedBridgesRef.current = detectBridges(
           roadChains,
-          [...riverChainData, ...canalChainData],
+          smoothedRailDataRef.current.chains,
+          [
+            ...riverChainData.map(c => ({ vertices: c.vertices, halfWidth: riverHWFor(c.segKey) })),
+            ...canalChainData.map(c => ({ vertices: c.vertices, halfWidth: canalHWFor(c.segKey) })),
+          ],
         )
       } else {
         detectedBridgesRef.current = []
@@ -1908,7 +1922,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     // Bridges — drawn on top of rivers and roads
-    if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0 && bridgeTiersRef.current.length > 0) {
+    if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0) {
       ctx.save()
       ctx.beginPath()
       ctx.rect(px, py, pw, ph)
@@ -1922,6 +1936,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         tierStyles: (isExport
           ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
           : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+        railStyle: isExport
+          ? { ...railStyleRef.current, thickness: railStyleRef.current.thickness * lineScale }
+          : railStyleRef.current,
         lineScale: isExport ? lineScale : 1,
         project,
       })
@@ -1973,6 +1990,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       _drawRiverHandles({
         ctx,
         zoom: zoomRef.current ?? 1,
+        allChains: riverChainsV2Ref.current,
+        chainOverrides: riverChainOverridesRef.current,
         hoveredChain: hoveredChainRef.current,
         hoveredHandleIdx: hoveredHandleIdxRef.current,
         draggingDensePt: draggingDensePtRef.current,
@@ -2330,12 +2349,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, generatedHexes, excludedHexKeys])
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
-  useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, riverEdges, canalEdges, generatedHexes])
+  useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, smoothedRailData, riverEdges, canalEdges, generatedHexes])
   useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailData, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railControlOverrides, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, railSelectMode, showRawOsmRoads])
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -3926,7 +3945,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
 
       // Bridge tier assignment — right-click near any detected bridge
-      if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0 && bridgeTiersRef.current.length > 0) {
+      if (bridgesEnabledRef.current && detectedBridgesRef.current.length > 0) {
         const meta2 = metaRef.current
         const logical2 = meta2 ? clientToLogicalRef.current(e.clientX, e.clientY) : null
         if (meta2 && logical2) {
@@ -3947,6 +3966,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
             const currentTierId = bridgeOverridesRef.current[captured.id]
             if (items.length > 0) items.push({ label: '─', action: () => {} })
             items.push({ label: 'Bridge tier', action: () => {}, dim: true })
+            items.push({
+              label: 'Default (no marker)',
+              action: () => clearBridgeOverrideRef.current(captured.id),
+              dim: !currentTierId,
+            })
             for (const tier of bridgeTiersRef.current) {
               items.push({
                 label: tier.label,
@@ -4870,7 +4894,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       {ctxMenu && (
         <div
           style={{
-            position: 'fixed', left: ctxMenu.x, top: ctxMenu.y,
+            position: 'fixed',
+            left: Math.min(ctxMenu.x, window.innerWidth - 190),
+            top: Math.min(ctxMenu.y, window.innerHeight - 60),
+            maxHeight: `${window.innerHeight - Math.min(ctxMenu.y, window.innerHeight - 60) - 10}px`,
+            overflowY: 'auto',
             background: '#0e0f18', border: '1px solid #2a2a4a',
             borderRadius: 4, padding: '3px 0', zIndex: 200,
             fontFamily: 'ui-monospace, monospace', fontSize: 12,

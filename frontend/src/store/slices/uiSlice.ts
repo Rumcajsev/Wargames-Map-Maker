@@ -275,7 +275,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 33,
+      version: 35,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         mapMode: s.mapMode, diptychJoin: s.diptychJoin,
@@ -294,38 +294,52 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         settlementLabelOverrides: s.settlementLabelOverrides,
         roadEdges: s.roadEdges, roadsDisplayMode: s.roadsDisplayMode,
         roadsVisibleTiers: s.roadsVisibleTiers, roadsStatus: s.roadsStatus,
-        railEdges: s.railEdges, railsDisplayMode: s.railsDisplayMode,
-        railsFetchTypes: s.railsFetchTypes, railsStatus: s.railsStatus,
+        railEdges: s.railEdges, railsFetchTypes: s.railsFetchTypes, railsStatus: s.railsStatus,
+        railStyle: s.railStyle, railControlOverrides: s.railControlOverrides,
+        railSnapBindings: s.railSnapBindings, railWiggleAmp: s.railWiggleAmp,
+        railWiggleFreq: s.railWiggleFreq, railSmoothing: s.railSmoothing,
+        railChainOverrides: s.railChainOverrides, railSegmentProps: s.railSegmentProps,
+        railHopProps: s.railHopProps, railPathSmoothing: s.railPathSmoothing,
+        railGeomOverride: s.railGeomOverride,
         riverEdges: s.riverEdges, canalEdges: s.canalEdges,
         riverSegmentProps: s.riverSegmentProps, canalSegmentProps: s.canalSegmentProps,
         riverHopProps: s.riverHopProps,
         roadSegmentProps: s.roadSegmentProps, roadHopProps: s.roadHopProps,
         roadChainOverrides: s.roadChainOverrides, roadControlOverrides: s.roadControlOverrides,
-        roadSnapBindings: s.roadSnapBindings, roadPathSmoothing: s.roadPathSmoothing, roadDensityMinChain: s.roadDensityMinChain,
+        roadSnapBindings: s.roadSnapBindings, roadPathSmoothing: s.roadPathSmoothing,
+        roadDensityMinChain: s.roadDensityMinChain, roadTierGeometry: s.roadTierGeometry,
         riverStyle: s.riverStyle, canalStyle: s.canalStyle,
         riverChainOverrides: s.riverChainOverrides,
         riverFlowStyle: s.riverFlowStyle, riverCurveSteps: s.riverCurveSteps,
         riverWobble: s.riverWobble, riverDetail: s.riverDetail, riverWiggliness: s.riverWiggliness,
-        showRiverLabels: s.showRiverLabels,
-        riverLabelColor: s.riverLabelColor,
-        elevationThresholds: s.elevationThresholds,
-        elevationStatus: s.elevationStatus,
+        riverWiggleAmp: s.riverWiggleAmp, riverWiggleFreq: s.riverWiggleFreq,
+        riverSmoothing: s.riverSmoothing, riverWidthScale: s.riverWidthScale,
+        riverPathSmoothing: s.riverPathSmoothing,
+        showRiverLabels: s.showRiverLabels, riverLabelColor: s.riverLabelColor,
+        canalWidthScale: s.canalWidthScale,
+        elevationThresholds: s.elevationThresholds, elevationStatus: s.elevationStatus,
         showReliefHeatmap: s.showReliefHeatmap, showElevHeatmap: s.showElevHeatmap,
         activePanel: s.activePanel, elevationStyle: s.elevationStyle,
         contourInterval: s.contourInterval, hexBorderMode: s.hexBorderMode,
         terrainDisplacement: s.terrainDisplacement, terrainNoiseFrequency: s.terrainNoiseFrequency,
         terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
         illustratedStyle: s.illustratedStyle,
-        riverWidthScale: s.riverWidthScale, canalWidthScale: s.canalWidthScale,
-        riverWiggleAmp: s.riverWiggleAmp, riverWiggleFreq: s.riverWiggleFreq, riverSmoothing: s.riverSmoothing,
         roadWiggleAmp: s.roadWiggleAmp, roadWiggleFreq: s.roadWiggleFreq, roadSmoothing: s.roadSmoothing,
-        roadTierStyles: s.roadTierStyles, railStyle: s.railStyle,
+        roadTierStyles: s.roadTierStyles,
         woodsHexStyle: s.woodsHexStyle, blobSize: s.blobSize, blobCount: s.blobCount,
-        showBridges: s.showBridges, bridgeStyle: s.bridgeStyle,
+        showBridges: s.showBridges, bridgesEnabled: s.bridgesEnabled,
+        bridgeStyle: s.bridgeStyle, bridgeTiers: s.bridgeTiers, bridgeOverrides: s.bridgeOverrides,
         urbanHexes: s.urbanHexes, urbanStyle: s.urbanStyle,
         urbanDisplayMode: s.urbanDisplayMode, urbanScale: s.urbanScale,
         urbanVertexRatio: s.urbanVertexRatio, urbanNoise: s.urbanNoise,
         urbanBuildingCount: s.urbanBuildingCount, urbanBuildingSize: s.urbanBuildingSize,
+        terrainEdgePaintEnabled: s.terrainEdgePaintEnabled,
+        edgeBlobPainted: s.edgeBlobPainted, edgeBlobSmooth: s.edgeBlobSmooth,
+        edgeBlobOffset: s.edgeBlobOffset, edgeBlobBump: s.edgeBlobBump,
+        edgeBlobSweepFreq: s.edgeBlobSweepFreq, edgeBlobLobeFreq: s.edgeBlobLobeFreq,
+        edgeBlobLobeAmp: s.edgeBlobLobeAmp, edgeBlobLobeThreshold: s.edgeBlobLobeThreshold,
+        edgeBlobLobeDirection: s.edgeBlobLobeDirection, edgeBlobWidth: s.edgeBlobWidth,
+        edgeBlobOverrides: s.edgeBlobOverrides,
         terrainBlobOverrides: s.terrainBlobOverrides, terrainTypeBlobStyles: s.terrainTypeBlobStyles,
         terrainBlobSmooth: s.terrainBlobSmooth, terrainBlobOffset: s.terrainBlobOffset,
         terrainBlobBump: s.terrainBlobBump, terrainBlobSweepFreq: s.terrainBlobSweepFreq,
@@ -348,8 +362,19 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         mapBgColor: s.mapBgColor, mapBorderEnabled: s.mapBorderEnabled,
         mapBorderColor: s.mapBorderColor, mapBorderWidth: s.mapBorderWidth,
         clipToHexGrid: s.clipToHexGrid, excludedHexKeys: s.excludedHexKeys,
+        hexNumbersEnabled: s.hexNumbersEnabled, hexNumberStartCorner: s.hexNumberStartCorner,
+        hexNumberEdge: s.hexNumberEdge, hexNumberColor: s.hexNumberColor,
+        hexNumberFontScale: s.hexNumberFontScale,
+        megaHexEnabled: s.megaHexEnabled, megaHexRadius: s.megaHexRadius,
+        megaHexColor: s.megaHexColor, megaHexOpacity: s.megaHexOpacity,
+        megaHexLineWidth: s.megaHexLineWidth, megaHexOriginQ: s.megaHexOriginQ,
+        megaHexOriginR: s.megaHexOriginR,
         highlights: s.highlights, highlightedHexes: s.highlightedHexes,
         highlightLines: s.highlightLines, highlightEdgePaths: s.highlightEdgePaths,
+        areasMode: s.areasMode, areas: s.areas, areaHexes: s.areaHexes,
+        areasStyle: s.areasStyle, areasGenParams: s.areasGenParams,
+        iconOverlays: s.iconOverlays, placedIcons: s.placedIcons,
+        labelOverlays: s.labelOverlays, placedLabels: s.placedLabels,
       },
     }
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
@@ -559,6 +584,10 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.areasStyle) s.areasStyle = { borderWidth: 2.0, labelSize: 1.0, borderColor: '#2c1a00' }
     if (!s.areasGenParams) s.areasGenParams = { targetSize: 8, riverWeight: 0.7, terrainWeight: 2.0 }
     if (s.activeAreaId === undefined) s.activeAreaId = null
+  }
+  if (fromVersion < 36) {
+    s.bridgeTiers = []
+    s.bridgeOverrides = {}
   }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'

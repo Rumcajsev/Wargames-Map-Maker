@@ -6,10 +6,7 @@ export interface BridgeTier {
   color: string
 }
 
-export const DEFAULT_BRIDGE_TIERS: BridgeTier[] = [
-  { id: 'bt-0', label: 'Major', color: '#e8c060' },
-  { id: 'bt-1', label: 'Minor', color: '#c0b090' },
-]
+export const DEFAULT_BRIDGE_TIERS: BridgeTier[] = []
 
 export interface BridgesSlice {
   bridgesEnabled: boolean

@@ -15,7 +15,7 @@ export type RiversSlice = {
   canalEdges: { q1: number; r1: number; q2: number; r2: number }[]
   showRiverLabels: boolean
   riverLabelColor: string
-  riverSegmentProps: Record<string, { width?: number; taper?: number; taperRange?: [number, number]; wiggleAmp?: number; wiggleFreq?: number }>
+  riverSegmentProps: Record<string, { width?: number; taper?: number; taperRange?: [number, number]; wiggleAmp?: number; wiggleFreq?: number; pathSmoothing?: number }>
   canalSegmentProps: Record<string, { width?: number; taper?: number; taperRange?: [number, number] }>
   riverSelectMode: boolean
   canalSelectMode: boolean
@@ -82,7 +82,7 @@ export type RiversSlice = {
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
 
-type SegProp = { width?: number; taper?: number; taperRange?: [number, number]; wiggleAmp?: number; wiggleFreq?: number }
+type SegProp = { width?: number; taper?: number; taperRange?: [number, number]; wiggleAmp?: number; wiggleFreq?: number; pathSmoothing?: number }
 
 const edgeKey = (q1: number, r1: number, q2: number, r2: number) => {
   const s1 = `${q1},${r1}`, s2 = `${q2},${r2}`

@@ -713,7 +713,7 @@ export function RoadsSidebar() {
         })()}
 
         {/* Bridges collapsible section */}
-        <div style={{ ...sectionStyle, padding: 0, overflow: 'hidden' }}>
+        <div style={{ ...sectionStyle, padding: 0 }}>
           <div
             onClick={() => setBridgesOpen(o => !o)}
             style={{
@@ -784,11 +784,11 @@ export function RoadsSidebar() {
                     value={tier.label}
                     onChange={e => updateBridgeTier(tier.id, { label: e.target.value })}
                     style={{
-                      flex: 1, background: '#0e0f18', border: '1px solid #2a2a4a', borderRadius: 3,
+                      flex: 1, minWidth: 0, background: '#0e0f18', border: '1px solid #2a2a4a', borderRadius: 3,
                       color: '#a0a0c0', fontSize: 11, padding: '2px 5px', fontFamily: 'inherit',
                     }}
                   />
-                  {bridgeTiers.length > 1 && (
+                  {bridgeTiers.length > 0 && (
                     <button
                       onClick={() => removeBridgeTier(tier.id)}
                       style={{

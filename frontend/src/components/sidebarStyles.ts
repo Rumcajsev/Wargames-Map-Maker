@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 export const sidebarStyle: CSSProperties = {
   width: 200,
   flexShrink: 0,
+  minHeight: 0,
   background: '#0e0f18',
   borderRight: '1px solid #1e1f2e',
   display: 'flex',
@@ -13,6 +14,7 @@ export const sidebarStyle: CSSProperties = {
   fontSize: 12,
   color: '#a0a0c0',
   overflowY: 'auto',
+  overflowX: 'hidden',
   userSelect: 'none',
 }
 
