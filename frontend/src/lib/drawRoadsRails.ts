@@ -4,6 +4,7 @@ import type { RoadTierStyle, RailStyle, RoadDashStyle } from '../store/mapStore'
 import { offsetPolyline } from './geometry'
 
 function dashPattern(style: RoadDashStyle, w: number): number[] {
+  if (style === 'dashed') return [w * 2.5, w * 1.5]
   if (style === 'dotted') return [w * 0.5, w * 1.5]
   return []
 }
@@ -39,7 +40,7 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     rCtx.lineJoin = 'round'
     for (const tier of [2, 1, 0] as const) {
       const s = tierStyles[tier]
-      rCtx.lineCap = s.caseDash === 'solid' ? 'round' : 'butt'
+      rCtx.lineCap = s.caseDash === 'dashed' ? 'butt' : 'round'
       rCtx.strokeStyle = s.outer
       rCtx.lineWidth = s.outerW
       rCtx.setLineDash(dashPattern(s.caseDash, s.outerW))
@@ -55,7 +56,7 @@ export function drawRoadsAndRails(rCtx: Ctx, {
     }
     for (const tier of [2, 1, 0] as const) {
       const s = tierStyles[tier]
-      rCtx.lineCap = s.fillDash === 'solid' ? 'round' : 'butt'
+      rCtx.lineCap = s.fillDash === 'dashed' ? 'butt' : 'round'
       rCtx.strokeStyle = s.inner
       rCtx.lineWidth = s.outerW * 0.5
       rCtx.setLineDash(dashPattern(s.fillDash, s.outerW * 0.5))

@@ -599,15 +599,6 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     }
   }
   if (fromVersion < 38) {
-    const tiers = s.roadTierStyles as Array<Record<string, unknown>> | undefined
-    if (tiers) {
-      for (const t of tiers) {
-        if (t.caseDash === 'dashed') t.caseDash = 'solid'
-        if (t.fillDash === 'dashed') t.fillDash = 'solid'
-      }
-    }
-  }
-  if (fromVersion < 38) {
     const hexes = s.generatedHexes as Array<Record<string, unknown>> | undefined
     if (hexes) {
       for (const h of hexes) {

@@ -143,7 +143,7 @@ export function RoadsSettingsFlyout(props: Props) {
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>{label}</div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {(['solid', 'dotted'] as const).map(opt => (
+              {(['solid', 'dashed', 'dotted'] as const).map(opt => (
                 <button
                   key={opt}
                   onClick={() => onChange(opt)}

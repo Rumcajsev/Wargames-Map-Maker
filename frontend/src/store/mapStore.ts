@@ -246,7 +246,7 @@ export const DEFAULT_THRESHOLDS: Record<string, number> = {
   clear: 0,
 }
 
-export type RoadDashStyle = 'solid' | 'dotted'
+export type RoadDashStyle = 'solid' | 'dashed' | 'dotted'
 
 export interface RoadTierStyle {
   outer: string
