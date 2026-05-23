@@ -51,6 +51,23 @@ function drawBush(ctx: Ctx, x: number, y: number, R: number, rng: () => number):
 export function drawHistoricalVegetation(ctx: Ctx, params: DrawHistoricalVegetationParams): void {
   const { blobs, R } = params
 
+  // ── Watercolor wash for woods only ────────────────────────────────────────
+  ctx.save()
+  ctx.fillStyle = 'rgba(120, 165, 70, 0.22)'
+  for (const { terrain, polys } of blobs) {
+    if (terrain !== 'woods') continue
+    for (const poly of polys) {
+      if (poly.length < 3) continue
+      ctx.beginPath()
+      ctx.moveTo(poly[0][0], poly[0][1])
+      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1])
+      ctx.closePath()
+      ctx.fill('evenodd')
+    }
+  }
+  ctx.restore()
+
+  // ── Tree and bush icons ────────────────────────────────────────────────────
   ctx.save()
   ctx.fillStyle = '#2a3e18'
   ctx.strokeStyle = '#1e2e10'
