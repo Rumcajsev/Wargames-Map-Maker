@@ -71,10 +71,16 @@ export interface BlobOverride {
 
 
 export interface ClassificationParams {
-  mountainsPct: number    // top X% by elevation_range_m → mountains
-  hillsPct: number        // next Y% by elevation_range_m → hills
-  mountainsFloorM: number // minimum range_m to qualify as mountains
-  hillsFloorM: number     // minimum range_m to qualify as hills
+  // Ruggedness signal (elevation_range_m within the hex)
+  mountainsPct: number      // top X% by range → mountains
+  hillsPct: number          // next Y% by range → hills
+  mountainsFloorM: number   // minimum range_m to qualify as mountains
+  hillsFloorM: number       // minimum range_m to qualify as hills
+  // Absolute height signal (elevation_median_m)
+  mountainsMedianPct: number    // top X% by median → mountains
+  hillsMedianPct: number        // next Y% by median → hills
+  mountainsMedianFloorM: number // minimum median_m to qualify as mountains
+  hillsMedianFloorM: number     // minimum median_m to qualify as hills
 }
 
 export const DEFAULT_CLASSIFICATION_PARAMS: ClassificationParams = {
@@ -82,6 +88,10 @@ export const DEFAULT_CLASSIFICATION_PARAMS: ClassificationParams = {
   hillsPct: 25,
   mountainsFloorM: 100,
   hillsFloorM: 40,
+  mountainsMedianPct: 20,
+  hillsMedianPct: 20,
+  mountainsMedianFloorM: 800,
+  hillsMedianFloorM: 200,
 }
 
 export type PaperSize = 'A4' | 'A3' | 'A2' | 'A1'
@@ -739,7 +749,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     megaHexOriginQ: s.megaHexOriginQ,
     megaHexOriginR: s.megaHexOriginR,
   }),
-  version: 40,
+  version: 41,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

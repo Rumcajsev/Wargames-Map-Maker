@@ -636,6 +636,15 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       s.classificationParams = { mountainsPct: 15, hillsPct: 25, mountainsFloorM: 100, hillsFloorM: 40 }
     }
   }
+  if (fromVersion < 41) {
+    const p = s.classificationParams as Record<string, unknown> | undefined
+    if (p) {
+      if (p.mountainsMedianPct === undefined) p.mountainsMedianPct = 20
+      if (p.hillsMedianPct === undefined) p.hillsMedianPct = 20
+      if (p.mountainsMedianFloorM === undefined) p.mountainsMedianFloorM = 800
+      if (p.hillsMedianFloorM === undefined) p.hillsMedianFloorM = 200
+    }
+  }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }

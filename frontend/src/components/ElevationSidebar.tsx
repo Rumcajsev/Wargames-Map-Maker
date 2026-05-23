@@ -107,6 +107,8 @@ export function ElevationSidebar() {
         <div style={sectionStyle}>
           <div style={labelStyle}>Classification</div>
 
+          <div style={{ fontSize: 10, color: '#5a5a7a', marginBottom: 6 }}>By ruggedness (range within hex)</div>
+
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: '#8a6a3a', marginBottom: 4 }}>Mountains</div>
             <SliderRow
@@ -137,6 +139,42 @@ export function ElevationSidebar() {
               min={0} max={300} step={5} unit="m"
               onChange={v => setClassificationParam('hillsFloorM', v)}
             />
+          </div>
+
+          <div style={{ borderTop: '1px solid #1e1f2e', margin: '10px 0 10px', paddingTop: 10 }}>
+            <div style={{ fontSize: 10, color: '#5a5a7a', marginBottom: 6 }}>By height (median) — promotes high plateaus</div>
+
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: '#8a6a3a', marginBottom: 4 }}>Mountains</div>
+              <SliderRow
+                label="Top % by median"
+                value={classificationParams.mountainsMedianPct}
+                min={1} max={50} step={1} unit="%"
+                onChange={v => setClassificationParam('mountainsMedianPct', v)}
+              />
+              <SliderRow
+                label="Min height"
+                value={classificationParams.mountainsMedianFloorM}
+                min={0} max={3000} step={50} unit="m"
+                onChange={v => setClassificationParam('mountainsMedianFloorM', v)}
+              />
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: '#7a8a5a', marginBottom: 4 }}>Hills</div>
+              <SliderRow
+                label="Next % by median"
+                value={classificationParams.hillsMedianPct}
+                min={1} max={50} step={1} unit="%"
+                onChange={v => setClassificationParam('hillsMedianPct', v)}
+              />
+              <SliderRow
+                label="Min height"
+                value={classificationParams.hillsMedianFloorM}
+                min={0} max={1500} step={25} unit="m"
+                onChange={v => setClassificationParam('hillsMedianFloorM', v)}
+              />
+            </div>
           </div>
 
           {pctSum > 95 && (

@@ -1,39 +1,63 @@
 import type { GeneratedHex, ClassificationParams } from '../store/mapStore'
 
+type ElevClass = 'flat' | 'hills' | 'mountains'
+const RANK: Record<ElevClass, number> = { flat: 0, hills: 1, mountains: 2 }
+
+function pctThreshold(sorted: number[], topPct: number): number {
+  const idx = Math.max(0, Math.floor(sorted.length * (1 - topPct / 100)))
+  return sorted[idx]
+}
+
 export function classifyElevation(
   hexes: GeneratedHex[],
   params: ClassificationParams,
 ): GeneratedHex[] {
   const active = hexes.filter(
-    h => h.terrain !== 'sea' && !h.isLake && h.elevation_range_m != null
+    h => h.terrain !== 'sea' && !h.isLake
+      && h.elevation_range_m != null
+      && h.elevation_median_m != null
   )
 
   if (active.length === 0) {
     return hexes.map(h => ({ ...h, elevation_class: null }))
   }
 
-  const sorted = [...active].sort((a, b) => a.elevation_range_m! - b.elevation_range_m!)
-  const n = sorted.length
+  // Build sorted arrays for each signal
+  const rangesSorted = active.map(h => h.elevation_range_m!).sort((a, b) => a - b)
+  const mediansSorted = active.map(h => h.elevation_median_m!).sort((a, b) => a - b)
 
-  // Index of the first hex in the top mountainsPct%
-  const mIdx = Math.max(0, Math.floor(n * (1 - params.mountainsPct / 100)))
-  // Index of the first hex in the top (mountainsPct + hillsPct)%
-  const hIdx = Math.max(0, Math.floor(n * (1 - (params.mountainsPct + params.hillsPct) / 100)))
+  // Range thresholds (ruggedness)
+  const mRangeMin = pctThreshold(rangesSorted, params.mountainsPct)
+  const hRangeMin = pctThreshold(rangesSorted, params.mountainsPct + params.hillsPct)
 
-  const mountainsRangeMin = sorted[mIdx].elevation_range_m!
-  const hillsRangeMin = sorted[hIdx].elevation_range_m!
+  // Median thresholds (absolute height)
+  const mMedianMin = pctThreshold(mediansSorted, params.mountainsMedianPct)
+  const hMedianMin = pctThreshold(mediansSorted, params.mountainsMedianPct + params.hillsMedianPct)
 
   return hexes.map(h => {
-    if (h.terrain === 'sea' || h.isLake || h.elevation_range_m == null) {
+    if (
+      h.terrain === 'sea' || h.isLake
+      || h.elevation_range_m == null
+      || h.elevation_median_m == null
+    ) {
       return { ...h, elevation_class: null }
     }
+
     const range = h.elevation_range_m
-    if (range >= mountainsRangeMin && range >= params.mountainsFloorM) {
-      return { ...h, elevation_class: 'mountains' as const }
-    }
-    if (range >= hillsRangeMin && range >= params.hillsFloorM) {
-      return { ...h, elevation_class: 'hills' as const }
-    }
-    return { ...h, elevation_class: 'flat' as const }
+    const median = h.elevation_median_m
+
+    // Classify by ruggedness
+    let byRange: ElevClass = 'flat'
+    if (range >= mRangeMin && range >= params.mountainsFloorM) byRange = 'mountains'
+    else if (range >= hRangeMin && range >= params.hillsFloorM) byRange = 'hills'
+
+    // Classify by absolute height
+    let byMedian: ElevClass = 'flat'
+    if (median >= mMedianMin && median >= params.mountainsMedianFloorM) byMedian = 'mountains'
+    else if (median >= hMedianMin && median >= params.hillsMedianFloorM) byMedian = 'hills'
+
+    // Take the higher of the two
+    const result: ElevClass = RANK[byRange] >= RANK[byMedian] ? byRange : byMedian
+    return { ...h, elevation_class: result }
   })
 }
