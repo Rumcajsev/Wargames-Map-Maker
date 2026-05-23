@@ -7,6 +7,7 @@ import { catmullRom } from './geometry'
 import { makePermutation } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams } from './edgeBlobs'
 import { drawHistoricalVegetation } from './drawHistoricalVegetation'
+import { drawHachures } from './drawHachures'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -358,6 +359,11 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   // ── 5c. Historical vegetation icons ─────────────────────────────────────────
   if (params.mapStyle === 'historical_simple') {
     drawHistoricalVegetation(tCtx, { blobs: defaultTerrainBlobs, R })
+  }
+
+  // ── 5d. Historical hachures (elevation) ──────────────────────────────────
+  if (params.mapStyle === 'historical_simple') {
+    drawHachures(tCtx, { projected, R })
   }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
