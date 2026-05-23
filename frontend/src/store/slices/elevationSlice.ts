@@ -26,6 +26,7 @@ export type ElevationSlice = {
   elevationProgress: GenerateProgress | null
   showReliefHeatmap: boolean
   showElevHeatmap: boolean
+  showElevationDebug: boolean
   elevationPaintMode: boolean
   elevationPaintBrush: 'flat' | 'hills' | 'mountains'
   elevationStyle: 'hachure' | 'contour'
@@ -34,6 +35,7 @@ export type ElevationSlice = {
   setElevationThreshold: (key: keyof ElevationThresholds, v: number) => void
   setShowReliefHeatmap: (v: boolean) => void
   setShowElevHeatmap: (v: boolean) => void
+  setShowElevationDebug: (v: boolean) => void
   setElevationPaintMode: (v: boolean) => void
   setElevationPaintBrush: (v: 'flat' | 'hills' | 'mountains') => void
   overrideHexElevation: (q: number, r: number, elevation_class: 'flat' | 'hills' | 'mountains') => void
@@ -50,6 +52,7 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   elevationProgress: null,
   showReliefHeatmap: false,
   showElevHeatmap: false,
+  showElevationDebug: false,
   elevationPaintMode: false,
   elevationPaintBrush: 'hills',
   elevationStyle: 'hachure',
@@ -127,6 +130,7 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
 
   setShowReliefHeatmap: (v) => set({ showReliefHeatmap: v, showElevHeatmap: v ? false : get().showElevHeatmap }),
   setShowElevHeatmap: (v) => set({ showElevHeatmap: v, showReliefHeatmap: v ? false : get().showReliefHeatmap }),
+  setShowElevationDebug: (v) => set({ showElevationDebug: v }),
 
   setElevationPaintMode: (v) => set({ elevationPaintMode: v, ...(v ? { terrainPaintMode: false, roadPaintMode: false, railPaintMode: false } : {}) }),
   setElevationPaintBrush: (v) => set({ elevationPaintBrush: v }),

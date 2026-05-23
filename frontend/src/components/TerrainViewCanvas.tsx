@@ -33,6 +33,7 @@ import { getToolCursor } from '../lib/cursors'
 import { detectBridges } from '../lib/detectBridges'
 import { drawBridges as _drawBridges } from '../lib/drawBridges'
 import { drawMegaHexGrid as _drawMegaHexGrid } from '../lib/drawMegaHexGrid'
+import { drawElevationDebug as _drawElevationDebug } from '../lib/drawElevationDebug'
 import type { BridgePoint } from '../lib/detectBridges'
 import { drawRoadHandles as _drawRoadHandles, drawRailHandles as _drawRailHandles, drawRiverHandles as _drawRiverHandles } from '../lib/drawEditHandles'
 import { drawPaperBackground as _drawPaperBackground, drawPaperMargin as _drawPaperMargin } from '../lib/drawPaperChrome'
@@ -200,6 +201,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     labelOverlays, placedLabels, activeLabelOverlayId,
     placeLabel, removeLabelAt, updateLabelText, moveLabelTo,
     elevationPaintMode,
+    showElevationDebug,
     activeTool,
     setActiveTool,
     mapMode, diptychJoin, paperSize, orientation,
@@ -890,6 +892,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   const hexNumbersEnabledRef = useRef(hexNumbersEnabled)
   hexNumbersEnabledRef.current = hexNumbersEnabled
+  const showElevationDebugRef = useRef(showElevationDebug)
+  showElevationDebugRef.current = showElevationDebug
   const hexNumberEdgeRef = useRef(hexNumberEdge)
   hexNumberEdgeRef.current = hexNumberEdge
   const hexNumberColorRef = useRef(hexNumberColor)
@@ -1486,6 +1490,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         edgeMode,
         inMargin,
       })
+    }
+
+    // Elevation debug overlay — screen only, never exported
+    if (!isExport && showElevationDebugRef.current) {
+      _drawElevationDebug({ ctx, projected, R })
     }
 
     // Hex highlights — offscreen cached (joined highlights + line highlights)
@@ -2354,7 +2363,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, beachStrip, beachColor, beachWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 

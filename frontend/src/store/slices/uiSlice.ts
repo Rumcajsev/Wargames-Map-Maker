@@ -2,7 +2,7 @@ import type { MapStore, ActiveTool, UrbanStyle, RoadEdge } from '../mapStore'
 import { DEFAULT_URBAN_STYLE } from '../mapStore'
 
 export type UiSlice = {
-  activePanel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'highlights' | 'areas'
+  activePanel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'highlights' | 'areas' | 'elevation'
   activeTool: ActiveTool
   urbanHexes: Array<{ q: number; r: number }>
   urbanStyle: UrbanStyle
@@ -37,7 +37,7 @@ export type UiSlice = {
   mapBorderWidth: number
   clipToHexGrid: boolean
   excludedHexKeys: string[]
-  setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'areas') => void
+  setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'areas' | 'elevation') => void
   setActiveTool: (tool: ActiveTool) => void
   toggleUrbanHex: (q: number, r: number) => void
   setUrbanStyle: (style: Partial<UrbanStyle>) => void
