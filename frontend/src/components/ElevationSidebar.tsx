@@ -1,6 +1,30 @@
 import { useMapStore } from '../store/mapStore'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
 
+function SliderRow({ label, value, min, max, step, unit, onChange }: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  unit: string
+  onChange: (v: number) => void
+}) {
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+        <span style={{ fontSize: 10, color: '#7a7a9a' }}>{label}</span>
+        <span style={{ fontSize: 10, color: '#5a5a7a' }}>{value}{unit}</span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ width: '100%', accentColor: '#3a6a9a' }}
+      />
+    </div>
+  )
+}
+
 export function ElevationSidebar() {
   const {
     generatedHexes,
@@ -8,14 +32,21 @@ export function ElevationSidebar() {
     elevationError,
     elevationProgress,
     showElevationDebug,
+    classificationParams,
     fetchElevation,
     setShowElevationDebug,
+    setClassificationParam,
   } = useMapStore()
 
   const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
   const fetchedCount = generatedHexes.filter(h => h.elevation_avg_m != null).length
   const isLoading = elevationStatus === 'loading'
   const noHexes = generatedHexes.length === 0
+
+  const flatCount = hasData ? generatedHexes.filter(h => h.elevation_class === 'flat').length : 0
+  const hillsCount = hasData ? generatedHexes.filter(h => h.elevation_class === 'hills').length : 0
+  const mountainsCount = hasData ? generatedHexes.filter(h => h.elevation_class === 'mountains').length : 0
+  const pctSum = classificationParams.mountainsPct + classificationParams.hillsPct
 
   return (
     <div style={sidebarStyle}>
@@ -50,9 +81,7 @@ export function ElevationSidebar() {
 
         {isLoading && elevationProgress && (
           <div style={{ marginBottom: 4 }}>
-            <div style={{
-              height: 2, background: '#1e1f2e', borderRadius: 1, marginBottom: 3,
-            }}>
+            <div style={{ height: 2, background: '#1e1f2e', borderRadius: 1, marginBottom: 3 }}>
               <div style={{
                 height: '100%', borderRadius: 1, background: '#3a6a9a',
                 width: `${elevationProgress.progress}%`, transition: 'width 0.2s',
@@ -72,6 +101,70 @@ export function ElevationSidebar() {
           </div>
         )}
       </div>
+
+      {/* ── Classification ── */}
+      {hasData && (
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Classification</div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: '#8a6a3a', marginBottom: 4 }}>Mountains</div>
+            <SliderRow
+              label="Top % by range"
+              value={classificationParams.mountainsPct}
+              min={1} max={50} step={1} unit="%"
+              onChange={v => setClassificationParam('mountainsPct', v)}
+            />
+            <SliderRow
+              label="Min range"
+              value={classificationParams.mountainsFloorM}
+              min={0} max={600} step={10} unit="m"
+              onChange={v => setClassificationParam('mountainsFloorM', v)}
+            />
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: '#7a8a5a', marginBottom: 4 }}>Hills</div>
+            <SliderRow
+              label="Next % by range"
+              value={classificationParams.hillsPct}
+              min={1} max={50} step={1} unit="%"
+              onChange={v => setClassificationParam('hillsPct', v)}
+            />
+            <SliderRow
+              label="Min range"
+              value={classificationParams.hillsFloorM}
+              min={0} max={300} step={5} unit="m"
+              onChange={v => setClassificationParam('hillsFloorM', v)}
+            />
+          </div>
+
+          {pctSum > 95 && (
+            <div style={{ fontSize: 10, color: '#9e5a5a', marginBottom: 6 }}>
+              Mountains + hills exceeds 95% — flat hexes will be scarce
+            </div>
+          )}
+
+          {/* Count summary */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+            gap: 4, fontSize: 10, textAlign: 'center',
+          }}>
+            {[
+              { label: 'Flat', count: flatCount, color: '#5a7a5a' },
+              { label: 'Hills', count: hillsCount, color: '#7a8a5a' },
+              { label: 'Mtns', count: mountainsCount, color: '#8a6a3a' },
+            ].map(({ label, count, color }) => (
+              <div key={label} style={{
+                background: '#12131e', borderRadius: 3, padding: '4px 2px',
+              }}>
+                <div style={{ color, marginBottom: 1 }}>{label}</div>
+                <div style={{ color: '#5a5a7a' }}>{count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Debug overlay ── */}
       {hasData && (

@@ -315,6 +315,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         showRiverLabels: s.showRiverLabels, riverLabelColor: s.riverLabelColor,
         canalWidthScale: s.canalWidthScale,
         elevationStatus: s.elevationStatus,
+        classificationParams: s.classificationParams,
         activePanel: s.activePanel, hexBorderMode: s.hexBorderMode,
         terrainDisplacement: s.terrainDisplacement, terrainNoiseFrequency: s.terrainNoiseFrequency,
         terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
@@ -623,6 +624,17 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     delete s.contourInterval
     delete s.elevationPaintMode
     delete s.elevationPaintBrush
+  }
+  if (fromVersion < 40) {
+    const hexes = s.generatedHexes as Array<Record<string, unknown>> | undefined
+    if (hexes) {
+      for (const h of hexes) {
+        if (h.elevation_class === undefined) h.elevation_class = null
+      }
+    }
+    if (!s.classificationParams) {
+      s.classificationParams = { mountainsPct: 15, hillsPct: 25, mountainsFloorM: 100, hillsFloorM: 40 }
+    }
   }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'

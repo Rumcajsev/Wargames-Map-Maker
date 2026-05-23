@@ -70,6 +70,20 @@ export interface BlobOverride {
 }
 
 
+export interface ClassificationParams {
+  mountainsPct: number    // top X% by elevation_range_m → mountains
+  hillsPct: number        // next Y% by elevation_range_m → hills
+  mountainsFloorM: number // minimum range_m to qualify as mountains
+  hillsFloorM: number     // minimum range_m to qualify as hills
+}
+
+export const DEFAULT_CLASSIFICATION_PARAMS: ClassificationParams = {
+  mountainsPct: 15,
+  hillsPct: 25,
+  mountainsFloorM: 100,
+  hillsFloorM: 40,
+}
+
 export type PaperSize = 'A4' | 'A3' | 'A2' | 'A1'
 export type Orientation = 'portrait' | 'landscape'
 export type HexOrientation = 'flat' | 'pointy'
@@ -133,6 +147,7 @@ export interface GeneratedHex {
   elevation_max_m: number | null
   elevation_min_m: number | null
   elevation_range_m: number | null
+  elevation_class: 'flat' | 'hills' | 'mountains' | null
   coastline_clip?: [number, number][][] | null
 }
 
@@ -592,6 +607,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     showRiverLabels: s.showRiverLabels,
     riverLabelColor: s.riverLabelColor,
     elevationStatus: s.elevationStatus,
+    classificationParams: s.classificationParams,
     activePanel: s.activePanel,
     hexBorderMode: s.hexBorderMode,
     terrainDisplacement: s.terrainDisplacement,
@@ -723,7 +739,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     megaHexOriginQ: s.megaHexOriginQ,
     megaHexOriginR: s.megaHexOriginR,
   }),
-  version: 39,
+  version: 40,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

@@ -381,6 +381,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
               elevation_max_m: null,
               elevation_min_m: null,
               elevation_range_m: null,
+              elevation_class: null,
               coastline_clip: null,
             }))
             if (get().blankMap) {

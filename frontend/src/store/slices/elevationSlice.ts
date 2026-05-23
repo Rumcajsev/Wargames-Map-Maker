@@ -1,12 +1,17 @@
-import type { MapStore, GeneratedHex, GenerateProgress } from '../mapStore'
+import type { MapStore, GeneratedHex, GenerateProgress, ClassificationParams } from '../mapStore'
+import { DEFAULT_CLASSIFICATION_PARAMS } from '../mapStore'
+import { classifyElevation as _classify } from '../../lib/elevationClassify'
 
 export type ElevationSlice = {
   elevationStatus: 'idle' | 'loading' | 'error' | 'done'
   elevationError: string | null
   elevationProgress: GenerateProgress | null
   showElevationDebug: boolean
+  classificationParams: ClassificationParams
   fetchElevation: () => Promise<void>
   setShowElevationDebug: (v: boolean) => void
+  setClassificationParam: (key: keyof ClassificationParams, v: number) => void
+  classifyElevation: () => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -16,6 +21,7 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   elevationError: null,
   elevationProgress: null,
   showElevationDebug: false,
+  classificationParams: { ...DEFAULT_CLASSIFICATION_PARAMS },
 
   fetchElevation: async () => {
     const { generatedHexes, generatedMetadata, hexOrientation } = get()
@@ -62,7 +68,9 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
           try { event = JSON.parse(jsonStr) } catch { continue }
 
           if (event.step === 'done') {
-            set({ generatedHexes: event.hexes as GeneratedHex[], elevationStatus: 'done', elevationProgress: null })
+            const params = get().classificationParams
+            const classified = _classify(event.hexes as GeneratedHex[], params)
+            set({ generatedHexes: classified, elevationStatus: 'done', elevationProgress: null })
           } else if (event.step === 'error') {
             set({ elevationStatus: 'error', elevationError: event.message as string, elevationProgress: null })
           } else {
@@ -76,4 +84,15 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   },
 
   setShowElevationDebug: (v) => set({ showElevationDebug: v }),
+
+  setClassificationParam: (key, v) => {
+    const next = { ...get().classificationParams, [key]: v }
+    const updated = _classify(get().generatedHexes, next)
+    set({ classificationParams: next, generatedHexes: updated })
+  },
+
+  classifyElevation: () => {
+    const { generatedHexes, classificationParams } = get()
+    set({ generatedHexes: _classify(generatedHexes, classificationParams) })
+  },
 })
