@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from models import GridConfig, ReclassifyRequest, SettlementsConfig, RoadsConfig, RailsConfig, RiversConfig, ElevationConfig, HexLookupConfig, SettlementRoadsConfig, MotorwayHexesConfig
 from services.hex_grid import generate_hex_grid
 from services.terrain import generate_terrain, classify_hex, terrain_stream_generator
-from services.elevation import elevation_stream_generator
+from services.elevation_tiles import elevation_stream_generator
 from services.geometry import compute_bbox
 
 router = APIRouter()
@@ -92,14 +92,14 @@ async def generate_rails(config: RailsConfig) -> dict:
 @router.post("/elevation-stream")
 async def elevation_stream(config: ElevationConfig) -> StreamingResponse:
     thresholds = {
-        "hills_relief_m": config.hills_relief_m,
-        "mountains_relief_m": config.mountains_relief_m,
+        "hills_range_m": config.hills_range_m,
+        "mountains_range_m": config.mountains_range_m,
         "hills_absolute_m": config.hills_absolute_m,
         "mountains_absolute_m": config.mountains_absolute_m,
     }
     hexes = [dict(h) for h in config.hexes]
     return StreamingResponse(
-        elevation_stream_generator(hexes, thresholds),
+        elevation_stream_generator(hexes, config, thresholds),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

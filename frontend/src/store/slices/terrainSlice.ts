@@ -350,8 +350,11 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
               coverage: {},
               isLake: false,
               lakeManualOverride: false,
-              elevation_m: null,
-              elevation_relief_m: null,
+              elevation_avg_m: null,
+              elevation_median_m: null,
+              elevation_max_m: null,
+              elevation_min_m: null,
+              elevation_range_m: null,
               elevation_class: null,
               coastline_clip: null,
             }))

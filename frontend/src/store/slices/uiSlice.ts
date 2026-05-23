@@ -598,6 +598,37 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       }
     }
   }
+  if (fromVersion < 38) {
+    const tiers = s.roadTierStyles as Array<Record<string, unknown>> | undefined
+    if (tiers) {
+      for (const t of tiers) {
+        if (t.caseDash === 'dashed') t.caseDash = 'solid'
+        if (t.fillDash === 'dashed') t.fillDash = 'solid'
+      }
+    }
+  }
+  if (fromVersion < 38) {
+    const hexes = s.generatedHexes as Array<Record<string, unknown>> | undefined
+    if (hexes) {
+      for (const h of hexes) {
+        delete h.elevation_m
+        delete h.elevation_relief_m
+        h.elevation_avg_m = null
+        h.elevation_median_m = null
+        h.elevation_max_m = null
+        h.elevation_min_m = null
+        h.elevation_range_m = null
+      }
+    }
+    const t = s.elevationThresholds as Record<string, unknown> | undefined
+    if (t) {
+      t.hills_range_m = t.hills_relief_m ?? 80
+      t.mountains_range_m = t.mountains_relief_m ?? 300
+      delete t.hills_relief_m
+      delete t.mountains_relief_m
+    }
+    s.elevationStatus = 'idle'
+  }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }

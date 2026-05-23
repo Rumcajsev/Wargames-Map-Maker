@@ -4,7 +4,6 @@ import type { RoadTierStyle, RailStyle, RoadDashStyle } from '../store/mapStore'
 import { offsetPolyline } from './geometry'
 
 function dashPattern(style: RoadDashStyle, w: number): number[] {
-  if (style === 'dashed') return [w * 2.5, w * 1.5]
   if (style === 'dotted') return [w * 0.5, w * 1.5]
   return []
 }

@@ -70,15 +70,15 @@ export interface BlobOverride {
 }
 
 export interface ElevationThresholds {
-  hills_relief_m: number
-  mountains_relief_m: number
+  hills_range_m: number
+  mountains_range_m: number
   hills_absolute_m: number
   mountains_absolute_m: number
 }
 
 export const DEFAULT_ELEVATION_THRESHOLDS: ElevationThresholds = {
-  hills_relief_m: 80,
-  mountains_relief_m: 300,
+  hills_range_m: 80,
+  mountains_range_m: 300,
   hills_absolute_m: 600,
   mountains_absolute_m: 1500,
 }
@@ -142,8 +142,11 @@ export interface GeneratedHex {
   manual_override?: boolean
   isLake?: boolean
   lakeManualOverride?: boolean
-  elevation_m: number | null
-  elevation_relief_m: number | null
+  elevation_avg_m: number | null
+  elevation_median_m: number | null
+  elevation_max_m: number | null
+  elevation_min_m: number | null
+  elevation_range_m: number | null
   elevation_class: 'flat' | 'hills' | 'mountains' | null
   elevation_manual_override?: boolean
   coastline_clip?: [number, number][][] | null
@@ -243,7 +246,7 @@ export const DEFAULT_THRESHOLDS: Record<string, number> = {
   clear: 0,
 }
 
-export type RoadDashStyle = 'solid' | 'dashed' | 'dotted'
+export type RoadDashStyle = 'solid' | 'dotted'
 
 export interface RoadTierStyle {
   outer: string
@@ -741,7 +744,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     megaHexOriginQ: s.megaHexOriginQ,
     megaHexOriginR: s.megaHexOriginR,
   }),
-  version: 37,
+  version: 38,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

@@ -63,10 +63,12 @@ class RailsConfig(BaseRegionConfig):
     rail_types: list[str] = ["rail"]
 
 
-class ElevationConfig(BaseModel):
+class ElevationConfig(BaseRegionConfig):
     hexes: list[dict]
-    hills_relief_m: float = 80.0
-    mountains_relief_m: float = 300.0
+    hex_orientation: str
+    outer_radius_m: float
+    hills_range_m: float = 80.0
+    mountains_range_m: float = 300.0
     hills_absolute_m: float = 600.0
     mountains_absolute_m: float = 1500.0
 

@@ -4,19 +4,19 @@ import { DEFAULT_ELEVATION_THRESHOLDS } from '../mapStore'
 const ELEVATION_RANK: Record<string, number> = { flat: 0, hills: 1, mountains: 2 }
 
 function classifyElevationModeA(
-  elevationM: number,
-  reliefM: number,
+  medianM: number,
+  rangeM: number,
   t: ElevationThresholds,
 ): 'flat' | 'hills' | 'mountains' {
-  const localClass =
-    reliefM >= t.mountains_relief_m ? 'mountains'
-    : reliefM >= t.hills_relief_m   ? 'hills'
+  const rangeClass =
+    rangeM >= t.mountains_range_m ? 'mountains'
+    : rangeM >= t.hills_range_m   ? 'hills'
     : 'flat'
   const absClass =
-    elevationM >= t.mountains_absolute_m ? 'mountains'
-    : elevationM >= t.hills_absolute_m   ? 'hills'
+    medianM >= t.mountains_absolute_m ? 'mountains'
+    : medianM >= t.hills_absolute_m   ? 'hills'
     : 'flat'
-  return (ELEVATION_RANK[localClass] >= ELEVATION_RANK[absClass] ? localClass : absClass) as 'flat' | 'hills' | 'mountains'
+  return (ELEVATION_RANK[rangeClass] >= ELEVATION_RANK[absClass] ? rangeClass : absClass) as 'flat' | 'hills' | 'mountains'
 }
 
 export type ElevationSlice = {
@@ -56,16 +56,28 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   contourInterval: 0,
 
   fetchElevation: async () => {
-    const { generatedHexes, elevationThresholds } = get()
-    if (generatedHexes.length === 0) return
+    const { generatedHexes, generatedMetadata, hexOrientation, elevationThresholds } = get()
+    if (generatedHexes.length === 0 || !generatedMetadata) return
 
     set({ elevationStatus: 'loading', elevationError: null, elevationProgress: null })
+
+    const { center, bearing, scale_m_per_mm, paper_mm, outer_radius_m } = generatedMetadata
 
     try {
       const resp = await fetch('/api/generate/elevation-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hexes: generatedHexes, ...elevationThresholds }),
+        body: JSON.stringify({
+          hexes: generatedHexes,
+          center_lon: center[0],
+          center_lat: center[1],
+          bearing,
+          width_m: scale_m_per_mm * paper_mm[0],
+          height_m: scale_m_per_mm * paper_mm[1],
+          hex_orientation: hexOrientation,
+          outer_radius_m,
+          ...elevationThresholds,
+        }),
       })
       if (!resp.ok) throw new Error(await resp.text())
       if (!resp.body) throw new Error('No response body')
@@ -107,8 +119,8 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
     const next = { ...elevationThresholds, [key]: v }
     const updated = generatedHexes.map((h) => {
       if (h.elevation_manual_override) return h
-      if (h.terrain === 'sea' || h.isLake || h.elevation_m == null || h.elevation_relief_m == null) return h
-      return { ...h, elevation_class: classifyElevationModeA(h.elevation_m, h.elevation_relief_m, next) }
+      if (h.terrain === 'sea' || h.isLake || h.elevation_median_m == null || h.elevation_range_m == null) return h
+      return { ...h, elevation_class: classifyElevationModeA(h.elevation_median_m, h.elevation_range_m, next) }
     })
     set({ elevationThresholds: next, generatedHexes: updated })
   },
