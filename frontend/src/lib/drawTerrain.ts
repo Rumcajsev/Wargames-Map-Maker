@@ -177,6 +177,36 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   //   tCtx.drawImage(fieldCanvas, px, py, pw, ph); tCtx.restore()
   // }
 
+  // ── 3b. Land clip (V3 realistic coastline) ──────────────────────────────────
+  // Restrict all terrain blob rendering to land areas so nothing bleeds across
+  // the coastline boundary into the sea.  Ocean hexes are excluded entirely;
+  // coastal hexes are clipped to the portion inside the smoothed land polygon.
+  const landClipActive = realisticCoastline && coastlineBoundaryRings.length > 0
+  if (landClipActive) {
+    tCtx.save()
+    tCtx.beginPath()
+    for (const { hex, verts } of projected) {
+      if (edgeMode === 'whole' && hex.partial) continue
+      if (!hex.partial && !inMargin(verts)) continue
+      const key = `${hex.q},${hex.r}`
+      if (oceanSeaKeys.has(key)) continue
+      if (seaCoastKeys.has(key)) {
+        for (const ring of coastlineBoundaryRings) {
+          const clipped = clipPolygonToConvex(ring, verts)
+          if (clipped.length < 3) continue
+          tCtx.moveTo(clipped[0][0], clipped[0][1])
+          for (let i = 1; i < clipped.length; i++) tCtx.lineTo(clipped[i][0], clipped[i][1])
+          tCtx.closePath()
+        }
+      } else {
+        tCtx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+        tCtx.closePath()
+      }
+    }
+    tCtx.clip('evenodd')
+  }
+
   // ── 4. Blob mode ────────────────────────────────────────────────────────────
   if (params.mapStyle !== 'basic') {
     const BLOB_Z: Record<string, number> = { rough: 1, marsh: 2, light_woods: 4, woods: 5, sea: 10 }
@@ -387,6 +417,8 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   if (params.mapStyle === 'historical_simple') {
     drawHachures(tCtx, { projected, R, hachureParams: params.hachureParams })
   }
+
+  if (landClipActive) tCtx.restore()
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
   if (realisticCoastline && coastlineBoundaryRings.length > 0) {
