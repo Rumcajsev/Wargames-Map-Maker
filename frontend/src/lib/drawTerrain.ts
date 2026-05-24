@@ -3,7 +3,7 @@
 
 import type { GeneratedHex, BlobOverride } from '../store/mapStore'
 import { buildTerrainBlobsV2, bleedPolygon } from './terrainBlobs'
-import { clipPolygonToConvex } from './geometry'
+import { clipPolygonToConvex, pointInPolygon } from './geometry'
 import { makePermutation } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams, parseEdgeBlobKey, sharedEdgeVertices } from './edgeBlobs'
 import { drawHistoricalVegetation } from './drawHistoricalVegetation'
@@ -94,6 +94,15 @@ function applyTextureOverlay(
   }
   tCtx.fill('evenodd')
   tCtx.restore()
+}
+
+function polyArea(pts: [number, number][]): number {
+  let a = 0
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % pts.length]
+    a += x0 * y1 - x1 * y0
+  }
+  return Math.abs(a) * 0.5
 }
 
 export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
@@ -488,27 +497,77 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
       tCtx.closePath()
     }
-    // Coastal hexes — evenodd: hex outline + smoothed land polygon clipped to hex.
-    // We let the clip result be the decider: if any coastline ring actually intersects
-    // this hex, render it as coastal. No bucket pre-filter — the polygon is the truth.
+    // Coastal hexes — evenodd: hex outline + land clip, with per-ring inversion detection.
+    //
+    // Sutherland-Hodgman can return the sea-side piece instead of the land-side piece
+    // when the ring enters and exits the hex close together (thin peninsula, coastal notch).
+    // We detect this per ring: pointInPolygon(hexCenter, ring) tells us if the center is
+    // inside the land ring; pointInPolygon(hexCenter, clip) tells us if the clip contains
+    // the center.  They should agree — if they don't, the clip is inverted.
+    //
+    // Not inverted → add hex + clip to evenodd path (sea fills the gap).
+    // Inverted     → collect clip for a separate solid fill (clip IS the sea area).
+    const invertedClips: [number, number][][] = []
+
     for (const { hex, verts } of projected) {
       if (!inMargin(verts) && !hex.partial) continue
+
+      const cx = verts.reduce((s, v) => s + v[0], 0) / verts.length
+      const cy = verts.reduce((s, v) => s + v[1], 0) / verts.length
+      const minClipArea = polyArea(verts) * 0.01   // skip clips < 1% of hex (floating-point dust)
+
       let addedHex = false
+      let hasAnyClip = false
+
       for (const ring of coastlineBoundaryRings) {
         const clipped = clipPolygonToConvex(ring, verts)
         if (clipped.length < 3) continue
-        if (!addedHex) {
-          tCtx.moveTo(verts[0][0], verts[0][1])
-          for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+        if (polyArea(clipped) < minClipArea) continue
+
+        hasAnyClip = true
+        const centerInsideRing  = pointInPolygon(cx, cy, ring)
+        const centerInsideClip  = pointInPolygon(cx, cy, clipped)
+        const inverted = centerInsideRing !== centerInsideClip
+
+        if (inverted) {
+          // Clip is the sea area — handle with a separate solid fill below.
+          invertedClips.push(clipped)
+        } else {
+          // Clip is the land area — evenodd: sea fills hex minus clip.
+          if (!addedHex) {
+            tCtx.moveTo(verts[0][0], verts[0][1])
+            for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+            tCtx.closePath()
+            addedHex = true
+          }
+          tCtx.moveTo(clipped[0][0], clipped[0][1])
+          for (let i = 1; i < clipped.length; i++) tCtx.lineTo(clipped[i][0], clipped[i][1])
           tCtx.closePath()
-          addedHex = true
         }
-        tCtx.moveTo(clipped[0][0], clipped[0][1])
-        for (let i = 1; i < clipped.length; i++) tCtx.lineTo(clipped[i][0], clipped[i][1])
+      }
+
+      // No ring intersected but backend flagged as coastal — smoothing voted it ocean.
+      if (!hasAnyClip && hex.coastline_clip && hex.coastline_clip.length > 0
+          && !(hex.manual_override && hexTerrainLayers(hex).some(t => t !== 'sea'))) {
+        tCtx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
         tCtx.closePath()
       }
     }
     tCtx.fill('evenodd')
+
+    // Inverted-clip solid fill: these polygons are the sea areas that S-H returned
+    // as land clips.  Fill them directly with sea color on top of the evenodd result.
+    if (invertedClips.length > 0) {
+      tCtx.fillStyle = seaColor
+      tCtx.beginPath()
+      for (const clip of invertedClips) {
+        tCtx.moveTo(clip[0][0], clip[0][1])
+        for (let i = 1; i < clip.length; i++) tCtx.lineTo(clip[i][0], clip[i][1])
+        tCtx.closePath()
+      }
+      tCtx.fill()
+    }
 
     // Beach strip — stroke the smoothed polygon boundary directly
     if (beachStrip) {

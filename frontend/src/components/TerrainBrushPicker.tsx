@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function TerrainBrushPicker({ activeBrush, paintMode, onSelect, onSettings }: Props) {
-  const { terrainColors, terrainTypeBlobStyles } = useMapStore()
+  const { terrainColors, terrainTypeBlobStyles, customTerrains } = useMapStore()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -32,6 +32,21 @@ export function TerrainBrushPicker({ activeBrush, paintMode, onSelect, onSetting
           />
         )
       })}
+      {customTerrains.length > 0 && (
+        <div style={{ borderTop: '1px solid #2a2a3a', marginTop: 2, paddingTop: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {customTerrains.map(ct => (
+            <ToolButton
+              key={ct.id}
+              label={ct.name}
+              active={paintMode && activeBrush === ct.id}
+              color={ct.color}
+              onSelect={() => onSelect(ct.id)}
+              onSettings={onSettings ? (y) => onSettings(ct.id, y) : undefined}
+              cogDataAttrib="data-terrain-flyout"
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useMapStore, TERRAIN_COLORS, DEFAULT_THRESHOLDS, TERRAIN_PRIORITY } from '../store/mapStore'
+import { useEffect, useId, useState } from 'react'
+import { useMapStore, TERRAIN_COLORS, DEFAULT_THRESHOLDS, TERRAIN_PRIORITY, MANUAL_ONLY_TERRAINS } from '../store/mapStore'
+import type { CustomTerrain } from '../store/mapStore'
+import { TEXTURE_REGISTRY } from '../lib/textureRegistry'
 import { TerrainBrushPicker } from './TerrainBrushPicker'
 import { TerrainSettingsFlyout } from './TerrainSettingsFlyout'
 import { CoastlineSettingsFlyout } from './CoastlineSettingsFlyout'
@@ -9,7 +11,7 @@ import { EnabledSection } from './ui'
 
 const terrainLabel = (t: string) => t.replace(/_/g, ' ')
 
-const SLIDER_TERRAINS = TERRAIN_PRIORITY.filter(t => t !== 'clear')
+const SLIDER_TERRAINS = TERRAIN_PRIORITY.filter(t => t !== 'clear' && !MANUAL_ONLY_TERRAINS.has(t))
 
 export function TerrainSidebar() {
   const {
@@ -22,6 +24,8 @@ export function TerrainSidebar() {
     terrainLayersEnabled, setTerrainLayersEnabled,
     realisticCoastline, setRealisticCoastline,
     terrainEdgePaintEnabled, setTerrainEdgePaintEnabled,
+    cliffPaintMode,
+    customTerrains, addCustomTerrain, updateCustomTerrain, removeCustomTerrain,
   } = useMapStore()
 
   const [openSettingsTerrain, setOpenSettingsTerrain] = useState<string | null>(null)
@@ -32,6 +36,12 @@ export function TerrainSidebar() {
   const [edgeBlobShapeAnchorY, setEdgeBlobShapeAnchorY] = useState(0)
   const [coastlineFlyoutOpen, setCoastlineFlyoutOpen] = useState(false)
   const [coastlineAnchorY, setCoastlineAnchorY] = useState(0)
+  const [editingCustomId, setEditingCustomId] = useState<string | null>(null)
+  const [newName, setNewName] = useState('')
+  const [newColor, setNewColor] = useState('#a07850')
+  const [newTextureId, setNewTextureId] = useState<string | null>(null)
+  const [addingCustom, setAddingCustom] = useState(false)
+  const uid = useId()
 
   const selectBrush = (terrain: string) => {
     if (terrainPaintMode && terrainPaintBrush === terrain) {
@@ -119,6 +129,20 @@ export function TerrainSidebar() {
           {terrainEdgePaintEnabled && (
             <div style={{ fontSize: 10, color: '#5a8a5a', marginTop: 4, letterSpacing: 0.3, paddingLeft: 18 }}>
               Near edge → paints edge blob
+            </div>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: cliffPaintMode ? '#e0c090' : '#6a6a8a', marginTop: 6 }}>
+            <input
+              type="checkbox"
+              checked={cliffPaintMode}
+              onChange={e => setActiveTool(e.target.checked ? { type: 'cliff' } : { type: 'none' })}
+              style={{ accentColor: '#c08840' }}
+            />
+            Cliff painting
+          </label>
+          {cliffPaintMode && (
+            <div style={{ fontSize: 10, color: '#a07830', marginTop: 4, letterSpacing: 0.3, paddingLeft: 18 }}>
+              Near edge → paints cliff · right-click erases
             </div>
           )}
         </div>
@@ -217,6 +241,104 @@ export function TerrainSidebar() {
             <span>Edge blob shape</span>
             <span style={{ fontSize: 9, color: '#4a4a6a' }}>›</span>
           </button>
+        </div>
+
+        {/* ── Custom terrains ── */}
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Custom Terrains</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {customTerrains.map(ct => (
+              <div key={ct.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: ct.color, flexShrink: 0, border: '1px solid #3a3a5a' }} />
+                {editingCustomId === ct.id ? (
+                  <input
+                    autoFocus
+                    value={ct.name}
+                    onChange={e => updateCustomTerrain(ct.id, { name: e.target.value })}
+                    onBlur={() => setEditingCustomId(null)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingCustomId(null) }}
+                    style={{ flex: 1, background: '#1a1f2a', border: '1px solid #3a5a7a', borderRadius: 3, padding: '2px 5px', color: '#c0c0e0', fontSize: 11, fontFamily: 'ui-monospace, monospace' }}
+                  />
+                ) : (
+                  <span
+                    style={{ flex: 1, fontSize: 11, color: '#b0b0d0', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    onDoubleClick={() => setEditingCustomId(ct.id)}
+                    title="Double-click to rename"
+                  >{ct.name}</span>
+                )}
+                <input
+                  type="color"
+                  value={ct.color}
+                  onChange={e => updateCustomTerrain(ct.id, { color: e.target.value })}
+                  title="Color"
+                  style={{ width: 18, height: 18, padding: 0, border: 'none', borderRadius: 2, cursor: 'pointer', background: 'none', flexShrink: 0 }}
+                />
+                <select
+                  value={ct.textureId ?? ''}
+                  onChange={e => updateCustomTerrain(ct.id, { textureId: e.target.value || null })}
+                  title="Texture"
+                  style={{ fontSize: 9, background: '#1a1f2a', border: '1px solid #2a2a3a', borderRadius: 2, color: '#8a8aaa', padding: '1px 2px', maxWidth: 64, cursor: 'pointer' }}
+                >
+                  <option value="">no texture</option>
+                  {TEXTURE_REGISTRY.map(tx => <option key={tx.id} value={tx.id}>{tx.label}</option>)}
+                </select>
+                <button
+                  onClick={() => removeCustomTerrain(ct.id)}
+                  title="Remove"
+                  style={{ background: 'none', border: 'none', color: '#5a3a3a', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}
+                >×</button>
+              </div>
+            ))}
+            {addingCustom ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#12141e', borderRadius: 4, padding: '6px 8px', border: '1px solid #2a2a4a' }}>
+                <input
+                  autoFocus
+                  placeholder="Name…"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setAddingCustom(false) }}
+                  style={{ background: '#1a1f2a', border: '1px solid #3a5a7a', borderRadius: 3, padding: '3px 6px', color: '#c0c0e0', fontSize: 11, fontFamily: 'ui-monospace, monospace' }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <label style={{ fontSize: 10, color: '#6a6a8a' }}>Color</label>
+                  <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} style={{ width: 24, height: 20, padding: 0, border: 'none', borderRadius: 2, cursor: 'pointer' }} />
+                  <label style={{ fontSize: 10, color: '#6a6a8a' }}>Texture</label>
+                  <select
+                    value={newTextureId ?? ''}
+                    onChange={e => setNewTextureId(e.target.value || null)}
+                    style={{ fontSize: 9, background: '#1a1f2a', border: '1px solid #2a2a3a', borderRadius: 2, color: '#8a8aaa', padding: '1px 2px', flex: 1, cursor: 'pointer' }}
+                  >
+                    <option value="">none</option>
+                    {TEXTURE_REGISTRY.map(tx => <option key={tx.id} value={tx.id}>{tx.label}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    disabled={!newName.trim()}
+                    onClick={() => {
+                      if (!newName.trim()) return
+                      const id = `custom_${uid}_${Date.now()}`
+                      addCustomTerrain({ id, name: newName.trim(), color: newColor, textureId: newTextureId })
+                      setNewName('')
+                      setNewColor('#a07850')
+                      setNewTextureId(null)
+                      setAddingCustom(false)
+                    }}
+                    style={{ flex: 1, fontSize: 10, padding: '3px 0', borderRadius: 3, border: 'none', background: '#3a5a3a', color: '#c0e0c0', cursor: 'pointer' }}
+                  >Add</button>
+                  <button
+                    onClick={() => setAddingCustom(false)}
+                    style={{ fontSize: 10, padding: '3px 8px', borderRadius: 3, border: '1px solid #2a2a3a', background: 'none', color: '#6a6a8a', cursor: 'pointer' }}
+                  >Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingCustom(true)}
+                style={{ fontSize: 10, padding: '3px 0', borderRadius: 3, border: '1px dashed #2a2a4a', background: 'none', color: '#4a4a6a', cursor: 'pointer', width: '100%' }}
+              >+ Add custom terrain</button>
+            )}
+          </div>
         </div>
 
         {/* ── Classification ── */}
