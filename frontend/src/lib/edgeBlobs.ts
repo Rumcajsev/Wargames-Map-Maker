@@ -275,13 +275,49 @@ function buildRibbonBlob(
 /** How far (in units of R) to extend the ribbon toward a matching-terrain hex. */
 const HEX_CONNECT_EXTEND = 0.7
 
+/** How far (in units of R) to push a chain endpoint into an adjacent matching-terrain area hex. */
+const ENDPOINT_EXTEND_FRACTION = 0.4
+
+/**
+ * If the chain endpoint vertex `pt` (from terminal edge `terminalEdgeKey`) sits adjacent
+ * to a matching-terrain area hex that is NOT one of the two hexes forming that edge,
+ * push the point ENDPOINT_EXTEND_FRACTION * R toward that hex center so the ribbon
+ * tip reaches into the area blob and closes the gap.
+ */
+function extendEndpointIntoAreaHex(
+  pt: [number, number],
+  terminalEdgeKey: string,
+  hexTerrainSet: Set<string>,
+  vertToHexes: Map<string, Array<{ q: number; r: number }>>,
+  hexVertMap: Map<string, [number, number][]>,
+  R: number,
+): [number, number] {
+  const { q1, r1, q2, r2 } = parseEdgeBlobKey(terminalEdgeKey)
+  const edgeHexKeys = new Set([`${q1},${r1}`, `${q2},${r2}`])
+
+  for (const { q, r } of vertToHexes.get(vk(pt)) ?? []) {
+    if (edgeHexKeys.has(`${q},${r}`)) continue
+    if (!hexTerrainSet.has(`${q},${r}`)) continue
+    const center = hexCenter(q, r, hexVertMap)
+    if (!center) continue
+    const dx = center[0] - pt[0], dy = center[1] - pt[1]
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    if (dist < 0.001) continue
+    const ext = ENDPOINT_EXTEND_FRACTION * R
+    return [pt[0] + (dx / dist) * ext, pt[1] + (dy / dist) * ext]
+  }
+  return pt
+}
+
 /**
  * Build all blob polygons for one edge chain.
  * Returns a list of polygons (one per non-branching path segment in the chain).
  *
  * When `hexTerrainSet` is provided, any side of the ribbon that faces a hex
  * whose terrain matches the chain terrain is extended to `HEX_CONNECT_EXTEND * R`
- * so the edge blob visually merges with the adjacent hex blob.
+ * so the edge blob visually merges with the adjacent hex blob. Endpoints that
+ * sit at a vertex touching a matching-terrain area hex are also pushed into that
+ * hex by ENDPOINT_EXTEND_FRACTION * R to close vertex-gap artefacts.
  */
 export function buildEdgeBlobPolys(
   chain: EdgeBlobChain,
@@ -293,6 +329,19 @@ export function buildEdgeBlobPolys(
   const ordered = buildOrderedPaths(chain.edgeKeys, hexVertMap)
   const halfWidth = params.width * R * Math.max(0.1, 1 + params.offset)
   const bigWidth  = Math.max(halfWidth, HEX_CONNECT_EXTEND * R)
+
+  // Build vertex → hex list once for endpoint extension lookups.
+  const vertToHexes = new Map<string, Array<{ q: number; r: number }>>()
+  if (hexTerrainSet && hexTerrainSet.size > 0) {
+    for (const [hexKey, verts] of hexVertMap) {
+      const [q, r] = hexKey.split(',').map(Number)
+      for (const v of verts) {
+        const k = vk(v)
+        if (!vertToHexes.has(k)) vertToHexes.set(k, [])
+        vertToHexes.get(k)!.push({ q, r })
+      }
+    }
+  }
 
   const result: [number, number][][] = []
   for (const { path, orderedEdgeKeys } of ordered) {
@@ -331,7 +380,19 @@ export function buildEdgeBlobPolys(
       if (rightMatch > 0) rightHalfWidth = bigWidth
     }
 
-    const poly = buildRibbonBlob(path, params, R, leftHalfWidth, rightHalfWidth)
+    // Extend endpoints into adjacent matching-terrain area hexes.
+    let workPath = path as [number, number][]
+    if (hexTerrainSet && hexTerrainSet.size > 0 && orderedEdgeKeys.length > 0) {
+      const first = extendEndpointIntoAreaHex(path[0], orderedEdgeKeys[0], hexTerrainSet, vertToHexes, hexVertMap, R)
+      const last  = extendEndpointIntoAreaHex(path[path.length - 1], orderedEdgeKeys[orderedEdgeKeys.length - 1], hexTerrainSet, vertToHexes, hexVertMap, R)
+      if (first !== path[0] || last !== path[path.length - 1]) {
+        workPath = [...path]
+        workPath[0] = first
+        workPath[workPath.length - 1] = last
+      }
+    }
+
+    const poly = buildRibbonBlob(workPath, params, R, leftHalfWidth, rightHalfWidth)
     if (poly.length >= 3) result.push(poly)
   }
   return result
