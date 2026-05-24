@@ -1,7 +1,7 @@
 /** Terrain blob building and field-style rendering utilities.
  *  Depends on geometry, noise, and projection libs — no React, no store state. */
 
-import { chaikin, catmullRom, distToSeg, subdivideClosedPolygon, resampleSmoothQuad, douglasPeucker } from './geometry'
+import { chaikin, subdivideClosedPolygon, resampleSmoothQuad } from './geometry'
 import { makePermutation, perlinNoise2D, perturbXY, perturbNormal } from './noise'
 import { projectToCanvas } from './projection'
 import { hexTerrainLayers } from '../store/mapStore'
@@ -11,7 +11,7 @@ import type { GridMetadata, GeneratedHex } from '../store/mapStore'
 
 /** Terrain to use for blob building and land-side color for a coastal hex.
  *  Ignores sea fraction so the hex participates in the correct terrain blob group. */
-export function effectiveLandTerrain(hex: GeneratedHex): string {
+function effectiveLandTerrain(hex: GeneratedHex): string {
   if (hex.manual_override) {
     if (hex.terrain && hex.terrain !== 'sea') return hex.terrain
     if (hex.terrains) {
@@ -30,9 +30,9 @@ export function effectiveLandTerrain(hex: GeneratedHex): string {
   return best
 }
 
-/** Terrain layers a coastal hex contributes to in the blob system.
- *  Both paths use hexTerrainLayers as the primary source.  When realistic
- *  coastline is on, 'sea' is stripped out — section 6 handles sea fill. */
+/** Terrain layers a coastal hex contributes to the blob system.
+ *  Uses hexTerrainLayers as the source of truth in both modes; when realistic
+ *  coastline is on, 'sea' is stripped because section 6 handles sea fill. */
 export function coastalBlobTerrains(hex: GeneratedHex, realisticCoastline: boolean): string[] {
   if (!hex.coastline_clip || hex.coastline_clip.length === 0) return hexTerrainLayers(hex)
   const land = effectiveLandTerrain(hex)
@@ -43,177 +43,6 @@ export function coastalBlobTerrains(hex: GeneratedHex, realisticCoastline: boole
   const merged = new Set(base)
   merged.add(land)
   return [...merged]
-}
-
-// ── Coastline ring smoothing ─────────────────────────────────────────────────
-
-/** Pre-compute which ring segments lie along a hex edge, avoiding redundant
- *  per-segment checks in both getCoastlineRuns and buildSmoothedRing. */
-function buildHexEdgeFlags(
-  ring: [number, number][],
-  hexVerts: [number, number][],
-  tol: number,
-): boolean[] {
-  const n = ring.length, nv = hexVerts.length
-  const flags = new Array<boolean>(n)
-  for (let i = 0; i < n; i++) {
-    const p = ring[i], q = ring[(i + 1) % n]
-    let onEdge = false
-    for (let e = 0; e < nv && !onEdge; e++) {
-      const a = hexVerts[e], b = hexVerts[(e + 1) % nv]
-      if (distToSeg(p, a, b) < tol && distToSeg(q, a, b) < tol) onEdge = true
-    }
-    flags[i] = onEdge
-  }
-  return flags
-}
-
-/** Split a coastline_clip ring into runs that follow the actual geographic coastline,
- *  skipping segments that lie along hex edges (where the land polygon was clipped). */
-export function getCoastlineRuns(
-  ring: [number, number][],
-  hexVerts: [number, number][],
-  tol: number,
-): [number, number][][] {
-  const n = ring.length
-  const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
-  let firstHex = -1
-  for (let i = 0; i < n; i++) if (hexEdge[i]) { firstHex = i; break }
-  const runs: [number, number][][] = []
-  let run: [number, number][] | null = null
-  for (let j = 0; j < n; j++) {
-    const i = firstHex >= 0 ? (firstHex + 1 + j) % n : j
-    if (hexEdge[i]) {
-      if (run && run.length >= 2) runs.push(run)
-      run = null
-    } else {
-      if (!run) run = [ring[i]]
-      run.push(ring[(i + 1) % n])
-    }
-  }
-  if (run && run.length >= 2) runs.push(run)
-  return runs
-}
-
-/** Build a closed ring where coastline segments are CatmullRom-smoothed and
- *  hex-edge segments stay as straight lines. Prevents the curve from escaping
- *  the hex boundary. */
-export function buildSmoothedRing(
-  ring: [number, number][],
-  hexVerts: [number, number][],
-  tol: number,
-  steps: number,
-  chaikinPasses = 3,
-  dpEpsilon = 0,
-): [number, number][] {
-  const n = ring.length
-  const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
-  let firstHex = -1
-  for (let i = 0; i < n; i++) if (hexEdge[i]) { firstHex = i; break }
-  const out: [number, number][] = []
-  let coast: [number, number][] | null = null
-  const flushCoast = () => {
-    if (!coast || coast.length < 2) { coast = null; return }
-    const simplified = dpEpsilon > 0 ? douglasPeucker(coast, dpEpsilon) : coast
-    out.push(...catmullRom(chaikin(simplified, chaikinPasses, false), steps))
-    coast = null
-  }
-  for (let j = 0; j < n; j++) {
-    const i = firstHex >= 0 ? (firstHex + j) % n : j
-    if (hexEdge[i]) {
-      flushCoast()
-      out.push(ring[i])
-    } else {
-      if (!coast) coast = [ring[i]]
-      coast.push(ring[(i + 1) % n])
-    }
-  }
-  flushCoast()
-  return out
-}
-
-/** Convert a coastline_clip ring into one open chain using ALL its points.
- *  Cuts the closed ring open at the first hex-edge segment (so the endpoints
- *  sit on a hex boundary, enabling stitching across hexes).  Returns null for
- *  rings with no hex-edge contact — those are closed islands and are handled
- *  separately. */
-export function getRingAsChain(
-  ring: [number, number][],
-  hexVerts: [number, number][],
-  tol: number,
-): [number, number][] | null {
-  const n = ring.length
-  if (n < 3) return null
-  const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
-  let firstHex = -1
-  for (let i = 0; i < n; i++) if (hexEdge[i]) { firstHex = i; break }
-  if (firstHex === -1) return null   // no hex-edge contact — closed island
-  // Open chain: start at the point after the cut edge, go all the way round.
-  // Includes geographic segments AND any remaining hex-edge segments within;
-  // DP will simplify short collinear hex-edge segments away during smoothing.
-  const chain: [number, number][] = []
-  for (let j = 0; j < n; j++) chain.push(ring[(firstHex + 1 + j) % n])
-  return chain
-}
-
-/** Collect coastline chains from all coastal hexes and stitch them end-to-end.
- *  Uses the full ring outline (not just geographic segments) so no data is
- *  discarded before DP simplification. */
-export function stitchCoastlineRuns(
-  coastlineClips: Map<string, [number, number][][]>,
-  hexVertMap: Map<string, [number, number][]>,
-  tol: number,
-): [number, number][][] {
-  const allRuns: [number, number][][] = []
-  for (const [key, rings] of coastlineClips) {
-    const verts = hexVertMap.get(key)
-    if (!verts) continue
-    for (const ring of rings) {
-      const chain = getRingAsChain(ring, verts, tol)
-      if (chain && chain.length >= 2) allRuns.push(chain)
-    }
-  }
-
-  const snap = (p: [number, number]) =>
-    `${Math.round(p[0] / tol * 10)},${Math.round(p[1] / tol * 10)}`
-
-  const startMap = new Map<string, number>()  // snap(start) → runIdx
-  const endMap   = new Map<string, number>()  // snap(end)   → runIdx
-  allRuns.forEach((r, i) => {
-    startMap.set(snap(r[0]), i)
-    endMap.set(snap(r[r.length - 1]), i)
-  })
-
-  const used = new Set<number>()
-  const chains: [number, number][][] = []
-
-  for (let seed = 0; seed < allRuns.length; seed++) {
-    if (used.has(seed)) continue
-    used.add(seed)
-    const chain: [number, number][] = [...allRuns[seed]]
-
-    // grow forward
-    for (;;) {
-      const k = snap(chain[chain.length - 1])
-      const next = startMap.get(k) ?? -1
-      if (next < 0 || used.has(next)) break
-      used.add(next)
-      chain.push(...allRuns[next].slice(1))
-    }
-
-    // grow backward
-    for (;;) {
-      const k = snap(chain[0])
-      const prev = endMap.get(k) ?? -1
-      if (prev < 0 || used.has(prev)) break
-      used.add(prev)
-      chain.unshift(...allRuns[prev].slice(0, -1))
-    }
-
-    if (chain.length >= 2) chains.push(chain)
-  }
-
-  return chains
 }
 
 // ── Blob shape helpers ───────────────────────────────────────────────────────

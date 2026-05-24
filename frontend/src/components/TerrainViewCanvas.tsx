@@ -190,7 +190,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     edgeBlobWidth, edgeBlobOverrides, setEdgeBlobOverride,
     realisticCoastline, coastlineDebugRaw,
     beachStrip, beachColor, beachWidth,
-    coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps,
+    coastlineDPEpsilon, coastlineChaikinPasses,
     terrainRenderMode,
     settlements, settlementTierStyles, settlementPlaceTier, addSettlement, placeSettlementAtHex,
     settlementMoveIndex, setSettlementMoveIndex, updateSettlement,
@@ -733,8 +733,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   coastlineDPEpsilonRef.current = coastlineDPEpsilon
   const coastlineChaikinPassesRef = useRef(coastlineChaikinPasses)
   coastlineChaikinPassesRef.current = coastlineChaikinPasses
-  const coastlineCatmullStepsRef = useRef(coastlineCatmullSteps)
-  coastlineCatmullStepsRef.current = coastlineCatmullSteps
   terrainBlobOverridesRef.current = terrainBlobOverrides
   terrainTypeBlobStylesRef.current = terrainTypeBlobStyles
   lakeOverridesRef.current = lakeOverrides
@@ -998,63 +996,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const hexVertMapRef = useRef(hexVertMap)
   hexVertMapRef.current = hexVertMap
 
-  // Coastal hexes: project each coastline_clip ring from lon/lat to canvas coords.
-  // Each entry maps (q,r) → array of projected rings (one ring per polygon in the clip).
-  const projectedCoastlineClips = useMemo(() => {
-    if (!generatedMetadata || !paperDims) return new Map<string, [number, number][][]>()
-    const { pw, ph, px, py } = paperDims
-    const result = new Map<string, [number, number][][]>()
-    for (const hex of generatedHexes) {
-      if (!hex.coastline_clip || hex.coastline_clip.length === 0) continue
-      const projectedRings = hex.coastline_clip.map(ring =>
-        ring.map(([lon, lat]) =>
-          projectToCanvas(lon, lat, generatedMetadata, pw, ph, px, py) as [number, number]
-        )
-      )
-      result.set(`${hex.q},${hex.r}`, projectedRings)
-    }
-    return result
-  }, [generatedHexes, generatedMetadata, paperDims])
-  const projectedCoastlineClipsRef = useRef(projectedCoastlineClips)
-  projectedCoastlineClipsRef.current = projectedCoastlineClips
-
-  // Keys of hexes that are TRUE sea-coast hexes: have coastline_clip AND at least one
-  // pure-sea neighbor. Inland water-body hexes also get coastline_clip but have no
-  // pure-sea neighbor, so they are excluded from the sea mask.
-  const seaCoastKeys = useMemo(() => {
-    if (!realisticCoastline) return new Set<string>()
-    const hexByKey = new Map<string, GeneratedHex>()
-    for (const h of generatedHexes) hexByKey.set(`${h.q},${h.r}`, h)
-    const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
-    // BFS outward from each coastal hex: if we reach a pure-sea hex (terrain=sea, no clip)
-    // within 2 hops, the original hex is a sea-coast hex. Two hops handles the common case
-    // where a land-coast hex is adjacent to a sea-coast hex (both have clips) rather than
-    // directly adjacent to open ocean.
-    const keys = new Set<string>()
-    for (const h of generatedHexes) {
-      if (!h.coastline_clip || h.coastline_clip.length === 0) continue
-      let found = false
-      for (const [dq1, dr1] of NEIGHBORS) {
-        const nb1 = hexByKey.get(`${h.q + dq1},${h.r + dr1}`)
-        if (!nb1 || nb1.terrain !== 'sea') continue
-        if (!nb1.coastline_clip || nb1.coastline_clip.length === 0) { found = true; break }
-        // second hop
-        for (const [dq2, dr2] of NEIGHBORS) {
-          const nb2 = hexByKey.get(`${nb1.q + dq2},${nb1.r + dr2}`)
-          if (nb2 && nb2.terrain === 'sea' && (!nb2.coastline_clip || nb2.coastline_clip.length === 0)) { found = true; break }
-        }
-        if (found) break
-      }
-      if (found) keys.add(`${h.q},${h.r}`)
-    }
-    return keys
-  }, [generatedHexes, realisticCoastline])
-  const seaCoastKeysRef = useRef(seaCoastKeys)
-  seaCoastKeysRef.current = seaCoastKeys
-
-  // Ocean sea keys: pure-sea hexes (terrain='sea', no clip) reachable from any seaCoastKey via
-  // flood-fill through connected pure-sea hexes. Inland water bodies (class 80 pixels classified
-  // as 'sea') form isolated islands with no connection to the coast — they are excluded.
+  // Ocean sea keys: pure-sea hexes (terrain='sea', no clip) that are reachable via
+  // flood-fill from any pure-sea hex adjacent to a coastal hex (one with coastline_clip).
+  // Inland water bodies form isolated islands with no path to the coast — excluded.
   const oceanSeaKeys = useMemo(() => {
     if (!realisticCoastline) return new Set<string>()
     const hexByKey = new Map<string, GeneratedHex>()
@@ -1062,12 +1006,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
     const visited = new Set<string>()
     const queue: string[] = []
-    // Seed: pure-sea hexes adjacent to any seaCoastKey
-    for (const ck of seaCoastKeys) {
-      const parts = ck.split(',')
-      const q = parseInt(parts[0]), r = parseInt(parts[1])
+    // Seed: pure-sea hexes adjacent to any hex with coastline_clip
+    for (const h of generatedHexes) {
+      if (!h.coastline_clip || h.coastline_clip.length === 0) continue
       for (const [dq, dr] of NEIGHBORS) {
-        const nb = hexByKey.get(`${q + dq},${r + dr}`)
+        const nb = hexByKey.get(`${h.q + dq},${h.r + dr}`)
         if (!nb || nb.terrain !== 'sea' || (nb.coastline_clip?.length ?? 0) > 0) continue
         const nk = `${nb.q},${nb.r}`
         if (!visited.has(nk)) { visited.add(nk); queue.push(nk) }
@@ -1086,7 +1029,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
     return visited
-  }, [generatedHexes, realisticCoastline, seaCoastKeys])
+  }, [generatedHexes, realisticCoastline])
   const oceanSeaKeysRef = useRef(oceanSeaKeys)
   oceanSeaKeysRef.current = oceanSeaKeys
 
@@ -1124,17 +1067,15 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     if (projectedHexes.length === 0 || hexRadius === 0) return []
     if (isTerrainPainting) return prevTerrainBlobsRef.current
     const overriddenKeys = new Set(Object.keys(terrainBlobOverrides))
+    // Pure-sea: terrain=sea with no coastline_clip. When realistic coastline is on these
+    // are excluded from blobs — section 6 handles their fill. When off, they enter the sea blob.
+    const isPureSea = (h: GeneratedHex) =>
+      h.terrain === 'sea' && (!h.coastline_clip || h.coastline_clip.length === 0)
     const terrainTypeSet = new Set<string>()
     for (const p of projectedHexes) {
       const h = p.hex as GeneratedHex
-      // Pure-sea no-clip hexes: excluded from blobs when realistic coastline is on
-      // (sea mask handles them). When off, they go through normally into the sea blob.
-      if (realisticCoastline && h.terrain === 'sea' && (!h.coastline_clip || h.coastline_clip.length === 0)) continue
-      // Coastal hexes (with clip) ALWAYS contribute their effectiveLandTerrain to land terrain
-      // blobs regardless of the toggle — this keeps blob shapes stable when toggling.
-      // When off, they also retain their base sea terrain so the sea blob still covers them visually.
-      const terrains = coastalBlobTerrains(h, realisticCoastline)
-      for (const t of terrains) {
+      if (realisticCoastline && isPureSea(h)) continue
+      for (const t of coastalBlobTerrains(h, realisticCoastline)) {
         if (t !== 'clear' && t !== 'lake') terrainTypeSet.add(t)
       }
     }
@@ -1144,7 +1085,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const componentMap = blobComponentsByTerrain.get(terrain) ?? new Map<string, string>()
       const terrainProjected = projectedHexes.filter(p => {
         const h = p.hex as GeneratedHex
-        if (realisticCoastline && h.terrain === 'sea' && (!h.coastline_clip || h.coastline_clip.length === 0)) return false
+        if (realisticCoastline && isPureSea(h)) return false
         const terrains = coastalBlobTerrains(h, realisticCoastline)
         if (!terrains.includes(terrain)) return false
         if (overriddenKeys.size > 0) {
@@ -1403,15 +1344,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       R,
       realisticCoastline: realisticCoastlineRef.current,
       coastlineDebugRaw: coastlineDebugRawRef.current,
-      coastlineClips: projectedCoastlineClipsRef.current,
-      seaCoastKeys: seaCoastKeysRef.current,
       oceanSeaKeys: oceanSeaKeysRef.current,
       beachStrip: beachStripRef.current,
       beachColor: beachColorRef.current,
       beachWidth: beachWidthRef.current,
-      coastlineDPEpsilon: coastlineDPEpsilonRef.current,
-      coastlineChaikinPasses: coastlineChaikinPassesRef.current,
-      coastlineCatmullSteps: coastlineCatmullStepsRef.current,
       coastlineBoundaryRings: smoothedCoastlineBoundaryRef.current,
       coastlineRawBoundaryRings: rawCoastlineBoundaryRef.current,
       edgeBlobPainted: edgeBlobPaintedRef.current,
@@ -1470,16 +1406,23 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isExport) {
         const overriddenKeys = new Set(Object.keys(terrainBlobOverridesRef.current))
         const components = blobComponentsRef.current
+        const exportRealistic = realisticCoastlineRef.current
+        const isPureSea = (h: GeneratedHex) =>
+          h.terrain === 'sea' && (!h.coastline_clip || h.coastline_clip.length === 0)
         const terrainTypeSet = new Set<string>()
         for (const p of projected) {
-          for (const t of hexTerrainLayers(p.hex as GeneratedHex)) {
+          const h = p.hex as GeneratedHex
+          if (exportRealistic && isPureSea(h)) continue
+          for (const t of coastalBlobTerrains(h, exportRealistic)) {
             if (t !== 'clear' && t !== 'lake') terrainTypeSet.add(t)
           }
         }
         exportTerrainBlobs = [...terrainTypeSet].flatMap(terrain => {
           const componentMap = blobComponentsByTerrainRef.current.get(terrain) ?? new Map<string, string>()
           const terrainProjected = projected.filter(p => {
-            if (!hexTerrainLayers(p.hex as GeneratedHex).includes(terrain)) return false
+            const h = p.hex as GeneratedHex
+            if (exportRealistic && isPureSea(h)) return false
+            if (!coastalBlobTerrains(h, exportRealistic).includes(terrain)) return false
             if (overriddenKeys.size > 0) {
               const ck = componentMap.get(`${p.hex.q},${p.hex.r}`)
               if (ck && overriddenKeys.has(ck)) return false
@@ -2430,7 +2373,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   //   forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys])
@@ -2441,7 +2384,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 

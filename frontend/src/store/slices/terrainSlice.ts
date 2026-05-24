@@ -34,7 +34,6 @@ export type TerrainSlice = {
   beachWidth: number
   coastlineDPEpsilon: number
   coastlineChaikinPasses: number
-  coastlineCatmullSteps: number
   terrainColors: Record<string, string>
   terrainTextureScales: Record<string, number>
   terrainBlobOverrides: Record<string, BlobOverride>
@@ -102,7 +101,6 @@ export type TerrainSlice = {
   setBeachWidth: (v: number) => void
   setCoastlineDPEpsilon: (v: number) => void
   setCoastlineChaikinPasses: (v: number) => void
-  setCoastlineCatmullSteps: (v: number) => void
   setTerrainColor: (terrain: string, color: string) => void
   setTerrainTextureScale: (terrain: string, scale: number) => void
   setTerrainBlobOverride: (key: string, override: BlobOverride | null) => void
@@ -170,7 +168,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   beachWidth: 0.06,
   coastlineDPEpsilon: 1,
   coastlineChaikinPasses: 2,
-  coastlineCatmullSteps: 1,
   terrainColors: { ...TERRAIN_COLORS },
   terrainTextureScales: { clear: 3, woods: 3, light_woods: 3 },
   terrainBlobOverrides: {},
@@ -547,7 +544,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setBeachWidth: (v) => set({ beachWidth: v }),
   setCoastlineDPEpsilon: (v) => set({ coastlineDPEpsilon: v }),
   setCoastlineChaikinPasses: (v) => set({ coastlineChaikinPasses: v }),
-  setCoastlineCatmullSteps: (v) => set({ coastlineCatmullSteps: v }),
   setTerrainColor: (terrain, color) => set((s) => ({ terrainColors: { ...s.terrainColors, [terrain]: color } })),
   setTerrainTextureScale: (terrain, scale) => set((s) => ({ terrainTextureScales: { ...s.terrainTextureScales, [terrain]: scale } })),
 

@@ -15,7 +15,6 @@ export function CoastlineSettingsFlyout({ anchorY, onClose }: Props) {
     beachWidth, setBeachWidth,
     coastlineDPEpsilon, setCoastlineDPEpsilon,
     coastlineChaikinPasses, setCoastlineChaikinPasses,
-    coastlineCatmullSteps, setCoastlineCatmullSteps,
   } = useMapStore()
 
   useEffect(() => {
@@ -58,11 +57,6 @@ export function CoastlineSettingsFlyout({ anchorY, onClose }: Props) {
         label="Smooth" value={coastlineChaikinPasses}
         min={0} max={6} step={1}
         onChange={setCoastlineChaikinPasses}
-      />
-      <SliderRow
-        label="Detail" value={coastlineCatmullSteps}
-        min={1} max={20} step={1}
-        onChange={setCoastlineCatmullSteps}
       />
 
       <EnabledSection

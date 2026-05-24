@@ -41,15 +41,10 @@ export type DrawTerrainParams = {
   R: number
   realisticCoastline: boolean
   coastlineDebugRaw: boolean
-  coastlineClips: Map<string, [number, number][][][]>
-  seaCoastKeys: Set<string>
   oceanSeaKeys: Set<string>
   beachStrip: boolean
   beachColor: string
   beachWidth: number
-  coastlineDPEpsilon: number
-  coastlineChaikinPasses: number
-  coastlineCatmullSteps: number
   /** Full land polygon boundary rings, smoothed globally (DP → Chaikin).
    *  Projected to canvas px. Used for sea mask clipping and beach strip. */
   coastlineBoundaryRings: [number, number][][]
@@ -109,7 +104,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     terrainBlobParams, lakeBlobParams,
     hexes, hexTerrainLayers, R,
     realisticCoastline, coastlineDebugRaw,
-    coastlineClips, seaCoastKeys, oceanSeaKeys,
+    oceanSeaKeys,
     beachStrip, beachColor, beachWidth,
     coastlineBoundaryRings, coastlineRawBoundaryRings,
     // edge blobs destructured inline below where used
@@ -188,12 +183,13 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     for (const { hex, verts } of projected) {
       if (edgeMode === 'whole' && hex.partial) continue
       if (!hex.partial && !inMargin(verts)) continue
-      const key = `${hex.q},${hex.r}`
-      if (seaCoastKeys.has(key)) {
-        // Add the land portion of this coastal hex.  If the smoothed boundary
-        // doesn't intersect the hex at all (smoothing can shift the line past
-        // small hexes), fall back to the full hex so terrain isn't clipped out.
-        let addedLand = false
+      // Consistent with section 6: let the coastline polygon decide which hexes
+      // are coastal. If any ring intersects this hex, add only the land-side
+      // portion to the clip path. Manually-painted hexes bypass the restriction
+      // so their terrain is always fully visible (section 6 paints sea on top).
+      // If no ring intersects, add the full hex — it sits entirely on one side.
+      let addedLand = false
+      if (!hex.manual_override) {
         for (const ring of coastlineBoundaryRings) {
           const clipped = clipPolygonToConvex(ring, verts)
           if (clipped.length < 3) continue
@@ -202,12 +198,8 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
           tCtx.closePath()
           addedLand = true
         }
-        if (!addedLand) {
-          tCtx.moveTo(verts[0][0], verts[0][1])
-          for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-          tCtx.closePath()
-        }
-      } else {
+      }
+      if (!addedLand) {
         tCtx.moveTo(verts[0][0], verts[0][1])
         for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
         tCtx.closePath()
