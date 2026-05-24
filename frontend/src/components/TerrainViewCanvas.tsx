@@ -6,7 +6,7 @@ import { BlobOverrideFlyout } from './BlobOverrideFlyout'
 import { hexAdjacent, catmullRom, offsetPolyline, pointInPolygon, distToSeg, douglasPeucker, chaikin } from '../lib/geometry'
 import { mulberry32, makePermutation } from '../lib/noise'
 import { projectToCanvas, unprojectFromCanvas, computePaper } from '../lib/projection'
-import { coastalBlobTerrains, buildSmoothedRing, bleedPolygon, buildTerrainBlobsV2, computeConnectedComponents, stitchCoastlineRuns } from '../lib/terrainBlobs'
+import { coastalBlobTerrains, bleedPolygon, buildTerrainBlobsV2, computeConnectedComponents } from '../lib/terrainBlobs'
 import { findEdgeChains as findEdgeChainsSync } from '../lib/edgeBlobs'
 import { riverChainCache, buildRiverChains, buildRiverChainsV2 } from '../lib/riverChains'
 
@@ -188,7 +188,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     edgeBlobSmooth, edgeBlobOffset, edgeBlobBump,
     edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection,
     edgeBlobWidth, edgeBlobOverrides, setEdgeBlobOverride,
-    realisticCoastline, coastlineV2, coastlineV3, coastlineDebugRaw,
+    realisticCoastline, coastlineDebugRaw,
     beachStrip, beachColor, beachWidth,
     coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps,
     terrainRenderMode,
@@ -721,10 +721,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   const realisticCoastlineRef = useRef(realisticCoastline)
   realisticCoastlineRef.current = realisticCoastline
-  const coastlineV2Ref = useRef(coastlineV2)
-  coastlineV2Ref.current = coastlineV2
-  const coastlineV3Ref = useRef(coastlineV3)
-  coastlineV3Ref.current = coastlineV3
   const coastlineDebugRawRef = useRef(coastlineDebugRaw)
   coastlineDebugRawRef.current = coastlineDebugRaw
   const beachStripRef = useRef(beachStrip)
@@ -1094,20 +1090,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const oceanSeaKeysRef = useRef(oceanSeaKeys)
   oceanSeaKeysRef.current = oceanSeaKeys
 
-  // Stitch only sea-coast runs (seaCoastKeys) into continuous chains — lakes and
-  // inland water bodies also have coastline_clip but must be excluded here or they
-  // create spurious chains that break the V2 global sea polygon.
-  const stitchedCoastlineChains = useMemo(() => {
-    if (!realisticCoastline || projectedCoastlineClips.size === 0) return []
-    const seaOnlyClips = new Map<string, [number, number][][]>()
-    for (const [key, rings] of projectedCoastlineClips) {
-      if (seaCoastKeys.has(key)) seaOnlyClips.set(key, rings)
-    }
-    return stitchCoastlineRuns(seaOnlyClips, hexVertMap, 3)
-  }, [projectedCoastlineClips, hexVertMap, realisticCoastline, seaCoastKeys])
-  const stitchedCoastlineChainsRef = useRef(stitchedCoastlineChains)
-  stitchedCoastlineChainsRef.current = stitchedCoastlineChains
-
   // Raw projected land polygon boundary — unsmoothed, for debug overlay and as V3 input.
   const rawCoastlineBoundary = useMemo((): [number, number][][] => {
     const raw = generatedMetadata?.coastline_boundary
@@ -1300,6 +1282,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     | { type: 'edge'; p1: [number, number]; p2: [number, number]; edgeKey: string }
     | null
   const paintHoverTargetRef = useRef<PaintHoverTarget>(null)
+  const strokeTrailRef = useRef<Map<string, NonNullable<PaintHoverTarget>>>(new Map())
 
   type ExportTarget = { canvas: HTMLCanvasElement; pw: number; ph: number }
 
@@ -1418,8 +1401,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       hexTerrainLayers,
       R,
       realisticCoastline: realisticCoastlineRef.current,
-      coastlineV2: coastlineV2Ref.current,
-      coastlineV3: coastlineV3Ref.current,
       coastlineDebugRaw: coastlineDebugRawRef.current,
       coastlineClips: projectedCoastlineClipsRef.current,
       seaCoastKeys: seaCoastKeysRef.current,
@@ -1430,7 +1411,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       coastlineDPEpsilon: coastlineDPEpsilonRef.current,
       coastlineChaikinPasses: coastlineChaikinPassesRef.current,
       coastlineCatmullSteps: coastlineCatmullStepsRef.current,
-      coastlineChains: stitchedCoastlineChainsRef.current,
       coastlineBoundaryRings: smoothedCoastlineBoundaryRef.current,
       coastlineRawBoundaryRings: rawCoastlineBoundaryRef.current,
       edgeBlobPainted: edgeBlobPaintedRef.current,
@@ -2183,6 +2163,35 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
+    // Paint stroke trail — all hexes/edges touched during the current drag stroke
+    if (!isExport && terrainPaintModeRef.current && strokeTrailRef.current.size > 0) {
+      const brush = terrainPaintBrushRef.current
+      const rawColor = terrainColorsRef.current[brush] ?? TERRAIN_COLORS[brush] ?? '#888888'
+      ctx.save()
+      for (const target of strokeTrailRef.current.values()) {
+        if (target.type === 'hex') {
+          ctx.globalAlpha = 0.35
+          ctx.fillStyle = rawColor
+          ctx.beginPath()
+          const { verts } = target
+          ctx.moveTo(verts[0][0], verts[0][1])
+          for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i][0], verts[i][1])
+          ctx.closePath()
+          ctx.fill()
+        } else {
+          ctx.globalAlpha = 0.55
+          ctx.strokeStyle = rawColor
+          ctx.lineWidth = R * 0.40
+          ctx.lineCap = 'round'
+          ctx.beginPath()
+          ctx.moveTo(target.p1[0], target.p1[1])
+          ctx.lineTo(target.p2[0], target.p2[1])
+          ctx.stroke()
+        }
+      }
+      ctx.restore()
+    }
+
     // Paint hover highlight (screen only — shows what clicking would paint)
     if (!isExport && terrainPaintModeRef.current) {
       const hoverTarget = paintHoverTargetRef.current
@@ -2420,7 +2429,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   //   forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineV2, coastlineV3, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys])
@@ -2431,7 +2440,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineV2, coastlineV3, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2717,6 +2726,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         const key = `${target.q},${target.r}`
         if (key !== lastPaintedKeyRef.current) {
           lastPaintedKeyRef.current = key
+          strokeTrailRef.current.set(`hex:${key}`, target)
           if (elevationPaintModeRef.current) {
             overrideHexElevationRef.current(target.q, target.r, elevationPaintBrushRef.current)
           } else {
@@ -2731,6 +2741,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       } else {
         if (target.edgeKey !== lastPaintedEdgeKeyRef.current) {
           lastPaintedEdgeKeyRef.current = target.edgeKey
+          strokeTrailRef.current.set(`edge:${target.edgeKey}`, target)
           const brush = terrainPaintBrushRef.current
           if (brush === 'clear') {
             eraseEdgeBlobRef.current(target.edgeKey)
@@ -2748,6 +2759,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       isPaintingRef.current = true
       lastPaintedKeyRef.current = null
       lastPaintedEdgeKeyRef.current = null
+      strokeTrailRef.current.clear()
       setIsTerrainPainting(true)
       const target = computeHoverTarget(e.clientX, e.clientY)
       paintHoverTargetRef.current = target
@@ -2765,13 +2777,14 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       const target = computeHoverTarget(e.clientX, e.clientY)
       const changed = hoverKey(target) !== hoverKey(paintHoverTargetRef.current)
       paintHoverTargetRef.current = target
-      if (changed) draw()
       if (isPaintingRef.current) executePaint(target)
+      if (changed) draw()
     }
 
     const onUp = () => {
       if (isPaintingRef.current && (terrainPaintModeRef.current || elevationPaintModeRef.current)) setIsTerrainPainting(false)
       isPaintingRef.current = false
+      strokeTrailRef.current.clear()
     }
 
     const onLeave = () => {

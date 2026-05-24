@@ -2,8 +2,8 @@
  *  Pure canvas operations — no React or store imports except types. */
 
 import type { GeneratedHex, BlobOverride } from '../store/mapStore'
-import { buildTerrainBlobsV2, buildSmoothedRing, bleedPolygon } from './terrainBlobs'
-import { catmullRom, chaikin, douglasPeucker, clipPolygonToConvex } from './geometry'
+import { buildTerrainBlobsV2, bleedPolygon } from './terrainBlobs'
+import { clipPolygonToConvex } from './geometry'
 import { makePermutation } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams } from './edgeBlobs'
 import { drawHistoricalVegetation } from './drawHistoricalVegetation'
@@ -40,8 +40,6 @@ export type DrawTerrainParams = {
   hexTerrainLayers: (hex: GeneratedHex) => string[]
   R: number
   realisticCoastline: boolean
-  coastlineV2: boolean
-  coastlineV3: boolean
   coastlineDebugRaw: boolean
   coastlineClips: Map<string, [number, number][][][]>
   seaCoastKeys: Set<string>
@@ -52,10 +50,8 @@ export type DrawTerrainParams = {
   coastlineDPEpsilon: number
   coastlineChaikinPasses: number
   coastlineCatmullSteps: number
-  /** Pre-stitched chains spanning multiple hexes — used for the V2 global smooth line. */
-  coastlineChains: [number, number][][]
   /** Full land polygon boundary rings, smoothed globally (DP → Chaikin).
-   *  Projected to canvas px. Used for V3 sea mask clipping and beach strip. */
+   *  Projected to canvas px. Used for sea mask clipping and beach strip. */
   coastlineBoundaryRings: [number, number][][]
   /** Raw (unsmoothed) projected land polygon boundary — for the debug overlay. */
   coastlineRawBoundaryRings: [number, number][][]
@@ -112,11 +108,10 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     blobComponents, blobComponentsByTerrain,
     terrainBlobParams, lakeBlobParams,
     hexes, hexTerrainLayers, R,
-    realisticCoastline, coastlineV2, coastlineV3, coastlineDebugRaw,
+    realisticCoastline, coastlineDebugRaw,
     coastlineClips, seaCoastKeys, oceanSeaKeys,
     beachStrip, beachColor, beachWidth,
-    coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps,
-    coastlineChains, coastlineBoundaryRings, coastlineRawBoundaryRings,
+    coastlineBoundaryRings, coastlineRawBoundaryRings,
     // edge blobs destructured inline below where used
   } = params
 
@@ -394,124 +389,55 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
-  if (realisticCoastline) {
+  if (realisticCoastline && coastlineBoundaryRings.length > 0) {
     const seaColor = terrainColors['sea'] ?? '#3a6898'
 
-    if (coastlineV3 && coastlineBoundaryRings.length > 0) {
-      // ── V3: globally smoothed land polygon, clipped to hexes after smoothing ─
-
-      // Ocean hexes — solid sea fill (same as V1/V2)
-      tCtx.fillStyle = seaColor
-      tCtx.beginPath()
-      for (const { hex, verts } of projected) {
-        const key = `${hex.q},${hex.r}`
-        if (!oceanSeaKeys.has(key)) continue
-        if (!inMargin(verts) && !hex.partial) continue
-        tCtx.moveTo(verts[0][0], verts[0][1])
-        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+    // Ocean hexes — solid sea fill
+    tCtx.fillStyle = seaColor
+    tCtx.beginPath()
+    for (const { hex, verts } of projected) {
+      const key = `${hex.q},${hex.r}`
+      if (!oceanSeaKeys.has(key)) continue
+      if (!inMargin(verts) && !hex.partial) continue
+      tCtx.moveTo(verts[0][0], verts[0][1])
+      for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+      tCtx.closePath()
+    }
+    // Coastal hexes — evenodd: hex outline + smoothed land polygon clipped to hex
+    for (const { hex, verts } of projected) {
+      if (!inMargin(verts) && !hex.partial) continue
+      const key = `${hex.q},${hex.r}`
+      if (!seaCoastKeys.has(key)) continue
+      let addedHex = false
+      for (const ring of coastlineBoundaryRings) {
+        const clipped = clipPolygonToConvex(ring, verts)
+        if (clipped.length < 3) continue
+        if (!addedHex) {
+          tCtx.moveTo(verts[0][0], verts[0][1])
+          for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+          tCtx.closePath()
+          addedHex = true
+        }
+        tCtx.moveTo(clipped[0][0], clipped[0][1])
+        for (let i = 1; i < clipped.length; i++) tCtx.lineTo(clipped[i][0], clipped[i][1])
         tCtx.closePath()
       }
-      // Coastal hexes — evenodd with smoothed boundary clipped to each hex
-      for (const { hex, verts } of projected) {
-        if (!inMargin(verts) && !hex.partial) continue
-        const key = `${hex.q},${hex.r}`
-        if (!seaCoastKeys.has(key)) continue
-        let addedHex = false
-        for (const ring of coastlineBoundaryRings) {
-          const clipped = clipPolygonToConvex(ring, verts)
-          if (clipped.length < 3) continue
-          if (!addedHex) {
-            tCtx.moveTo(verts[0][0], verts[0][1])
-            for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-            tCtx.closePath()
-            addedHex = true
-          }
-          tCtx.moveTo(clipped[0][0], clipped[0][1])
-          for (let i = 1; i < clipped.length; i++) tCtx.lineTo(clipped[i][0], clipped[i][1])
-          tCtx.closePath()
-        }
-      }
-      tCtx.fill('evenodd')
+    }
+    tCtx.fill('evenodd')
 
-      // Beach strip — stroke the smoothed polygon boundary directly
-      if (beachStrip) {
-        tCtx.strokeStyle = beachColor
-        tCtx.lineWidth = beachWidth * R * 2
-        tCtx.lineJoin = 'round'
-        tCtx.lineCap = 'round'
-        for (const ring of coastlineBoundaryRings) {
-          if (ring.length < 2) continue
-          tCtx.beginPath()
-          tCtx.moveTo(ring[0][0], ring[0][1])
-          for (let i = 1; i < ring.length; i++) tCtx.lineTo(ring[i][0], ring[i][1])
-          tCtx.closePath()
-          tCtx.stroke()
-        }
-      }
-    } else {
-      // ── V1 / V2: per-hex evenodd sea mask ────────────────────────────────────
-
-      // V1 beach strip — stroked before the sea fill so sea covers the sea-side half
-      if (!coastlineV2 && beachStrip && coastlineChains.length > 0) {
-        tCtx.strokeStyle = beachColor
-        tCtx.lineWidth = beachWidth * R * 2
-        tCtx.lineJoin = 'round'
-        tCtx.lineCap = 'round'
-        for (const chain of coastlineChains) {
-          const simplified = coastlineDPEpsilon > 0 ? douglasPeucker(chain, coastlineDPEpsilon) : chain
-          const smoothed = catmullRom(chaikin(simplified, coastlineChaikinPasses, false), coastlineCatmullSteps)
-          if (smoothed.length < 2) continue
-          tCtx.beginPath()
-          tCtx.moveTo(smoothed[0][0], smoothed[0][1])
-          for (let i = 1; i < smoothed.length; i++) tCtx.lineTo(smoothed[i][0], smoothed[i][1])
-          tCtx.stroke()
-        }
-      }
-
-      tCtx.fillStyle = seaColor
-      tCtx.beginPath()
-      for (const { hex, verts } of projected) {
-        const key = `${hex.q},${hex.r}`
-        if (!oceanSeaKeys.has(key)) continue
-        if (!inMargin(verts) && !hex.partial) continue
-        tCtx.moveTo(verts[0][0], verts[0][1])
-        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+    // Beach strip — stroke the smoothed polygon boundary directly
+    if (beachStrip) {
+      tCtx.strokeStyle = beachColor
+      tCtx.lineWidth = beachWidth * R * 2
+      tCtx.lineJoin = 'round'
+      tCtx.lineCap = 'round'
+      for (const ring of coastlineBoundaryRings) {
+        if (ring.length < 2) continue
+        tCtx.beginPath()
+        tCtx.moveTo(ring[0][0], ring[0][1])
+        for (let i = 1; i < ring.length; i++) tCtx.lineTo(ring[i][0], ring[i][1])
         tCtx.closePath()
-      }
-      for (const { hex, verts } of projected) {
-        if (!inMargin(verts) && !hex.partial) continue
-        const key = `${hex.q},${hex.r}`
-        if (!seaCoastKeys.has(key)) continue
-        const rings = coastlineClips.get(key)
-        if (!rings || rings.length === 0) continue
-        tCtx.moveTo(verts[0][0], verts[0][1])
-        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-        tCtx.closePath()
-        for (const ring of rings) {
-          if (ring.length < 3) continue
-          const pts = buildSmoothedRing(ring, verts, 3, coastlineCatmullSteps, coastlineChaikinPasses, coastlineDPEpsilon)
-          tCtx.moveTo(pts[0][0], pts[0][1])
-          for (let i = 1; i < pts.length; i++) tCtx.lineTo(pts[i][0], pts[i][1])
-          tCtx.closePath()
-        }
-      }
-      tCtx.fill('evenodd')
-
-      // V2 smooth global line — drawn on top of the sea mask
-      if (coastlineV2 && beachStrip && coastlineChains.length > 0) {
-        tCtx.strokeStyle = beachColor
-        tCtx.lineWidth = beachWidth * R * 2
-        tCtx.lineJoin = 'round'
-        tCtx.lineCap = 'round'
-        for (const chain of coastlineChains) {
-          const simplified = coastlineDPEpsilon > 0 ? douglasPeucker(chain, coastlineDPEpsilon) : chain
-          const smoothed = catmullRom(chaikin(simplified, coastlineChaikinPasses, false), coastlineCatmullSteps)
-          if (smoothed.length < 2) continue
-          tCtx.beginPath()
-          tCtx.moveTo(smoothed[0][0], smoothed[0][1])
-          for (let i = 1; i < smoothed.length; i++) tCtx.lineTo(smoothed[i][0], smoothed[i][1])
-          tCtx.stroke()
-        }
+        tCtx.stroke()
       }
     }
   }

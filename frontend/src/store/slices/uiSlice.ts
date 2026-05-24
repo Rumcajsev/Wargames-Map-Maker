@@ -754,11 +754,13 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.styleSnapshots) s.styleSnapshots = {}
   }
   if (fromVersion < 48) {
-    s.coastlineV3 = true
-    s.coastlineV2 = false
     s.coastlineDPEpsilon = 1
     s.coastlineChaikinPasses = 2
     s.coastlineCatmullSteps = 1
+  }
+  if (fromVersion < 49) {
+    delete s.coastlineV2
+    delete s.coastlineV3
   }
   return s
 }

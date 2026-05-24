@@ -28,8 +28,6 @@ export type TerrainSlice = {
   terrainBlobLobeThreshold: number
   terrainBlobLobeDirection: number
   realisticCoastline: boolean
-  coastlineV2: boolean
-  coastlineV3: boolean
   coastlineDebugRaw: boolean
   beachStrip: boolean
   beachColor: string
@@ -98,8 +96,6 @@ export type TerrainSlice = {
   setTerrainBlobLobeThreshold: (v: number) => void
   setTerrainBlobLobeDirection: (v: number) => void
   setRealisticCoastline: (v: boolean) => void
-  setCoastlineV2: (v: boolean) => void
-  setCoastlineV3: (v: boolean) => void
   setCoastlineDebugRaw: (v: boolean) => void
   setBeachStrip: (v: boolean) => void
   setBeachColor: (v: string) => void
@@ -168,8 +164,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   terrainBlobLobeThreshold: DEFAULT_TERRAIN_BLOB.lobeThreshold,
   terrainBlobLobeDirection: DEFAULT_TERRAIN_BLOB.lobeDirection,
   realisticCoastline: false,
-  coastlineV2: false,
-  coastlineV3: true,
   coastlineDebugRaw: false,
   beachStrip: false,
   beachColor: '#e4d5a0',
@@ -547,8 +541,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setTerrainBlobLobeThreshold: (v) => set({ terrainBlobLobeThreshold: v }),
   setTerrainBlobLobeDirection: (v) => set({ terrainBlobLobeDirection: v }),
   setRealisticCoastline: (v) => set({ realisticCoastline: v }),
-  setCoastlineV2: (v) => set({ coastlineV2: v }),
-  setCoastlineV3: (v) => set({ coastlineV3: v }),
   setCoastlineDebugRaw: (v) => set({ coastlineDebugRaw: v }),
   setBeachStrip: (v) => set({ beachStrip: v }),
   setBeachColor: (v) => set({ beachColor: v }),
