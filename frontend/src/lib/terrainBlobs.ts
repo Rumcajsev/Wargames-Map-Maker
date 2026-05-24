@@ -30,12 +30,15 @@ export function effectiveLandTerrain(hex: GeneratedHex): string {
   return best
 }
 
-/** Terrain layers a coastal hex contributes to in the blob system. */
+/** Terrain layers a coastal hex contributes to in the blob system.
+ *  Both paths use hexTerrainLayers as the primary source.  When realistic
+ *  coastline is on, 'sea' is stripped out — section 6 handles sea fill. */
 export function coastalBlobTerrains(hex: GeneratedHex, realisticCoastline: boolean): string[] {
   if (!hex.coastline_clip || hex.coastline_clip.length === 0) return hexTerrainLayers(hex)
   const land = effectiveLandTerrain(hex)
-  if (realisticCoastline) return land === 'clear' ? [] : [land]
-  const base = hexTerrainLayers(hex)
+  const base = realisticCoastline
+    ? hexTerrainLayers(hex).filter(t => t !== 'sea')
+    : hexTerrainLayers(hex)
   if (land === 'clear') return base
   const merged = new Set(base)
   merged.add(land)

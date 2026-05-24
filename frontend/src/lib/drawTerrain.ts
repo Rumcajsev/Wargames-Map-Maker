@@ -189,7 +189,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       if (edgeMode === 'whole' && hex.partial) continue
       if (!hex.partial && !inMargin(verts)) continue
       const key = `${hex.q},${hex.r}`
-      if (oceanSeaKeys.has(key)) continue
       if (seaCoastKeys.has(key)) {
         // Add the land portion of this coastal hex.  If the smoothed boundary
         // doesn't intersect the hex at all (smoothing can shift the line past
@@ -434,27 +433,24 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   if (realisticCoastline && coastlineBoundaryRings.length > 0) {
     const seaColor = terrainColors['sea'] ?? '#3a6898'
 
-    // Ocean hexes — solid sea fill
+    // Ocean hexes — solid sea fill.  Skip hexes the user has manually painted
+    // with non-sea terrain so their paint isn't erased by the sea fill.
     tCtx.fillStyle = seaColor
     tCtx.beginPath()
     for (const { hex, verts } of projected) {
       const key = `${hex.q},${hex.r}`
       if (!oceanSeaKeys.has(key)) continue
       if (!inMargin(verts) && !hex.partial) continue
+      if (hex.manual_override && hexTerrainLayers(hex).some(t => t !== 'sea')) continue
       tCtx.moveTo(verts[0][0], verts[0][1])
       for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
       tCtx.closePath()
     }
     // Coastal hexes — evenodd: hex outline + smoothed land polygon clipped to hex.
-    // Also check one-hop neighbours of ocean hexes — catches hexes the backend dropped
-    // due to the 99% area-ratio filter but whose smoothed boundary still crosses them.
-    // Revert: remove the neighboursOcean check and restore the seaCoastKeys-only guard.
-    const HEX_DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]] as const
+    // We let the clip result be the decider: if any coastline ring actually intersects
+    // this hex, render it as coastal. No bucket pre-filter — the polygon is the truth.
     for (const { hex, verts } of projected) {
       if (!inMargin(verts) && !hex.partial) continue
-      const key = `${hex.q},${hex.r}`
-      const neighboursOcean = HEX_DIRS.some(([dq, dr]) => oceanSeaKeys.has(`${hex.q+dq},${hex.r+dr}`))
-      if (!seaCoastKeys.has(key) && !neighboursOcean) continue
       let addedHex = false
       for (const ring of coastlineBoundaryRings) {
         const clipped = clipPolygonToConvex(ring, verts)
