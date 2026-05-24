@@ -205,6 +205,17 @@ async def terrain_stream_generator(config: GridConfig) -> AsyncGenerator[str, No
 
         land_poly = await asyncio.to_thread(_build_land_poly)
 
+        def _boundary_rings(poly) -> list:
+            if poly is None:
+                return []
+            if poly.geom_type == 'Polygon':
+                return [[[round(c[0], 6), round(c[1], 6)] for c in poly.exterior.coords[:-1]]]
+            if poly.geom_type == 'MultiPolygon':
+                return [[[round(c[0], 6), round(c[1], 6)] for c in p.exterior.coords[:-1]] for p in poly.geoms]
+            return []
+
+        meta['coastline_boundary'] = _boundary_rings(land_poly)
+
         def _rings(geom) -> list[list[list[float]]]:
             if geom.geom_type == "Polygon":
                 return [[[round(c[0], 6), round(c[1], 6)] for c in geom.exterior.coords]]

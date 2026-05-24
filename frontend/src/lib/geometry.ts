@@ -1,5 +1,26 @@
 /** Pure polygon and curve geometry utilities — no canvas, no React, no store deps. */
 
+/** Douglas-Peucker polyline simplification. Removes points that deviate less than
+ *  epsilon from the straight line between their neighbors. Retains first and last point. */
+export function douglasPeucker(pts: [number, number][], epsilon: number): [number, number][] {
+  if (pts.length < 3 || epsilon <= 0) return pts
+  const [x1, y1] = pts[0], [x2, y2] = pts[pts.length - 1]
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy)
+  let maxDist = 0, maxIdx = 1
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = len < 1e-10
+      ? Math.hypot(pts[i][0] - x1, pts[i][1] - y1)
+      : Math.abs(dy * pts[i][0] - dx * pts[i][1] + x2 * y1 - y2 * x1) / len
+    if (d > maxDist) { maxDist = d; maxIdx = i }
+  }
+  if (maxDist > epsilon) {
+    const L = douglasPeucker(pts.slice(0, maxIdx + 1), epsilon)
+    const R = douglasPeucker(pts.slice(maxIdx), epsilon)
+    return [...L.slice(0, -1), ...R]
+  }
+  return [pts[0], pts[pts.length - 1]]
+}
+
 export function hexAdjacent(q1: number, r1: number, q2: number, r2: number): boolean {
   const dq = q2 - q1, dr = r2 - r1
   return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)) === 1
@@ -147,4 +168,47 @@ export function pointInPolygon(x: number, y: number, pts: [number, number][]): b
       inside = !inside
   }
   return inside
+}
+
+/** Clip a subject polygon against a convex clip polygon (Sutherland-Hodgman).
+ *  Both arrays are (last point ≠ first point) vertex lists.
+ *  Works for any winding order — sign is inferred from the clip polygon's area. */
+export function clipPolygonToConvex(
+  subject: [number, number][],
+  clip: [number, number][],
+): [number, number][] {
+  // Compute signed area of clip to determine which side is "inside"
+  let area2 = 0
+  const nc = clip.length
+  for (let i = 0; i < nc; i++) {
+    const a = clip[i], b = clip[(i + 1) % nc]
+    area2 += a[0] * b[1] - b[0] * a[1]
+  }
+  const sign = area2 >= 0 ? 1 : -1
+
+  let output = subject.slice()
+  for (let i = 0; i < nc && output.length > 0; i++) {
+    const ea = clip[i], eb = clip[(i + 1) % nc]
+    const edx = eb[0] - ea[0], edy = eb[1] - ea[1]
+    const inside = (p: [number, number]) =>
+      (edx * (p[1] - ea[1]) - edy * (p[0] - ea[0])) * sign >= 0
+    const intersect = (a: [number, number], b: [number, number]): [number, number] => {
+      const dx = b[0] - a[0], dy = b[1] - a[1]
+      const t = (edx * (a[1] - ea[1]) - edy * (a[0] - ea[0])) / (edy * dx - edx * dy)
+      return [a[0] + t * dx, a[1] + t * dy]
+    }
+    const input = output
+    output = []
+    for (let j = 0; j < input.length; j++) {
+      const cur = input[j], prev = input[(j - 1 + input.length) % input.length]
+      const curIn = inside(cur), prevIn = inside(prev)
+      if (curIn) {
+        if (!prevIn) output.push(intersect(prev, cur))
+        output.push(cur)
+      } else if (prevIn) {
+        output.push(intersect(prev, cur))
+      }
+    }
+  }
+  return output
 }

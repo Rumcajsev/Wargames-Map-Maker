@@ -172,6 +172,9 @@ export interface GridMetadata {
   bearing: number
   paper_mm: [number, number]
   margin_mm: number
+  /** Exterior ring(s) of the full WorldCover land polygon, [[lon, lat], …].
+   *  Sent before hex clipping so the frontend can smooth it globally. */
+  coastline_boundary?: [number, number][][]
 }
 
 export const PAPER_MM: Record<PaperSize, [number, number]> = {

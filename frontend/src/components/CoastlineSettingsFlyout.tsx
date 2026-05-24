@@ -10,6 +10,8 @@ interface Props {
 export function CoastlineSettingsFlyout({ anchorY, onClose }: Props) {
   const {
     coastlineV2, setCoastlineV2,
+    coastlineV3, setCoastlineV3,
+    coastlineDebugRaw, setCoastlineDebugRaw,
     beachStrip, setBeachStrip,
     beachColor, setBeachColor,
     beachWidth, setBeachWidth,
@@ -28,28 +30,50 @@ export function CoastlineSettingsFlyout({ anchorY, onClose }: Props) {
 
   const top = Math.min(anchorY, window.innerHeight - 160 - 8)
 
+  const activeMode = coastlineV3 ? 'v3' : coastlineV2 ? 'v2' : 'v1'
+
   return (
     <FlyoutContainer top={top} data-coastline-flyout="">
       <FlyoutHeader title="Coastline" onClose={onClose} />
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
-        {(['v1', 'v2'] as const).map(v => {
-          const active = v === 'v2' ? coastlineV2 : !coastlineV2
+        {(['v1', 'v2', 'v3'] as const).map(v => {
+          const active = activeMode === v
+          const accent = v === 'v3' ? '#2e7d6b' : '#4a6fa5'
           return (
             <button
               key={v}
-              onClick={() => setCoastlineV2(v === 'v2')}
+              onClick={() => {
+                setCoastlineV2(v === 'v2')
+                setCoastlineV3(v === 'v3')
+              }}
               style={{
                 flex: 1, fontSize: 10, padding: '3px 0', borderRadius: 3, cursor: 'pointer',
                 border: 'none', fontWeight: active ? 600 : 400,
-                background: active ? '#4a6fa5' : '#ddd',
+                background: active ? accent : '#ddd',
                 color: active ? '#fff' : '#555',
               }}
             >
-              {v === 'v1' ? 'Per-hex' : 'Smooth'}
+              {v === 'v1' ? 'Per-hex' : v === 'v2' ? 'Smooth' : 'Global ✦'}
             </button>
           )
         })}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>
+          Raw data overlay
+        </span>
+        <button
+          onClick={() => setCoastlineDebugRaw(!coastlineDebugRaw)}
+          style={{
+            fontSize: 10, padding: '2px 8px', borderRadius: 3, cursor: 'pointer', border: 'none',
+            background: coastlineDebugRaw ? '#a53030' : '#ccc',
+            color: coastlineDebugRaw ? '#fff' : '#333',
+          }}
+        >
+          {coastlineDebugRaw ? 'on' : 'off'}
+        </button>
       </div>
 
       <SectionLabel label="Smoothing" />
