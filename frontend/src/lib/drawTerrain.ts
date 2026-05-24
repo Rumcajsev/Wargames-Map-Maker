@@ -191,11 +191,21 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const key = `${hex.q},${hex.r}`
       if (oceanSeaKeys.has(key)) continue
       if (seaCoastKeys.has(key)) {
+        // Add the land portion of this coastal hex.  If the smoothed boundary
+        // doesn't intersect the hex at all (smoothing can shift the line past
+        // small hexes), fall back to the full hex so terrain isn't clipped out.
+        let addedLand = false
         for (const ring of coastlineBoundaryRings) {
           const clipped = clipPolygonToConvex(ring, verts)
           if (clipped.length < 3) continue
           tCtx.moveTo(clipped[0][0], clipped[0][1])
           for (let i = 1; i < clipped.length; i++) tCtx.lineTo(clipped[i][0], clipped[i][1])
+          tCtx.closePath()
+          addedLand = true
+        }
+        if (!addedLand) {
+          tCtx.moveTo(verts[0][0], verts[0][1])
+          for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
           tCtx.closePath()
         }
       } else {
