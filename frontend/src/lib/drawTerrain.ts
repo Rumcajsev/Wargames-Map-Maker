@@ -445,11 +445,16 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
       tCtx.closePath()
     }
-    // Coastal hexes — evenodd: hex outline + smoothed land polygon clipped to hex
+    // Coastal hexes — evenodd: hex outline + smoothed land polygon clipped to hex.
+    // Also check one-hop neighbours of ocean hexes — catches hexes the backend dropped
+    // due to the 99% area-ratio filter but whose smoothed boundary still crosses them.
+    // Revert: remove the neighboursOcean check and restore the seaCoastKeys-only guard.
+    const HEX_DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]] as const
     for (const { hex, verts } of projected) {
       if (!inMargin(verts) && !hex.partial) continue
       const key = `${hex.q},${hex.r}`
-      if (!seaCoastKeys.has(key)) continue
+      const neighboursOcean = HEX_DIRS.some(([dq, dr]) => oceanSeaKeys.has(`${hex.q+dq},${hex.r+dr}`))
+      if (!seaCoastKeys.has(key) && !neighboursOcean) continue
       let addedHex = false
       for (const ring of coastlineBoundaryRings) {
         const clipped = clipPolygonToConvex(ring, verts)
