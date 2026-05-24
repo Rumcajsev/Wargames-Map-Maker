@@ -165,6 +165,8 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     updates.terrainPaintMode = tool.type === 'terrain'
     if (tool.type === 'terrain') updates.terrainPaintBrush = tool.brush
 
+    updates.cliffPaintMode = tool.type === 'cliff'
+
     updates.elevationPaintMode = tool.type === 'elevation'
     if (tool.type === 'elevation') updates.elevationPaintBrush = tool.brush
 
@@ -331,7 +333,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 36,
+      version: 37,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         mapMode: s.mapMode, diptychJoin: s.diptychJoin,
@@ -392,6 +394,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         urbanVertexRatio: s.urbanVertexRatio, urbanNoise: s.urbanNoise,
         urbanBuildingCount: s.urbanBuildingCount, urbanBuildingSize: s.urbanBuildingSize,
         terrainEdgePaintEnabled: s.terrainEdgePaintEnabled,
+        cliffEdges: s.cliffEdges, customTerrains: s.customTerrains,
         edgeBlobPainted: s.edgeBlobPainted, edgeBlobSmooth: s.edgeBlobSmooth,
         edgeBlobOffset: s.edgeBlobOffset, edgeBlobBump: s.edgeBlobBump,
         edgeBlobSweepFreq: s.edgeBlobSweepFreq, edgeBlobLobeFreq: s.edgeBlobLobeFreq,
@@ -761,6 +764,10 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 49) {
     delete s.coastlineV2
     delete s.coastlineV3
+  }
+  if (fromVersion < 50) {
+    if (!s.customTerrains) s.customTerrains = []
+    if (!s.cliffEdges) s.cliffEdges = {}
   }
   return s
 }

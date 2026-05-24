@@ -5,7 +5,7 @@ import type { GeneratedHex, BlobOverride } from '../store/mapStore'
 import { buildTerrainBlobsV2, bleedPolygon } from './terrainBlobs'
 import { clipPolygonToConvex } from './geometry'
 import { makePermutation } from './noise'
-import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams } from './edgeBlobs'
+import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams, parseEdgeBlobKey, sharedEdgeVertices } from './edgeBlobs'
 import { drawHistoricalVegetation } from './drawHistoricalVegetation'
 import { drawHachures } from './drawHachures'
 
@@ -56,6 +56,10 @@ export type DrawTerrainParams = {
   edgeBlobOverrides: Record<string, BlobOverride>
   hexVertMap: Map<string, [number, number][]>
   mapStyle: 'standard' | 'historical_simple' | 'basic'
+  // Cliff edges
+  cliffEdges: Record<string, true>
+  /** terrain name → texture image, for beach / mountains / custom terrains */
+  extraTextures: Map<string, HTMLImageElement | null>
   hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
 }
 
@@ -297,6 +301,9 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
           applyTextureOverlay(tCtx, lightWoodsTexture, ovPolys, R, ovTexScale, R * 0.12)
         } else if (terrain === 'marsh' && marshTexture) {
           applyTextureOverlay(tCtx, marshTexture, ovPolys, R, ovTexScale, R * 0.12)
+        } else {
+          const extraTex = params.extraTextures.get(terrain)
+          if (extraTex) applyTextureOverlay(tCtx, extraTex, ovPolys, R, ovTexScale, R * 0.12)
         }
       }
 
@@ -307,6 +314,9 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         applyTextureOverlay(tCtx, lightWoodsTexture, defaultPolys, R, terrainTextureScales['light_woods'] ?? 3, 0)
       } else if (terrain === 'marsh' && marshTexture) {
         applyTextureOverlay(tCtx, marshTexture, defaultPolys, R, terrainTextureScales['marsh'] ?? 3, 0)
+      } else {
+        const extraTex = params.extraTextures.get(terrain)
+        if (extraTex) applyTextureOverlay(tCtx, extraTex, defaultPolys, R, terrainTextureScales[terrain] ?? 3, 0)
       }
     }
 
@@ -405,6 +415,9 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         applyTextureOverlay(tCtx, lightWoodsTexture, polys, R, texScale, R * 0.12)
       } else if (chain.terrain === 'marsh' && marshTexture) {
         applyTextureOverlay(tCtx, marshTexture, polys, R, texScale, R * 0.12)
+      } else {
+        const extraTex = params.extraTextures.get(chain.terrain)
+        if (extraTex) applyTextureOverlay(tCtx, extraTex, polys, R, texScale, R * 0.12)
       }
     }
   }
@@ -420,6 +433,43 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   }
 
   if (landClipActive) tCtx.restore()
+
+  // ── 5e. Cliff edges ──────────────────────────────────────────────────────────
+  const { cliffEdges, hexVertMap: hexVertMapCliff } = params
+  if (params.mapStyle !== 'basic' && Object.keys(cliffEdges).length > 0) {
+    tCtx.save()
+    tCtx.strokeStyle = '#1a1208'
+    tCtx.lineCap = 'round'
+    for (const edgeKey of Object.keys(cliffEdges)) {
+      const { q1, r1, q2, r2 } = parseEdgeBlobKey(edgeKey)
+      const seg = sharedEdgeVertices(q1, r1, q2, r2, hexVertMapCliff)
+      if (!seg) continue
+      const [p1, p2] = seg
+      const dx = p2[0] - p1[0], dy = p2[1] - p1[1]
+      const len = Math.hypot(dx, dy)
+      if (len < 1) continue
+      const nx = -dy / len, ny = dx / len
+      // Main spine
+      tCtx.lineWidth = R * 0.045
+      tCtx.beginPath()
+      tCtx.moveTo(p1[0], p1[1])
+      tCtx.lineTo(p2[0], p2[1])
+      tCtx.stroke()
+      // Symmetric tick marks (classic cliff symbol)
+      const tickLen = R * 0.14
+      const tickCount = Math.max(2, Math.floor(len / (R * 0.20)))
+      tCtx.lineWidth = R * 0.03
+      for (let i = 0; i < tickCount; i++) {
+        const t = (i + 0.5) / tickCount
+        const mx = p1[0] + t * dx, my = p1[1] + t * dy
+        tCtx.beginPath()
+        tCtx.moveTo(mx + nx * tickLen * 0.5, my + ny * tickLen * 0.5)
+        tCtx.lineTo(mx - nx * tickLen * 0.5, my - ny * tickLen * 0.5)
+        tCtx.stroke()
+      }
+    }
+    tCtx.restore()
+  }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
   if (realisticCoastline && coastlineBoundaryRings.length > 0) {

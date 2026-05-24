@@ -94,6 +94,7 @@ export type HexEdgeMode = 'whole' | 'half'
 export type ActiveTool =
   | { type: 'none' }
   | { type: 'terrain'; brush: string }
+  | { type: 'cliff' }
   | { type: 'elevation'; brush: 'flat' | 'hills' | 'mountains' }
   | { type: 'lake' }
   | { type: 'road'; tier: 0 | 1 | 2; erasing: boolean }
@@ -192,6 +193,15 @@ export const TERRAIN_COLORS: Record<string, string> = {
   marsh: '#6b9e8a',
   sea: '#3a6898',
   river: '#7ab0c8',
+  beach: '#dfd0a0',
+  mountains: '#8a7a6a',
+}
+
+export interface CustomTerrain {
+  id: string
+  name: string
+  color: string
+  textureId: string | null
 }
 
 export const LAKE_COLOR = '#5888b0'
@@ -244,7 +254,10 @@ export function mapResolutionMpx(lat: number, zoom: number): number {
   return (78271.516 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom)
 }
 
-export const TERRAIN_PRIORITY = ['sea', 'marsh', 'woods', 'light_woods', 'rough', 'clear'] as const
+export const TERRAIN_PRIORITY = ['sea', 'marsh', 'woods', 'light_woods', 'rough', 'clear', 'beach', 'mountains'] as const
+
+/** Terrains that are manual-paint only — excluded from auto-classification sliders. */
+export const MANUAL_ONLY_TERRAINS = new Set(['beach', 'mountains'])
 
 export const DEFAULT_THRESHOLDS: Record<string, number> = {
   sea: 0.4,
@@ -810,7 +823,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 49,
+  version: 50,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

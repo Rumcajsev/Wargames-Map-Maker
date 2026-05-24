@@ -1,6 +1,6 @@
 import type {
   MapStore, GeneratedHex, GridMetadata, GenerateProgress, BlobOverride,
-  ActiveTool,
+  ActiveTool, CustomTerrain,
 } from '../mapStore'
 import {
   DEFAULT_THRESHOLDS,
@@ -58,6 +58,16 @@ export type TerrainSlice = {
   edgeBlobLobeDirection: number
   edgeBlobWidth: number
   edgeBlobOverrides: Record<string, BlobOverride>
+  // Custom terrain types
+  customTerrains: CustomTerrain[]
+  addCustomTerrain: (terrain: CustomTerrain) => void
+  updateCustomTerrain: (id: string, updates: Partial<CustomTerrain>) => void
+  removeCustomTerrain: (id: string) => void
+  // Cliff edges
+  cliffEdges: Record<string, true>
+  cliffPaintMode: boolean
+  paintCliffEdge: (edgeKey: string) => void
+  eraseCliffEdge: (edgeKey: string) => void
   // Blank map
   blankMap: boolean
   setBlankMap: (v: boolean) => void
@@ -192,6 +202,22 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   edgeBlobWidth: 0.25,
   edgeBlobOverrides: {},
 
+  customTerrains: [],
+  addCustomTerrain: (terrain) => set(s => ({ customTerrains: [...s.customTerrains, terrain] })),
+  updateCustomTerrain: (id, updates) => set(s => ({
+    customTerrains: s.customTerrains.map(t => t.id === id ? { ...t, ...updates } : t),
+  })),
+  removeCustomTerrain: (id) => set(s => ({ customTerrains: s.customTerrains.filter(t => t.id !== id) })),
+
+  cliffEdges: {},
+  cliffPaintMode: false,
+  paintCliffEdge: (edgeKey) => set(s => ({ cliffEdges: { ...s.cliffEdges, [edgeKey]: true } })),
+  eraseCliffEdge: (edgeKey) => set(s => {
+    const next = { ...s.cliffEdges }
+    delete next[edgeKey]
+    return { cliffEdges: next }
+  }),
+
   blankMap: false,
 
   setBlankMap: (v) => set({ blankMap: v }),
@@ -249,6 +275,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     elevationError: null,
     elevationProgress: null,
     terrainPaintMode: false,
+    cliffPaintMode: false,
     lakePaintMode: false,
     roadPaintMode: false,
     roadPaintEraser: false,
