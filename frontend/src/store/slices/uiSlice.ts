@@ -806,6 +806,11 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 52) {
     if (!s.autoDisabledOceanHexKeys) s.autoDisabledOceanHexKeys = []
   }
+  if (fromVersion < 53) {
+    if (s.hillsColor === undefined) s.hillsColor = '#c8b87a'
+    if (s.mountainsColor === undefined) s.mountainsColor = '#9a9080'
+    if (s.reliefShadingOpacity === undefined) s.reliefShadingOpacity = 0.45
+  }
   return s
 }
 

@@ -59,6 +59,10 @@ export type DrawTerrainParams = {
   /** terrain name → texture image, for beach / mountains / custom terrains */
   extraTextures: Map<string, HTMLImageElement | null>
   hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
+  elevationBlobs: { hills: [number, number][][]; mountains: [number, number][][] }
+  hillsColor: string
+  mountainsColor: string
+  reliefShadingOpacity: number
 }
 
 export type { EdgeBlobParams, EdgeBlobChain }
@@ -92,6 +96,52 @@ function applyTextureOverlay(
   }
   tCtx.fill('evenodd')
   tCtx.restore()
+}
+
+function drawElevationBlobsWithShading(
+  tCtx: Ctx,
+  polys: [number, number][][],
+  color: string,
+  reliefOpacity: number,
+): void {
+  if (polys.length === 0) return
+  tCtx.fillStyle = color
+  tCtx.beginPath()
+  for (const poly of polys) {
+    if (poly.length < 3) continue
+    tCtx.moveTo(poly[0][0], poly[0][1])
+    for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+    tCtx.closePath()
+  }
+  tCtx.fill('evenodd')
+
+  if (reliefOpacity <= 0) return
+
+  for (const poly of polys) {
+    if (poly.length < 3) continue
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const [x, y] of poly) {
+      if (x < minX) minX = x; if (x > maxX) maxX = x
+      if (y < minY) minY = y; if (y > maxY) maxY = y
+    }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+    const half = Math.hypot(maxX - minX, maxY - minY) * 0.55
+    const d = half * 0.707
+    const grad = tCtx.createLinearGradient(cx - d, cy - d, cx + d, cy + d)
+    grad.addColorStop(0,    `rgba(255,255,255,${(reliefOpacity * 0.8).toFixed(3)})`)
+    grad.addColorStop(0.28, `rgba(255,255,255,0)`)
+    grad.addColorStop(0.72, `rgba(0,0,0,0)`)
+    grad.addColorStop(1,    `rgba(0,0,0,${(reliefOpacity * 0.6).toFixed(3)})`)
+    tCtx.save()
+    tCtx.beginPath()
+    tCtx.moveTo(poly[0][0], poly[0][1])
+    for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+    tCtx.closePath()
+    tCtx.clip()
+    tCtx.fillStyle = grad
+    tCtx.fillRect(minX, minY, maxX - minX, maxY - minY)
+    tCtx.restore()
+  }
 }
 
 function polyArea(pts: [number, number][]): number {
@@ -217,6 +267,13 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       }
     }
     tCtx.clip('evenodd')
+  }
+
+  // ── 3c. Elevation blobs (hills / mountains) ──────────────────────────────────
+  if (params.mapStyle !== 'basic') {
+    const { elevationBlobs, hillsColor, mountainsColor, reliefShadingOpacity } = params
+    drawElevationBlobsWithShading(tCtx, elevationBlobs.hills, hillsColor, reliefShadingOpacity)
+    drawElevationBlobsWithShading(tCtx, elevationBlobs.mountains, mountainsColor, reliefShadingOpacity)
   }
 
   // ── 4. Blob mode ────────────────────────────────────────────────────────────

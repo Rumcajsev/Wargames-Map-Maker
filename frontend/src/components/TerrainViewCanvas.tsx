@@ -193,6 +193,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     edgeBlobWidth, edgeBlobOverrides, setEdgeBlobOverride,
     realisticCoastline, coastlineDebugRaw,
     beachStrip, beachColor, beachWidth,
+    hillsColor, mountainsColor, reliefShadingOpacity,
     coastlineDPEpsilon, coastlineChaikinPasses,
     terrainRenderMode,
     settlements, settlementTierStyles, settlementPlaceTier, addSettlement, placeSettlementAtHex,
@@ -735,6 +736,12 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   beachColorRef.current = beachColor
   const beachWidthRef = useRef(beachWidth)
   beachWidthRef.current = beachWidth
+  const hillsColorRef = useRef(hillsColor)
+  hillsColorRef.current = hillsColor
+  const mountainsColorRef = useRef(mountainsColor)
+  mountainsColorRef.current = mountainsColor
+  const reliefShadingOpacityRef = useRef(reliefShadingOpacity)
+  reliefShadingOpacityRef.current = reliefShadingOpacity
   const coastlineDPEpsilonRef = useRef(coastlineDPEpsilon)
   coastlineDPEpsilonRef.current = coastlineDPEpsilon
   const coastlineChaikinPassesRef = useRef(coastlineChaikinPasses)
@@ -1172,6 +1179,33 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const defaultLakeBlobsRef = useRef(defaultLakeBlobs)
   defaultLakeBlobsRef.current = defaultLakeBlobs
 
+  const prevElevationBlobsRef = useRef<{ hills: [number, number][][]; mountains: [number, number][][] }>({ hills: [], mountains: [] })
+  const elevationBlobsCache = useRef<{ hexKey: string; blobs: { hills: [number, number][][]; mountains: [number, number][][] } } | null>(null)
+  const defaultElevationBlobs = useMemo(() => {
+    if (projectedHexes.length === 0 || hexRadius === 0) return prevElevationBlobsRef.current
+    if (isTerrainPainting) return prevElevationBlobsRef.current
+    const hexKey = projectedHexes.map(p => `${p.hex.q},${p.hex.r}:${(p.hex as GeneratedHex).elevation_class ?? ''}`).join('|')
+    if (elevationBlobsCache.current?.hexKey === hexKey) return elevationBlobsCache.current.blobs
+    const makePolys = (cls: 'hills' | 'mountains') => {
+      const elevProjected = projectedHexes
+        .filter(p => (p.hex as GeneratedHex).elevation_class === cls)
+        .map(p => ({ ...p, hex: { ...p.hex, terrain: cls } }))
+      if (elevProjected.length === 0) return []
+      const blobs = buildTerrainBlobsV2(
+        elevProjected, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump,
+        terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp,
+        terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius,
+      )
+      return blobs.find(b => b.terrain === cls)?.polys ?? []
+    }
+    const blobs = { hills: makePolys('hills'), mountains: makePolys('mountains') }
+    elevationBlobsCache.current = { hexKey, blobs }
+    prevElevationBlobsRef.current = blobs
+    return blobs
+  }, [isTerrainPainting, projectedHexes, terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq, terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection, hexRadius])
+  const defaultElevationBlobsRef = useRef(defaultElevationBlobs)
+  defaultElevationBlobsRef.current = defaultElevationBlobs
+
   const screenPwRef = useRef(0)
 
   // Compute the paper's screen rect and (lazily) init/update the overlay map
@@ -1390,6 +1424,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       beachStrip: beachStripRef.current,
       beachColor: beachColorRef.current,
       beachWidth: beachWidthRef.current,
+      elevationBlobs: defaultElevationBlobsRef.current,
+      hillsColor: hillsColorRef.current,
+      mountainsColor: mountainsColorRef.current,
+      reliefShadingOpacity: reliefShadingOpacityRef.current,
       coastlineBoundaryRings: smoothedCoastlineBoundaryRef.current,
       coastlineRawBoundaryRings: rawCoastlineBoundaryRef.current,
       edgeBlobPainted: edgeBlobPaintedRef.current,
@@ -2417,7 +2455,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   //   forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, defaultElevationBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, hillsColor, mountainsColor, reliefShadingOpacity, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys])

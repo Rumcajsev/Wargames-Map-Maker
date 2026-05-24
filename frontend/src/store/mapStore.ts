@@ -254,7 +254,7 @@ export function mapResolutionMpx(lat: number, zoom: number): number {
   return (78271.516 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom)
 }
 
-export const TERRAIN_PRIORITY = ['sea', 'marsh', 'woods', 'light_woods', 'rough', 'clear', 'beach', 'mountains'] as const
+export const TERRAIN_PRIORITY = ['clear', 'light_woods', 'woods', 'rough', 'marsh', 'sea', 'beach', 'mountains'] as const
 
 /** Terrains that are manual-paint only — excluded from auto-classification sliders. */
 export const MANUAL_ONLY_TERRAINS = new Set(['beach', 'mountains'])
@@ -825,7 +825,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 52,
+  version: 53,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

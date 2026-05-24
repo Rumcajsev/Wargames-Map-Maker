@@ -32,6 +32,9 @@ export type TerrainSlice = {
   beachStrip: boolean
   beachColor: string
   beachWidth: number
+  hillsColor: string
+  mountainsColor: string
+  reliefShadingOpacity: number
   coastlineDPEpsilon: number
   coastlineChaikinPasses: number
   terrainColors: Record<string, string>
@@ -104,6 +107,9 @@ export type TerrainSlice = {
   setBeachStrip: (v: boolean) => void
   setBeachColor: (v: string) => void
   setBeachWidth: (v: number) => void
+  setHillsColor: (v: string) => void
+  setMountainsColor: (v: string) => void
+  setReliefShadingOpacity: (v: number) => void
   setCoastlineDPEpsilon: (v: number) => void
   setCoastlineChaikinPasses: (v: number) => void
   setTerrainColor: (terrain: string, color: string) => void
@@ -171,6 +177,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   beachStrip: false,
   beachColor: '#e4d5a0',
   beachWidth: 0.06,
+  hillsColor: '#c8b87a',
+  mountainsColor: '#9a9080',
+  reliefShadingOpacity: 0.45,
   coastlineDPEpsilon: 1,
   coastlineChaikinPasses: 2,
   terrainColors: { ...TERRAIN_COLORS },
@@ -554,6 +563,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setBeachStrip: (v) => set({ beachStrip: v }),
   setBeachColor: (v) => set({ beachColor: v }),
   setBeachWidth: (v) => set({ beachWidth: v }),
+  setHillsColor: (v) => set({ hillsColor: v }),
+  setMountainsColor: (v) => set({ mountainsColor: v }),
+  setReliefShadingOpacity: (v) => set({ reliefShadingOpacity: v }),
   setCoastlineDPEpsilon: (v) => set({ coastlineDPEpsilon: v }),
   setCoastlineChaikinPasses: (v) => set({ coastlineChaikinPasses: v }),
   setTerrainColor: (terrain, color) => set((s) => ({ terrainColors: { ...s.terrainColors, [terrain]: color } })),
