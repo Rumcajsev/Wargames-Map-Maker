@@ -437,7 +437,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     tCtx.fill('evenodd')
 
     // V2 smooth global line — drawn on top of the sea mask to eliminate staircase edges
-    if (coastlineV2 && coastlineChains.length > 0) {
+    if (coastlineV2 && beachStrip && coastlineChains.length > 0) {
       tCtx.strokeStyle = beachColor
       tCtx.lineWidth = beachWidth * R * 2
       tCtx.lineJoin = 'round'
