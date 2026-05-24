@@ -1,4 +1,5 @@
-import type { MapStore } from '../mapStore'
+import type { MapStore, GeneratedHex, GridMetadata } from '../mapStore'
+import { combinedDimsMm, mapResolutionMpx } from '../mapStore'
 
 export type ImageTransform = {
   translateX: number  // fraction of paperWidth offset from paper center
@@ -7,35 +8,19 @@ export type ImageTransform = {
   rotation: number    // degrees
 }
 
-export type HexCrop = {
-  q: number
-  r: number
-  cx: number   // center x in image pixel space
-  cy: number   // center y in image pixel space
-  size: number // crop size in pixels
-}
-
 export type MapImageSlice = {
   dataSource: 'osm' | 'map_image'
   mapImageDataUrl: string | null
   mapImageNaturalSize: { w: number; h: number } | null
   mapImageTransform: ImageTransform
   mapImageOpacity: number
-  mapImageModalOpen: boolean
-  mapImageModalStep: 'upload' | 'align' | 'classify'
-  mapImageClassifyStatus: 'idle' | 'loading' | 'done' | 'error'
-  mapImageClassifyProgress: { message: string; progress: number } | null
-  mapImageConfidenceVisible: boolean
 
   setMapImageDataUrl: (url: string, w: number, h: number) => void
   setMapImageTransform: (t: Partial<ImageTransform>) => void
   setMapImageOpacity: (v: number) => void
-  openMapImageModal: () => void
-  closeMapImageModal: () => void
-  setMapImageModalStep: (step: 'upload' | 'align' | 'classify') => void
   clearMapImage: () => void
-  fetchMapImageClassification: (hexCrops: HexCrop[]) => Promise<void>
-  setMapImageConfidenceVisible: (v: boolean) => void
+  startImageImport: () => Promise<void>
+  confirmImageAlign: () => void
 }
 
 const DEFAULT_TRANSFORM: ImageTransform = { translateX: 0, translateY: 0, scaleFrac: 1, rotation: 0 }
@@ -48,17 +33,11 @@ export const createMapImageSlice = (set: Set, get: () => MapStore): MapImageSlic
   mapImageNaturalSize: null,
   mapImageTransform: DEFAULT_TRANSFORM,
   mapImageOpacity: 0.6,
-  mapImageModalOpen: false,
-  mapImageModalStep: 'upload',
-  mapImageClassifyStatus: 'idle',
-  mapImageClassifyProgress: null,
-  mapImageConfidenceVisible: false,
 
   setMapImageDataUrl: (url, w, h) => set({
     mapImageDataUrl: url,
     mapImageNaturalSize: { w, h },
     mapImageTransform: DEFAULT_TRANSFORM,
-    mapImageModalStep: 'align',
   }),
 
   setMapImageTransform: (t) => set((s) => ({
@@ -67,125 +46,83 @@ export const createMapImageSlice = (set: Set, get: () => MapStore): MapImageSlic
 
   setMapImageOpacity: (v) => set({ mapImageOpacity: v }),
 
-  openMapImageModal: () => set({ mapImageModalOpen: true, mapImageModalStep: 'upload' }),
-
-  closeMapImageModal: () => set({ mapImageModalOpen: false }),
-
-  setMapImageModalStep: (step) => set({ mapImageModalStep: step }),
-
-  clearMapImage: () => set({
+  clearMapImage: () => set((s) => ({
     dataSource: 'osm',
     mapImageDataUrl: null,
     mapImageNaturalSize: null,
     mapImageTransform: DEFAULT_TRANSFORM,
-    mapImageModalOpen: false,
-    mapImageModalStep: 'upload',
-    mapImageClassifyStatus: 'idle',
-    mapImageClassifyProgress: null,
-    mapImageConfidenceVisible: false,
-  }),
+    roadEdges: [],
+    riverEdges: [],
+    settlements: [],
+    roadsStatus: 'idle',
+    settlementsStatus: 'idle',
+    generatedHexes: s.generatedHexes.map(h => ({
+      ...h,
+      terrain: 'clear', terrains: [],
+      elevation_class: null,
+    })),
+    step: s.step === 'image-align' ? 'setup' : s.step,
+  })),
 
-  fetchMapImageClassification: async (hexCrops) => {
-    const { mapImageDataUrl } = get()
-    if (!mapImageDataUrl) return
+  startImageImport: async () => {
+    const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth, marginMm } = get()
+    if (framePixelWidth === 0) return
 
-    set({ mapImageClassifyStatus: 'loading', mapImageClassifyProgress: { message: 'Starting…', progress: 0 } })
+    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+    const res = mapResolutionMpx(center[1], zoom)
+    const widthM = framePixelWidth * res
+    const heightM = widthM * (chMm / cwMm)
 
-    // Compress image to max 2000px wide before sending
-    const imageB64 = await compressImage(mapImageDataUrl, 2000)
-
+    set({ generateStatus: 'loading', generateError: null, generateProgress: null })
     try {
-      const resp = await fetch('/api/generate/map-image-stream', {
+      const resp = await fetch('/api/generate/grid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_b64: imageB64, hex_crops: hexCrops }),
+        body: JSON.stringify({
+          center_lon: center[0], center_lat: center[1],
+          bearing, width_m: widthM, height_m: heightM,
+          hex_size_mm: hexSizeMm, paper_size: paperSize,
+          orientation, hex_orientation: hexOrientation,
+          paper_width_mm: cwMm, paper_height_mm: chMm,
+          margin_mm: marginMm,
+        }),
       })
-
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-
-      const reader = resp.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const jsonStr = line.slice(6).trim()
-          if (!jsonStr) continue
-          let event: Record<string, unknown>
-          try { event = JSON.parse(jsonStr) } catch { continue }
-
-          if (event.step === 'done') {
-            const hexResults = event.hexes as Array<{
-              q: number; r: number; terrain: string; elevation_class: string;
-              confidence: number; notes: string
-            }>
-            const roadEdges = event.road_edges as Array<{ q1: number; r1: number; q2: number; r2: number; tier: number }>
-            const riverEdges = event.river_edges as Array<{ q1: number; r1: number; q2: number; r2: number }>
-
-            // Build lookup for fast hex update
-            const resultMap = new Map(hexResults.map(h => [`${h.q},${h.r}`, h]))
-
-            set((s) => ({
-              generatedHexes: s.generatedHexes.map((h) => {
-                const r = resultMap.get(`${h.q},${h.r}`)
-                if (!r) return h
-                return {
-                  ...h,
-                  terrain: r.terrain,
-                  terrains: r.terrain === 'clear' ? [] : [r.terrain],
-                  elevation_class: r.elevation_class as 'flat' | 'hills' | 'mountains',
-                  ai_confidence: r.confidence,
-                  ai_notes: r.notes,
-                }
-              }),
-              roadEdges: roadEdges.map(e => ({ ...e, manual: true as const })),
-              riverEdges: riverEdges,
-              generateStatus: 'done' as const,
-              roadsStatus: 'done' as const,
-              dataSource: 'map_image' as const,
-              mapImageClassifyStatus: 'done' as const,
-              mapImageClassifyProgress: null,
-              mapImageModalOpen: false,
-              mapImageConfidenceVisible: true,
-            }))
-          } else if (event.step === 'error') {
-            set({ mapImageClassifyStatus: 'error', mapImageClassifyProgress: null })
-          } else {
-            set({ mapImageClassifyProgress: { message: event.message as string, progress: event.progress as number } })
-          }
-        }
-      }
-    } catch (err) {
-      set({ mapImageClassifyStatus: 'error', mapImageClassifyProgress: null })
-      console.error('Map image classification failed:', err)
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+      const placeholder: GeneratedHex[] = data.hexes.map((h: GeneratedHex) => ({
+        ...h,
+        terrain: 'clear', terrains: [], coverage: {},
+        isLake: false, lakeManualOverride: false,
+        elevation_avg_m: null, elevation_median_m: null,
+        elevation_max_m: null, elevation_min_m: null,
+        elevation_range_m: null, elevation_class: null,
+        elevation_manual_override: false, coastline_clip: null,
+      }))
+      set({
+        step: 'image-align',
+        generatedHexes: placeholder,
+        generatedMetadata: data.metadata as GridMetadata,
+        dataSource: 'map_image',
+        generateStatus: 'done',
+        generateProgress: null,
+        activeTool: { type: 'align-image' },
+        highlightedHexes: {},
+        highlightLines: {},
+        highlightEdgePaths: {},
+        highlightPaintMode: false,
+        roadEdges: [],
+        riverEdges: [],
+        settlements: [],
+        roadsStatus: 'idle',
+        settlementsStatus: 'idle',
+      })
+    } catch (e) {
+      set({ generateStatus: 'error', generateError: String(e), generateProgress: null })
     }
   },
 
-  setMapImageConfidenceVisible: (v) => set({ mapImageConfidenceVisible: v }),
+  confirmImageAlign: () => set({
+    step: 'terrain',
+    dataSource: 'map_image',
+  }),
 })
-
-async function compressImage(dataUrl: string, maxWidth: number): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.naturalWidth)
-      const w = Math.round(img.naturalWidth * scale)
-      const h = Math.round(img.naturalHeight * scale)
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, w, h)
-      const compressed = canvas.toDataURL('image/jpeg', 0.85)
-      resolve(compressed.split(',')[1])
-    }
-    img.src = dataUrl
-  })
-}

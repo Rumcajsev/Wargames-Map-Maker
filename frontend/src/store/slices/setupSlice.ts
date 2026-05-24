@@ -2,7 +2,7 @@ import type { MapStore, PaperSize, Orientation, MapMode, DiptychJoin, HexOrienta
 import { combinedDimsMm, mapResolutionMpx } from '../mapStore'
 
 export type SetupSlice = {
-  step: 'setup' | 'terrain'
+  step: 'setup' | 'terrain' | 'image-align'
   paperSize: PaperSize
   orientation: Orientation
   mapMode: MapMode

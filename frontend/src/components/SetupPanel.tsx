@@ -14,6 +14,7 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
     setPaperSize, setOrientation, setMapMode, setDiptychJoin,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     generateMap, setBlankMap,
+    startImageImport,
   } = useMapStore()
 
   const [elapsed, setElapsed] = useState(0)
@@ -216,6 +217,30 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
             Style Presets…
           </button>
         )}
+        <button
+          onClick={startImageImport}
+          disabled={generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0}
+          style={{
+            width: '100%',
+            padding: '10px 0',
+            marginBottom: 8,
+            background: 'none',
+            color: framePixelWidth === 0 ? '#3a3a5a' : '#7a9e8a',
+            border: '1px solid #2a4a3a',
+            borderRadius: 4,
+            cursor: (generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0) ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            opacity: framePixelWidth === 0 ? 0.5 : 1,
+          }}
+          onMouseEnter={e => { if (framePixelWidth > 0) { e.currentTarget.style.borderColor = '#4a7a5a'; e.currentTarget.style.color = '#a0c8b0' } }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a4a3a'; e.currentTarget.style.color = framePixelWidth === 0 ? '#3a3a5a' : '#7a9e8a' }}
+        >
+          Import historical map
+        </button>
+
         <button
           onClick={generateMap}
           disabled={generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0}

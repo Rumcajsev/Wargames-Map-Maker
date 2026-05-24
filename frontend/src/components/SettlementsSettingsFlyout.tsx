@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useMapStore, DEFAULT_SETTLEMENT_TIER_STYLES, type SettlementTier } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_SETTLEMENT_FILL, PALETTE_SETTLEMENT_STROKE, PALETTE_BUILDINGS, PALETTE_BUILDING_STROKE } from '../palettes'
+import { FlyoutContainer, FlyoutHeader, ToggleButtonGroup } from './ui'
 
 interface Props {
   tier: SettlementTier
@@ -43,62 +44,21 @@ export function SettlementsSettingsFlyout({ tier, anchorY, onClose }: Props) {
   const top = Math.min(anchorY, window.innerHeight - 320 - 8)
 
   return (
-    <div
-      data-settlements-flyout=""
-      style={{
-        position: 'fixed',
-        left: 204,
-        top,
-        width: 210,
-        background: '#0e0f18',
-        border: '1px solid #2a2a4a',
-        borderRadius: 4,
-        padding: '10px 12px',
-        zIndex: 100,
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: 11,
-        color: '#a0a0c0',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#e0e0f0', letterSpacing: 0.5 }}>{TIER_LABELS[tier]}</span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button
-            onClick={() => setSettlementTierStyle(tier, { ...DEFAULT_SETTLEMENT_TIER_STYLES[tier] })}
-            title="Reset to default"
-            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 12, lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-          >↺</button>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-          >×</button>
-        </div>
-      </div>
+    <FlyoutContainer top={top} width={210} data-settlements-flyout="">
+      <FlyoutHeader
+        title={TIER_LABELS[tier]}
+        onClose={onClose}
+        onReset={() => setSettlementTierStyle(tier, { ...DEFAULT_SETTLEMENT_TIER_STYLES[tier] })}
+      />
 
       {/* Mode toggle */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ ...labelStyle, marginBottom: 4 }}>Display</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['icon', 'buildings'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setSettlementTierStyle(tier, { displayMode: m })}
-              style={{
-                flex: 1, padding: '3px 0', fontSize: 10,
-                background: style.displayMode === m ? '#1e2a3a' : 'none',
-                border: `1px solid ${style.displayMode === m ? '#4a7aaa' : '#2a2a4a'}`,
-                color: style.displayMode === m ? '#a0c0e0' : '#5a5a7a',
-                borderRadius: 3, cursor: 'pointer',
-              }}
-            >{m}</button>
-          ))}
-        </div>
+        <ToggleButtonGroup
+          options={[{ value: 'icon', label: 'icon' }, { value: 'buildings', label: 'buildings' }]}
+          value={style.displayMode}
+          onChange={m => setSettlementTierStyle(tier, { displayMode: m })}
+        />
       </div>
 
       {/* Icon controls */}
@@ -106,21 +66,11 @@ export function SettlementsSettingsFlyout({ tier, anchorY, onClose }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
             <div style={{ ...labelStyle, marginBottom: 4 }}>Shape</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['circle', 'square'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSettlementTierStyle(tier, { shape: s })}
-                  style={{
-                    flex: 1, padding: '3px 0', fontSize: 10,
-                    background: style.shape === s ? '#1e2a3a' : 'none',
-                    border: `1px solid ${style.shape === s ? '#4a7aaa' : '#2a2a4a'}`,
-                    color: style.shape === s ? '#a0c0e0' : '#5a5a7a',
-                    borderRadius: 3, cursor: 'pointer',
-                  }}
-                >{s}</button>
-              ))}
-            </div>
+            <ToggleButtonGroup
+              options={[{ value: 'circle', label: 'circle' }, { value: 'square', label: 'square' }]}
+              value={style.shape}
+              onChange={s => setSettlementTierStyle(tier, { shape: s })}
+            />
           </div>
           <div>
             <div style={{ ...rowStyle }}>
@@ -157,21 +107,11 @@ export function SettlementsSettingsFlyout({ tier, anchorY, onClose }: Props) {
           {/* Algorithm toggle */}
           <div>
             <div style={{ ...labelStyle, marginBottom: 4 }}>Algorithm</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['v1', 'v2'] as const).map(alg => (
-                <button
-                  key={alg}
-                  onClick={() => setSettlementTierStyle(tier, { buildingAlgorithm: alg })}
-                  style={{
-                    flex: 1, padding: '3px 0', fontSize: 10,
-                    background: style.buildingAlgorithm === alg ? '#1e2a3a' : 'none',
-                    border: `1px solid ${style.buildingAlgorithm === alg ? '#4a7aaa' : '#2a2a4a'}`,
-                    color: style.buildingAlgorithm === alg ? '#a0c0e0' : '#5a5a7a',
-                    borderRadius: 3, cursor: 'pointer',
-                  }}
-                >{alg}</button>
-              ))}
-            </div>
+            <ToggleButtonGroup
+              options={[{ value: 'v1', label: 'v1' }, { value: 'v2', label: 'v2' }]}
+              value={style.buildingAlgorithm}
+              onChange={alg => setSettlementTierStyle(tier, { buildingAlgorithm: alg })}
+            />
           </div>
 
           {/* V2 controls */}
@@ -305,6 +245,6 @@ export function SettlementsSettingsFlyout({ tier, anchorY, onClose }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </FlyoutContainer>
   )
 }

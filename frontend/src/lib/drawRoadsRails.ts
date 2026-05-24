@@ -51,6 +51,7 @@ export function drawRoadsAndRails(rCtx: Ctx, {
           const pts = chain.map(([lon, lat]) => project(lon, lat))
           if (pts.length < 2) continue
           const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
+          rCtx.setLineDash(dash)
           rc.path(d, {
             roughness: s.roughness ?? 0.3,
             bowing: s.bowing ?? 0.5,
@@ -58,8 +59,8 @@ export function drawRoadsAndRails(rCtx: Ctx, {
             strokeWidth: w,
             fill: 'none',
             seed: Math.abs(Math.round(pts[0][0] * 7 + pts[0][1] * 13)) + tier,
-            strokeLineDash: dash,
           })
+          rCtx.setLineDash([])
         }
       }
     } else {

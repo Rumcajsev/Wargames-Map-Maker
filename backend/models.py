@@ -74,16 +74,10 @@ class HexLookupConfig(BaseModel):
     types: Optional[list[str]] = None
 
 
-class HexCrop(BaseModel):
-    q: int
-    r: int
-    cx: float
-    cy: float
-    size: int = 64
-
 class MapImageClassifyConfig(BaseModel):
     image_b64: str
-    hex_crops: list[HexCrop]
+    cols: int
+    rows: int
 
 class SettlementRoadsConfig(BaseRegionConfig):
     hex_orientation: str        # "flat" | "pointy"

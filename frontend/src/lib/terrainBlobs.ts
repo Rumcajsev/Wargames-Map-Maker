@@ -1,7 +1,7 @@
 /** Terrain blob building and field-style rendering utilities.
  *  Depends on geometry, noise, and projection libs — no React, no store state. */
 
-import { chaikin, catmullRom, distToSeg, subdivideClosedPolygon, resampleSmoothQuad } from './geometry'
+import { chaikin, catmullRom, distToSeg, subdivideClosedPolygon, resampleSmoothQuad, douglasPeucker } from './geometry'
 import { makePermutation, perlinNoise2D, perturbXY, perturbNormal } from './noise'
 import { projectToCanvas } from './projection'
 import { hexTerrainLayers } from '../store/mapStore'
@@ -100,6 +100,8 @@ export function buildSmoothedRing(
   hexVerts: [number, number][],
   tol: number,
   steps: number,
+  chaikinPasses = 3,
+  dpEpsilon = 0,
 ): [number, number][] {
   const n = ring.length
   const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
@@ -109,7 +111,8 @@ export function buildSmoothedRing(
   let coast: [number, number][] | null = null
   const flushCoast = () => {
     if (!coast || coast.length < 2) { coast = null; return }
-    out.push(...catmullRom(coast, steps))
+    const simplified = dpEpsilon > 0 ? douglasPeucker(coast, dpEpsilon) : coast
+    out.push(...catmullRom(chaikin(simplified, chaikinPasses, false), steps))
     coast = null
   }
   for (let j = 0; j < n; j++) {
@@ -124,6 +127,90 @@ export function buildSmoothedRing(
   }
   flushCoast()
   return out
+}
+
+/** Convert a coastline_clip ring into one open chain using ALL its points.
+ *  Cuts the closed ring open at the first hex-edge segment (so the endpoints
+ *  sit on a hex boundary, enabling stitching across hexes).  Returns null for
+ *  rings with no hex-edge contact — those are closed islands and are handled
+ *  separately. */
+export function getRingAsChain(
+  ring: [number, number][],
+  hexVerts: [number, number][],
+  tol: number,
+): [number, number][] | null {
+  const n = ring.length
+  if (n < 3) return null
+  const hexEdge = buildHexEdgeFlags(ring, hexVerts, tol)
+  let firstHex = -1
+  for (let i = 0; i < n; i++) if (hexEdge[i]) { firstHex = i; break }
+  if (firstHex === -1) return null   // no hex-edge contact — closed island
+  // Open chain: start at the point after the cut edge, go all the way round.
+  // Includes geographic segments AND any remaining hex-edge segments within;
+  // DP will simplify short collinear hex-edge segments away during smoothing.
+  const chain: [number, number][] = []
+  for (let j = 0; j < n; j++) chain.push(ring[(firstHex + 1 + j) % n])
+  return chain
+}
+
+/** Collect coastline chains from all coastal hexes and stitch them end-to-end.
+ *  Uses the full ring outline (not just geographic segments) so no data is
+ *  discarded before DP simplification. */
+export function stitchCoastlineRuns(
+  coastlineClips: Map<string, [number, number][][]>,
+  hexVertMap: Map<string, [number, number][]>,
+  tol: number,
+): [number, number][][] {
+  const allRuns: [number, number][][] = []
+  for (const [key, rings] of coastlineClips) {
+    const verts = hexVertMap.get(key)
+    if (!verts) continue
+    for (const ring of rings) {
+      const chain = getRingAsChain(ring, verts, tol)
+      if (chain && chain.length >= 2) allRuns.push(chain)
+    }
+  }
+
+  const snap = (p: [number, number]) =>
+    `${Math.round(p[0] / tol * 10)},${Math.round(p[1] / tol * 10)}`
+
+  const startMap = new Map<string, number>()  // snap(start) → runIdx
+  const endMap   = new Map<string, number>()  // snap(end)   → runIdx
+  allRuns.forEach((r, i) => {
+    startMap.set(snap(r[0]), i)
+    endMap.set(snap(r[r.length - 1]), i)
+  })
+
+  const used = new Set<number>()
+  const chains: [number, number][][] = []
+
+  for (let seed = 0; seed < allRuns.length; seed++) {
+    if (used.has(seed)) continue
+    used.add(seed)
+    const chain: [number, number][] = [...allRuns[seed]]
+
+    // grow forward
+    for (;;) {
+      const k = snap(chain[chain.length - 1])
+      const next = startMap.get(k) ?? -1
+      if (next < 0 || used.has(next)) break
+      used.add(next)
+      chain.push(...allRuns[next].slice(1))
+    }
+
+    // grow backward
+    for (;;) {
+      const k = snap(chain[0])
+      const prev = endMap.get(k) ?? -1
+      if (prev < 0 || used.has(prev)) break
+      used.add(prev)
+      chain.unshift(...allRuns[prev].slice(0, -1))
+    }
+
+    if (chain.length >= 2) chains.push(chain)
+  }
+
+  return chains
 }
 
 // ── Blob shape helpers ───────────────────────────────────────────────────────
@@ -328,7 +415,9 @@ export function computeConnectedComponents(hexes: { q: number; r: number; terrai
 }
 
 // ── Field-style rendering ────────────────────────────────────────────────────
-
+// Detached from active use — kept for future reuse. Nothing below this line is
+// referenced by the current render pipeline (blob mode only).
+/*
 export function parseHexColor(hex: string): [number, number, number] {
   const c = parseInt(hex.replace('#', ''), 16)
   return [(c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff]
@@ -447,3 +536,4 @@ export function buildFieldCanvas(
   octx.putImageData(imageData, 0, 0)
   return offscreen
 }
+*/

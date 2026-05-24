@@ -3,6 +3,7 @@ import { useMapStore } from '../store/mapStore'
 import { RoadsSettingsFlyout } from './RoadsSettingsFlyout'
 import { RoadGeomFlyout } from './RoadGeomFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
+import { SectionLabel, EnabledSection, ToggleButtonGroup } from './ui'
 import { ToolButton } from './ToolButton'
 
 const ROAD_TIERS = [
@@ -170,7 +171,6 @@ export function RoadsSidebar() {
 
   const [openFlyout, setOpenFlyout] = useState<FlyoutKey | null>(null)
   const [flyoutAnchorY, setFlyoutAnchorY] = useState(0)
-  const [bridgesOpen, setBridgesOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -715,57 +715,25 @@ export function RoadsSidebar() {
           )
         })()}
 
-        {/* Bridges collapsible section */}
-        <div style={{ ...sectionStyle, padding: 0 }}>
-          <div
-            onClick={() => setBridgesOpen(o => !o)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '6px 10px', cursor: 'pointer', userSelect: 'none',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#1a1a2e')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        {/* Bridges section */}
+        <div style={sectionStyle}>
+          <SectionLabel>Bridges</SectionLabel>
+          <EnabledSection
+            label="Show bridges"
+            enabled={bridgesEnabled}
+            onToggle={setBridgesEnabled}
+            accentColor="#7a6ab0"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ ...labelStyle, marginBottom: 0 }}>Bridges</span>
-              <span style={{ fontSize: 10, color: bridgesEnabled ? '#5a9e6f' : '#5a5a7a' }}>
-                {bridgesEnabled ? 'on' : 'off'}
-              </span>
-            </div>
-            <span style={{ color: '#4a4a6a', fontSize: 10 }}>{bridgesOpen ? '▲' : '▼'}</span>
-          </div>
-
-          {bridgesOpen && (
-            <div style={{ padding: '0 10px 10px' }}>
-              {/* Enable/disable */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 11 }}>Show bridges</span>
-                <input
-                  type="checkbox"
-                  checked={bridgesEnabled}
-                  onChange={e => setBridgesEnabled(e.target.checked)}
-                  style={{ accentColor: '#7a6ab0' }}
-                />
-              </div>
-
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Style picker */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 11 }}>Style</span>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {(['plank', 'icon'] as const).map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setBridgeStyle(s)}
-                      style={{
-                        padding: '2px 8px', fontSize: 10, cursor: 'pointer',
-                        background: bridgeStyle === s ? '#2a2a4a' : 'none',
-                        border: `1px solid ${bridgeStyle === s ? '#4a4a8a' : '#2a2a4a'}`,
-                        borderRadius: 3, color: bridgeStyle === s ? '#a0a0c0' : '#4a4a6a',
-                        fontFamily: 'inherit',
-                      }}
-                    >{s}</button>
-                  ))}
-                </div>
+              <div>
+                <div style={{ ...labelStyle, marginBottom: 4 }}>Style</div>
+                <ToggleButtonGroup
+                  options={[{ value: 'plank', label: 'plank' }, { value: 'icon', label: 'icon' }]}
+                  value={bridgeStyle}
+                  onChange={setBridgeStyle}
+                  accent="#7a6ab0"
+                />
               </div>
 
               {/* Tier list */}
@@ -818,7 +786,7 @@ export function RoadsSidebar() {
                 >+ Add tier</button>
               )}
             </div>
-          )}
+          </EnabledSection>
         </div>
 
       </div>

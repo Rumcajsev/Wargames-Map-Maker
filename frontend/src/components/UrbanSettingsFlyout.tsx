@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useMapStore, DEFAULT_URBAN_STYLE } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_BUILDINGS, PALETTE_BUILDING_STROKE } from '../palettes'
+import { FlyoutContainer, FlyoutHeader } from './ui'
 
 interface Props {
   anchorY: number
@@ -27,34 +28,12 @@ export function UrbanSettingsFlyout({ anchorY, onClose }: Props) {
   const top = Math.min(anchorY, window.innerHeight - 400 - 8)
 
   return (
-    <div
-      data-urban-flyout=""
-      style={{
-        position: 'fixed', left: 204, top,
-        width: 210, background: '#0e0f18', border: '1px solid #2a2a4a',
-        borderRadius: 4, padding: '10px 12px', zIndex: 100,
-        fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#a0a0c0',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#e0e0f0', letterSpacing: 0.5 }}>Urban Style</span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button
-            onClick={() => setUrbanStyle({ ...DEFAULT_URBAN_STYLE })}
-            title="Reset to default"
-            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 12, lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-          >↺</button>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-          >×</button>
-        </div>
-      </div>
+    <FlyoutContainer top={top} width={210} data-urban-flyout="">
+      <FlyoutHeader
+        title="Urban Style"
+        onClose={onClose}
+        onReset={() => setUrbanStyle({ ...DEFAULT_URBAN_STYLE })}
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
@@ -118,6 +97,6 @@ export function UrbanSettingsFlyout({ anchorY, onClose }: Props) {
             style={{ width: '100%' }} />
         </div>
       </div>
-    </div>
+    </FlyoutContainer>
   )
 }

@@ -59,6 +59,14 @@ Supporting geometry and data libs:
 
 **Rule: new canvas rendering logic always goes in `src/lib/`, never inline in a component.** Each lib function takes an explicit params struct so it's testable and reusable without React.
 
+### Shared UI primitives — `src/components/ui.tsx`
+
+`SliderRow`, `ResetButton`, and `SectionLabel` live in `ui.tsx`. **Before writing any of these patterns inline, import from there.** If a new pattern appears in more than one place, add it to `ui.tsx` instead of duplicating it.
+
+- `SliderRow` — label+value header with either a built-in `<input type="range">` (pass `min/max/step/onChange`) or custom children
+- `ResetButton` — `↺` icon; `confirm={true}` (default) = two-step "Sure?", `confirm={false}` = immediate
+- `SectionLabel` — uppercase sidebar section header with optional `action` slot on the right
+
 ---
 
 ## Backend architecture

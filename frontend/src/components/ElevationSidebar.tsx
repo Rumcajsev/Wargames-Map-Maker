@@ -1,29 +1,10 @@
 import { useMapStore } from '../store/mapStore'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
+import { SliderRow, ResetButton, SectionLabel } from './ui'
 
-function SliderRow({ label, value, min, max, step, unit, onChange }: {
-  label: string
-  value: number
-  min: number
-  max: number
-  step: number
-  unit: string
-  onChange: (v: number) => void
-}) {
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-        <span style={{ fontSize: 10, color: '#7a7a9a' }}>{label}</span>
-        <span style={{ fontSize: 10, color: '#5a5a7a' }}>{value}{unit}</span>
-      </div>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        style={{ width: '100%', accentColor: '#3a6a9a' }}
-      />
-    </div>
-  )
-}
+type HachureKey = 'spacing' | 'length' | 'wobble' | 'jitter' | 'hillWidth' | 'mtnWidth' | 'smoothing'
+
+const HACHURE_DEFAULTS = { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 }
 
 export function ElevationSidebar() {
   const {
@@ -44,6 +25,9 @@ export function ElevationSidebar() {
     clearElevationOverrides,
     setActiveTool,
     dataSource,
+    mapStyle,
+    hachureParams,
+    setHachureParam,
   } = useMapStore()
 
   const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
@@ -224,6 +208,36 @@ export function ElevationSidebar() {
               Clear {overrideCount} manual override{overrideCount !== 1 ? 's' : ''}
             </button>
           )}
+        </div>
+      )}
+
+      {/* ── Hatching style (historical mode only) ── */}
+      {mapStyle === 'historical_simple' && hasData && (
+        <div style={sectionStyle}>
+          <SectionLabel action={
+            <ResetButton onReset={() => {
+              for (const [k, v] of Object.entries(HACHURE_DEFAULTS)) setHachureParam(k as HachureKey, v)
+            }} />
+          }>Hatching</SectionLabel>
+          {(
+            [
+              { key: 'smoothing', label: 'Smoothing',      min: 0,   max: 6,   step: 1,    unit: '' },
+              { key: 'spacing',   label: 'Spacing',       min: 0.5, max: 12,  step: 0.5,  unit: 'px' },
+              { key: 'length',    label: 'Stroke length',  min: 6,   max: 48,  step: 1,    unit: 'px' },
+              { key: 'wobble',    label: 'Wobble',         min: 0,   max: 8,   step: 0.25, unit: 'px' },
+              { key: 'jitter',    label: 'Angle jitter',   min: 0,   max: 0.6, step: 0.05, unit: 'rad' },
+              { key: 'hillWidth', label: 'Hill width',     min: 0.2, max: 3.0, step: 0.1,  unit: 'px' },
+              { key: 'mtnWidth',  label: 'Mtn width',      min: 0.2, max: 3.0, step: 0.1,  unit: 'px' },
+            ] as { key: HachureKey; label: string; min: number; max: number; step: number; unit: string }[]
+          ).map(({ key, label, min, max, step, unit }) => (
+            <SliderRow
+              key={key}
+              label={label}
+              value={hachureParams[key]}
+              min={min} max={max} step={step} unit={unit}
+              onChange={v => setHachureParam(key, v)}
+            />
+          ))}
         </div>
       )}
 

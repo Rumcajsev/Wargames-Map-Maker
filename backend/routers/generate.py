@@ -103,7 +103,7 @@ async def elevation_stream(config: ElevationConfig) -> StreamingResponse:
 async def map_image_stream(config: MapImageClassifyConfig) -> StreamingResponse:
     from services.map_image import map_image_stream_generator
     return StreamingResponse(
-        map_image_stream_generator(config.image_b64, [dict(hc) for hc in config.hex_crops]),
+        map_image_stream_generator(config.image_b64, config.cols, config.rows),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

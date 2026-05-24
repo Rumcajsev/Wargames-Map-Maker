@@ -3,6 +3,7 @@ import { useMapStore, type LabelOverlay } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_HIGHLIGHTS } from '../palettes'
 import { useFlyoutTop } from './useFlyoutTop'
+import { SliderRow } from './ui'
 
 interface Props {
   overlay: LabelOverlay
@@ -17,15 +18,6 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase',
 }
 
-const SliderRow = ({ label, value, children }: { label: string; value: string; children: React.ReactNode }) => (
-  <div style={{ marginBottom: 10 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-      <span style={labelStyle}>{label}</span>
-      <span style={{ fontSize: 10, color: '#6a6a8a' }}>{value}</span>
-    </div>
-    {children}
-  </div>
-)
 
 const PALETTE_LABEL_BG = [
   'transparent',

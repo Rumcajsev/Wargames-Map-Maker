@@ -16,7 +16,7 @@ export const STYLE_PRESET_KEYS: string[] = [
   'edgeBlobSmooth', 'edgeBlobOffset', 'edgeBlobBump',
   'edgeBlobSweepFreq', 'edgeBlobLobeFreq', 'edgeBlobLobeAmp',
   'edgeBlobLobeThreshold', 'edgeBlobLobeDirection', 'edgeBlobWidth',
-  'fieldFreq', 'fieldAmp', 'fieldOctaves', 'fieldPersistence', 'fieldWildness',
+  // 'fieldFreq', 'fieldAmp', 'fieldOctaves', 'fieldPersistence', 'fieldWildness', // field render detached
   'autoLakesEnabled', 'lakeSensitivity',
   'lakeBlobSmooth', 'lakeBlobOffset', 'lakeBlobBump',
   'lakeBlobSweepFreq', 'lakeBlobLobeFreq', 'lakeBlobLobeAmp',
@@ -35,7 +35,8 @@ export const STYLE_PRESET_KEYS: string[] = [
   // Rivers
   'riverStyle', 'canalStyle',
   'riverWidthScale', 'canalWidthScale',
-  'riverFlowStyle', 'riverCurveSteps', 'riverWobble', 'riverDetail', 'riverWiggliness',
+  // 'riverFlowStyle', 'riverWiggliness',  // detached
+  'riverCurveSteps', 'riverWobble', 'riverDetail',
   'riverWiggleAmp', 'riverWiggleFreq', 'riverSmoothing',
   'showRiverLabels', 'riverLabelColor',
   // Bridges

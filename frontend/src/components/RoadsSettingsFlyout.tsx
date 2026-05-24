@@ -3,6 +3,7 @@ import { useMapStore, DEFAULT_ROAD_TIER_STYLES, DEFAULT_RAIL_STYLE } from '../st
 import type { RoadDashStyle } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_ROAD_SURFACE, PALETTE_ROAD_CASING, PALETTE_RAIL_LIGHT, PALETTE_RAIL_DARK } from '../palettes'
+import { FlyoutContainer, FlyoutHeader, EnabledSection, ToggleButtonGroup } from './ui'
 
 const TIER_LABELS = ['Motorway', 'Primary', 'Secondary'] as const
 
@@ -63,7 +64,7 @@ export function RoadsSettingsFlyout(props: Props) {
     }
   }
 
-  const flyoutHeight = type === 'rail' ? 520 : 580
+  const flyoutHeight = type === 'rail' ? 520 : (isHistorical ? 420 : 580)
   const top = Math.min(anchorY, window.innerHeight - flyoutHeight - 8)
 
   const row = (label: string, value: React.ReactNode) => (
@@ -81,7 +82,7 @@ export function RoadsSettingsFlyout(props: Props) {
   )
 
   const sliderRow = (label: string, field: string, value: number, min: number, max: number, step: number) => (
-    <div style={{ opacity: overrideEnabled ? 1 : 0.4, pointerEvents: overrideEnabled ? 'auto' : 'none' }}>
+    <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
         <span style={{ color: '#6a6a8a', fontSize: 11 }}>{label}</span>
         <span style={{ color: '#5a5a7a', fontSize: 10 }}>{value.toFixed(step < 1 ? 2 : 0)}</span>
@@ -98,69 +99,27 @@ export function RoadsSettingsFlyout(props: Props) {
   const divider = <div style={{ borderTop: '1px solid #1e1f2e', margin: '10px 0' }} />
 
   return (
-    <div
-      data-roads-flyout=""
-      style={{
-        position: 'fixed',
-        left: 204,
-        top,
-        width: 200,
-        background: '#0e0f18',
-        border: '1px solid #2a2a4a',
-        borderRadius: 4,
-        padding: '10px 12px',
-        zIndex: 100,
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: 11,
-        color: '#a0a0c0',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#e0e0f0', letterSpacing: 0.5 }}>
-          {isRoad ? TIER_LABELS[tier!] : 'Rail'}
-        </span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button
-            onClick={() => {
-              if (isRoad && tier !== null) setRoadTierStyle(tier, { ...DEFAULT_ROAD_TIER_STYLES[tier] })
-              else if (!isRoad) setRailStyle({ ...DEFAULT_RAIL_STYLE })
-            }}
-            title="Reset visuals to default"
-            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 12, lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-          >↺</button>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-          >×</button>
-        </div>
-      </div>
+    <FlyoutContainer top={top} data-roads-flyout="">
+      <FlyoutHeader
+        title={isRoad ? TIER_LABELS[tier!] : 'Rail'}
+        onClose={onClose}
+        onReset={() => {
+          if (isRoad && tier !== null) setRoadTierStyle(tier, { ...DEFAULT_ROAD_TIER_STYLES[tier] })
+          else if (!isRoad) setRailStyle({ ...DEFAULT_RAIL_STYLE })
+        }}
+      />
 
       {isRoad && tier !== null && (() => {
         const s = roadTierStyles[tier]
         const dashRow = (label: string, value: RoadDashStyle, onChange: (v: RoadDashStyle) => void) => (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>{label}</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['solid', 'dashed', 'dotted'] as const).map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => onChange(opt)}
-                  style={{
-                    flex: 1, padding: '3px 0', fontSize: 10,
-                    background: value === opt ? '#1e2a1e' : 'none',
-                    border: `1px solid ${value === opt ? '#4a8a5a' : '#2a2a4a'}`,
-                    color: value === opt ? '#90c090' : '#5a5a7a',
-                    borderRadius: 3, cursor: 'pointer',
-                    fontFamily: 'ui-monospace, monospace',
-                  }}
-                >{opt}</button>
-              ))}
-            </div>
+            <ToggleButtonGroup
+              options={[{ value: 'solid', label: 'solid' }, { value: 'dashed', label: 'dashed' }, { value: 'dotted', label: 'dotted' }]}
+              value={value}
+              onChange={onChange}
+              accent="#5a9e6f"
+            />
           </div>
         )
         return (
@@ -177,21 +136,7 @@ export function RoadsSettingsFlyout(props: Props) {
             {!isHistorical && colorRow('Surface', s.inner, PALETTE_ROAD_SURFACE, v => setRoadTierStyle(tier, { inner: v }))}
             {!isHistorical && dashRow('Fill stroke', s.fillDash, v => setRoadTierStyle(tier, { fillDash: v }))}
             {colorRow(isHistorical ? 'Color' : 'Casing', s.outer, PALETTE_ROAD_CASING, v => setRoadTierStyle(tier, { outer: v }))}
-            {dashRow(isHistorical ? 'Stroke' : 'Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
-            {isHistorical && <>
-              <div>
-                {row('Roughness', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{(s.roughness ?? 0.3).toFixed(2)}</span>)}
-                <input type="range" min={0} max={3} step={0.05} value={s.roughness ?? 0.3}
-                  onChange={e => setRoadTierStyle(tier, { roughness: parseFloat(e.target.value) })}
-                  style={{ width: '100%', marginBottom: 8 }} />
-              </div>
-              <div>
-                {row('Bowing', <span style={{ color: '#5a5a7a', fontSize: 10 }}>{(s.bowing ?? 0.5).toFixed(2)}</span>)}
-                <input type="range" min={0} max={5} step={0.1} value={s.bowing ?? 0.5}
-                  onChange={e => setRoadTierStyle(tier, { bowing: parseFloat(e.target.value) })}
-                  style={{ width: '100%', marginBottom: 8 }} />
-              </div>
-            </>}
+            {dashRow(isHistorical ? 'Line' : 'Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
           </div>
         )
       })()}
@@ -200,22 +145,11 @@ export function RoadsSettingsFlyout(props: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 4 }}>Style</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['classic', 'cross'] as const).map(s => (
-                <button
-                  key={s}
-                  onClick={() => setRailStyle({ railStyle: s })}
-                  style={{
-                    flex: 1, padding: '3px 0', fontSize: 10,
-                    background: railStyle.railStyle === s ? '#1e2a3a' : 'none',
-                    border: `1px solid ${railStyle.railStyle === s ? '#4a7aaa' : '#2a2a4a'}`,
-                    color: railStyle.railStyle === s ? '#a0c0e0' : '#5a5a7a',
-                    borderRadius: 3, cursor: 'pointer',
-                    fontFamily: 'ui-monospace, monospace',
-                  }}
-                >{s}</button>
-              ))}
-            </div>
+            <ToggleButtonGroup
+              options={[{ value: 'classic', label: 'classic' }, { value: 'cross', label: 'cross' }]}
+              value={railStyle.railStyle}
+              onChange={s => setRailStyle({ railStyle: s })}
+            />
           </div>
 
           <div style={{ marginBottom: 8 }}>
@@ -235,24 +169,19 @@ export function RoadsSettingsFlyout(props: Props) {
 
       {divider}
 
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
-          <input
-            type="checkbox"
-            checked={overrideEnabled}
-            onChange={toggleOverride}
-            style={{ accentColor: isRoad ? '#5a9e6f' : '#4a9ab0', cursor: 'pointer' }}
-          />
-          <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: overrideEnabled ? '#a0c0a0' : '#4a4a6a' }}>
-            {isRoad ? 'Road geometry override' : 'Rail geometry override'}
-          </span>
-        </label>
-      </div>
-
-      {sliderRow('Wiggle amp', 'wiggleAmp', effectiveGeom.wiggleAmp, 0, 1, 0.01)}
-      {sliderRow('Wiggle freq', 'wiggleFreq', effectiveGeom.wiggleFreq, 0.5, 10, 0.1)}
-      {sliderRow('Path smoothing', 'pathSmoothing', effectiveGeom.pathSmoothing, 0, 50, 1)}
-      {sliderRow('Line smoothing', 'smoothing', effectiveGeom.smoothing, 0, 30, 1)}
-    </div>
+      <EnabledSection
+        label={isRoad ? 'Road geometry override' : 'Rail geometry override'}
+        enabled={overrideEnabled}
+        onToggle={toggleOverride}
+        accentColor={isRoad ? '#5a9e6f' : '#4a9ab0'}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {sliderRow('Wiggle amp', 'wiggleAmp', effectiveGeom.wiggleAmp, 0, 1, 0.01)}
+          {sliderRow('Wiggle freq', 'wiggleFreq', effectiveGeom.wiggleFreq, 0.5, 10, 0.1)}
+          {sliderRow('Path smoothing', 'pathSmoothing', effectiveGeom.pathSmoothing, 0, 50, 1)}
+          {sliderRow('Line smoothing', 'smoothing', effectiveGeom.smoothing, 0, 30, 1)}
+        </div>
+      </EnabledSection>
+    </FlyoutContainer>
   )
 }

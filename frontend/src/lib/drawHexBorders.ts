@@ -12,8 +12,15 @@ export function drawHexBorders(
   inMargin: (verts: [number, number][]) => boolean,
   lineScale = 1,
   excludedKeys?: Set<string>,
+  opacity = 0.35,
+  color = '#000000',
+  difference = false,
 ) {
   const borderLW = 0.5 * lineScale
+  bCtx.save()
+  bCtx.globalAlpha = opacity
+  if (difference) bCtx.globalCompositeOperation = 'difference'
+  const strokeColor = difference ? '#ffffff' : color
   for (const { hex, verts } of projected) {
     if (edgeMode === 'whole' && hex.partial) continue
     if (!hex.partial && !inMargin(verts)) continue
@@ -23,11 +30,11 @@ export function drawHexBorders(
       bCtx.moveTo(verts[0][0], verts[0][1])
       for (let i = 1; i < verts.length; i++) bCtx.lineTo(verts[i][0], verts[i][1])
       bCtx.closePath()
-      bCtx.strokeStyle = 'rgba(0,0,0,0.35)'
+      bCtx.strokeStyle = strokeColor
       bCtx.lineWidth = borderLW
       bCtx.stroke()
     } else if (borderMode === 'stubs') {
-      bCtx.strokeStyle = 'rgba(0,0,0,0.35)'
+      bCtx.strokeStyle = strokeColor
       bCtx.lineWidth = borderLW
       for (let i = 0; i < verts.length; i++) {
         const [x0, y0] = verts[i]
@@ -44,6 +51,7 @@ export function drawHexBorders(
       }
     }
   }
+  bCtx.restore()
 }
 
 // Collect the boundary edges of the visible hex grid (edges not shared between two visible hexes).

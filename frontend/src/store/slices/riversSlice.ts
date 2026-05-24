@@ -27,11 +27,11 @@ export type RiversSlice = {
   canalEditMode: boolean
   riverWidthScale: number
   canalWidthScale: number
-  riverFlowStyle: number
+  // riverFlowStyle: number  — defined but never wired to canvas or UI
   riverCurveSteps: number
   riverWobble: number
   riverDetail: number
-  riverWiggliness: number
+  // riverWiggliness: number  — defined but never wired to canvas or UI
   riverWiggleFreq: number
   riverWiggleAmp: number
   riverSmoothing: number
@@ -69,11 +69,11 @@ export type RiversSlice = {
   setCanalStyle: (s: Partial<RiverStyleConfig>) => void
   setCanalWidthScale: (v: number) => void
   setRiverWidthScale: (v: number) => void
-  setRiverFlowStyle: (v: number) => void
+  // setRiverFlowStyle: (v: number) => void  — detached
   setRiverCurveSteps: (v: number) => void
   setRiverWobble: (v: number) => void
   setRiverDetail: (v: number) => void
-  setRiverWiggliness: (v: number) => void
+  // setRiverWiggliness: (v: number) => void  — detached
   setRiverWiggleFreq: (v: number) => void
   setRiverWiggleAmp: (v: number) => void
   setRiverSmoothing: (v: number) => void
@@ -156,11 +156,10 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
     canalStyle: { ...DEFAULT_CANAL_STYLE },
     riverWidthScale: 1.0,
     canalWidthScale: 0.45,
-    riverFlowStyle: 1,
+    // riverFlowStyle / riverWiggliness — detached
     riverCurveSteps: 3,
     riverWobble: 0,
     riverDetail: 0,
-    riverWiggliness: 0,
     riverWiggleFreq: 2.5,
     riverWiggleAmp: 0.25,
     riverSmoothing: 10,
@@ -292,11 +291,10 @@ export const createRiversSlice = (set: Set, get: () => MapStore): RiversSlice =>
     setCanalStyle: (s) => set(st => ({ canalStyle: { ...st.canalStyle, ...s } })),
     setCanalWidthScale: (v) => set({ canalWidthScale: v }),
     setRiverWidthScale: (v) => set({ riverWidthScale: v }),
-    setRiverFlowStyle: (v) => set({ riverFlowStyle: v }),
+    // setRiverFlowStyle / setRiverWiggliness — detached
     setRiverCurveSteps: (v) => set({ riverCurveSteps: v }),
     setRiverWobble: (v) => set({ riverWobble: v }),
     setRiverDetail: (v) => set({ riverDetail: v }),
-    setRiverWiggliness: (v) => set({ riverWiggliness: v }),
     setRiverWiggleFreq: (v) => set({ riverWiggleFreq: v }),
     setRiverWiggleAmp: (v) => set({ riverWiggleAmp: v }),
     setRiverSmoothing: (v) => set({ riverSmoothing: v }),

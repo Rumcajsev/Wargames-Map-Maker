@@ -28,31 +28,3 @@ export function drawMapImageOverlay({
   ctx.restore()
 }
 
-export interface DrawConfidenceOverlayParams {
-  ctx: CanvasRenderingContext2D
-  hexes: Array<{ q: number; r: number; ai_confidence?: number }>
-  hexLayout: { flatTop: boolean }
-  outerRadiusPx: number
-  hexCenters: Map<string, [number, number]>
-  threshold: number
-}
-
-export function drawConfidenceOverlay({
-  ctx, hexes, hexCenters, outerRadiusPx, threshold,
-}: DrawConfidenceOverlayParams): void {
-  for (const h of hexes) {
-    const conf = h.ai_confidence
-    if (conf === undefined || conf >= threshold) continue
-    const center = hexCenters.get(`${h.q},${h.r}`)
-    if (!center) continue
-    const [cx, cy] = center
-    const alpha = 0.15 + 0.3 * (1 - conf / threshold)
-    ctx.save()
-    ctx.globalAlpha = alpha
-    ctx.fillStyle = '#ff8c00'
-    ctx.beginPath()
-    ctx.arc(cx, cy, outerRadiusPx * 0.85, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-  }
-}

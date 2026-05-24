@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMapStore, TERRAIN_COLORS } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_TERRAIN } from '../palettes'
-import { modeBtn } from './sidebarStyles'
+import { FlyoutContainer, FlyoutHeader, ToggleButtonGroup, EnabledSection } from './ui'
 
 const TEXTURED_TERRAINS = new Set(['clear', 'woods', 'light_woods'])
 
@@ -16,8 +16,6 @@ export function TerrainSettingsFlyout({ terrain, anchorY, onClose }: Props) {
   const {
     terrainColors, setTerrainColor,
     terrainTextureScales, setTerrainTextureScale,
-    terrainRenderMode,
-    fieldWildness, setFieldWildness,
     terrainTypeBlobStyles, setTerrainTypeBlobStyle,
     terrainBlobSmooth, setTerrainBlobSmooth,
     terrainBlobOffset, setTerrainBlobOffset,
@@ -30,7 +28,6 @@ export function TerrainSettingsFlyout({ terrain, anchorY, onClose }: Props) {
   } = useMapStore()
 
   const isDefaults = terrain === undefined
-  const [blobOpen, setBlobOpen] = useState(false)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -43,9 +40,8 @@ export function TerrainSettingsFlyout({ terrain, anchorY, onClose }: Props) {
   const color = terrain ? (terrainColors[terrain] ?? TERRAIN_COLORS[terrain] ?? '#888888') : '#7a9e7a'
   const hasTexture = terrain ? TEXTURED_TERRAINS.has(terrain) : false
   const textureScale = terrain ? (terrainTextureScales[terrain] ?? 3) : 3
-  const wildness = terrain ? (fieldWildness[terrain] ?? 1.0) : 1.0
-  const hasWildness = !isDefaults && terrainRenderMode === 'field'
-  const showBlobSection = terrainRenderMode === 'blob'
+  // hasWildness / wildness — field mode detached, always false now
+  const showBlobSection = true
 
   const typeStyle = terrain ? terrainTypeBlobStyles[terrain] : null
   const overrideEnabled = typeStyle?.enabled ?? false
@@ -188,46 +184,25 @@ export function TerrainSettingsFlyout({ terrain, anchorY, onClose }: Props) {
       </div>
       <div>
         <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>Fringe Direction</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button style={modeBtn(local.lobeDirection >= 0)} onClick={() => setBlob('lobeDirection', 1)}>Outward</button>
-          <button style={modeBtn(local.lobeDirection < 0)} onClick={() => setBlob('lobeDirection', -1)}>Inward</button>
-        </div>
+        <ToggleButtonGroup
+          options={[{ value: 'outward', label: 'Outward' }, { value: 'inward', label: 'Inward' }]}
+          value={local.lobeDirection >= 0 ? 'outward' : 'inward'}
+          onChange={v => setBlob('lobeDirection', v === 'outward' ? 1 : -1)}
+        />
       </div>
     </div>
   )
 
   return (
-    <div
+    <FlyoutContainer
+      top={Math.min(anchorY, window.innerHeight - 48)}
+      scrollable
       data-terrain-flyout=""
-      style={{
-        position: 'fixed',
-        left: 204,
-        top: Math.min(anchorY, window.innerHeight - 48),
-        width: 200,
-        maxHeight: 'calc(100vh - 16px)',
-        overflowY: 'auto',
-        background: '#0e0f18',
-        border: '1px solid #2a2a4a',
-        borderRadius: 4,
-        padding: '10px 12px',
-        zIndex: 100,
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: 11,
-        color: '#a0a0c0',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-      }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#e0e0f0', textTransform: 'capitalize', letterSpacing: 0.5 }}>
-          {isDefaults ? 'Default blob shape' : terrain!.replace(/_/g, ' ')}
-        </span>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-        >×</button>
-      </div>
+      <FlyoutHeader
+        title={isDefaults ? 'Default blob shape' : terrain!.replace(/_/g, ' ')}
+        onClose={onClose}
+      />
 
       {isDefaults && showBlobSection && blobControls}
 
@@ -253,55 +228,22 @@ export function TerrainSettingsFlyout({ terrain, anchorY, onClose }: Props) {
             </div>
           )}
 
-          {hasWildness && (
-            <div style={{ marginTop: hasTexture ? 12 : 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Edge Wildness</span>
-                <span style={{ color: '#5a5a7a', fontSize: 10 }}>{wildness.toFixed(1)}×</span>
-              </div>
-              <input
-                type="range" min={0} max={30} step={1}
-                value={Math.round(wildness * 10)}
-                onChange={e => setFieldWildness(terrain!, Number(e.target.value) / 10)}
-                style={{ width: '100%', accentColor: color }}
-              />
-            </div>
-          )}
+          {/* hasWildness block — detached with field render */}
 
           {showBlobSection && (
             <div style={{ marginTop: 12, borderTop: '1px solid #1e1f2e', paddingTop: 10 }}>
-              <button
-                data-terrain-flyout=""
-                onClick={() => setBlobOpen(v => !v)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  width: '100%', background: 'none', border: 'none', color: '#a0a0c0',
-                  cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontSize: 11,
-                  marginBottom: blobOpen ? 8 : 0,
-                }}
+              <EnabledSection
+                label="Custom blob shape"
+                enabled={overrideEnabled}
+                onToggle={handleEnableToggle}
+                accentColor={color}
               >
-                <label
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <input
-                    type="checkbox"
-                    checked={overrideEnabled}
-                    onChange={e => handleEnableToggle(e.target.checked)}
-                    style={{ accentColor: color, margin: 0 }}
-                  />
-                  <span style={{ color: overrideEnabled ? '#c0c0e0' : '#6a6a8a', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                    Blob shape
-                  </span>
-                </label>
-                <span style={{ color: '#4a4a6a', fontSize: 10 }}>{blobOpen ? '▲' : '▼'}</span>
-              </button>
-
-              {blobOpen && blobControls}
+                {blobControls}
+              </EnabledSection>
             </div>
           )}
         </>
       )}
-    </div>
+    </FlyoutContainer>
   )
 }

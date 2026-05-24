@@ -5,6 +5,7 @@ import {
   PALETTE_RIVER, PALETTE_RIVER_OUTLINE,
   PALETTE_CANAL, PALETTE_CANAL_OUTLINE,
 } from '../palettes'
+import { FlyoutContainer, FlyoutHeader, ToggleButtonGroup, EnabledSection } from './ui'
 
 
 
@@ -28,7 +29,7 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
   const {
     riverWidthScale, setRiverWidthScale,
     canalWidthScale, setCanalWidthScale,
-    riverWiggliness, setRiverWiggliness,
+    // riverWiggliness / setRiverWiggliness — detached
     riverWiggleFreq, setRiverWiggleFreq,
     riverWiggleAmp, setRiverWiggleAmp,
     riverSmoothing, setRiverSmoothing,
@@ -67,33 +68,11 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
   const inputStyle: React.CSSProperties = { width: '100%', accentColor }
 
   return (
-    <div
-      data-rivers-flyout=""
-      style={{
-        position: 'fixed',
-        left: 204,
-        top,
-        width: 210,
-        background: '#0e0f18',
-        border: '1px solid #2a2a4a',
-        borderRadius: 4,
-        padding: '10px 12px',
-        zIndex: 100,
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: 11,
-        color: '#a0a0c0',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ color: '#e0e0f0', textTransform: 'capitalize', letterSpacing: 0.5 }}>{type}</span>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: 'none', color: '#4a4a6a', cursor: 'pointer', padding: '0 2px', fontSize: 15, lineHeight: 1 }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#4a4a6a')}
-        >×</button>
-      </div>
+    <FlyoutContainer top={top} width={210} data-rivers-flyout="">
+      <FlyoutHeader
+        title={type.charAt(0).toUpperCase() + type.slice(1)}
+        onClose={onClose}
+      />
 
       {(isRiver || isCanal) && style && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -148,40 +127,30 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
             </Row>
           </>)}
 
-          {/* Outline toggle */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a' }}>Outline</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-              <span style={{ fontSize: 10, color: style.strokeEnabled ? accentColor : '#4a4a6a' }}>
-                {style.strokeEnabled ? 'on' : 'off'}
-              </span>
-              <input type="checkbox" checked={style.strokeEnabled}
-                onChange={e => setStyle({ strokeEnabled: e.target.checked })}
-                style={{ accentColor, cursor: 'pointer' }}
-              />
-            </label>
-          </div>
-
-          {style.strokeEnabled && (<>
-            {/* Outline color */}
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>Outline color</div>
-              <ColorSwatch
-                value={style.strokeColor}
-                onChange={c => setStyle({ strokeColor: c })}
-                palette={isRiver ? PALETTE_RIVER_OUTLINE : PALETTE_CANAL_OUTLINE}
-              />
+          <EnabledSection
+            label="Outline"
+            enabled={style.strokeEnabled}
+            onToggle={enabled => setStyle({ strokeEnabled: enabled })}
+            accentColor={accentColor}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>Color</div>
+                <ColorSwatch
+                  value={style.strokeColor}
+                  onChange={c => setStyle({ strokeColor: c })}
+                  palette={isRiver ? PALETTE_RIVER_OUTLINE : PALETTE_CANAL_OUTLINE}
+                />
+              </div>
+              <Row label="Width" value={`${Math.round(style.strokeWidth * 100)}%`}>
+                <input type="range" min={5} max={100} step={5}
+                  value={Math.round(style.strokeWidth * 100)}
+                  onChange={e => setStyle({ strokeWidth: Number(e.target.value) / 100 })}
+                  style={inputStyle}
+                />
+              </Row>
             </div>
-
-            {/* Outline width */}
-            <Row label="Outline width" value={`${Math.round(style.strokeWidth * 100)}%`}>
-              <input type="range" min={5} max={100} step={5}
-                value={Math.round(style.strokeWidth * 100)}
-                onChange={e => setStyle({ strokeWidth: Number(e.target.value) / 100 })}
-                style={inputStyle}
-              />
-            </Row>
-          </>)}
+          </EnabledSection>
         </div>
       )}
 
@@ -210,22 +179,15 @@ export function RiversSettingsFlyout({ type, anchorY, onClose }: Props) {
           </Row>
           <div>
             <div style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: '#4a4a6a', marginBottom: 5 }}>Fringe Direction</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['Outward', 'Inward'] as const).map(label => {
-                const dir = label === 'Outward' ? 1 : -1
-                const active = label === 'Outward' ? lakeBlobLobeDirection >= 0 : lakeBlobLobeDirection < 0
-                return (
-                  <button key={label} onClick={() => setLakeBlobLobeDirection(dir)} style={{
-                    flex: 1, padding: '3px 0', fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase',
-                    background: active ? '#2a3a5a' : 'none', border: '1px solid #2a2a4a',
-                    color: active ? '#8ab0e0' : '#4a4a6a', borderRadius: 3, cursor: 'pointer', fontFamily: 'ui-monospace, monospace',
-                  }}>{label}</button>
-                )
-              })}
-            </div>
+            <ToggleButtonGroup
+              options={[{ value: 'outward', label: 'Outward' }, { value: 'inward', label: 'Inward' }]}
+              value={lakeBlobLobeDirection >= 0 ? 'outward' : 'inward'}
+              onChange={v => setLakeBlobLobeDirection(v === 'outward' ? 1 : -1)}
+              accent="#8ab0e0"
+            />
           </div>
         </div>
       )}
-    </div>
+    </FlyoutContainer>
   )
 }

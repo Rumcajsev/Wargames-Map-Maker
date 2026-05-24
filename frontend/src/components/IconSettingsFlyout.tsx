@@ -3,6 +3,7 @@ import { useMapStore, type IconOverlay } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_HIGHLIGHTS } from '../palettes'
 import { useFlyoutTop } from './useFlyoutTop'
+import { SliderRow } from './ui'
 
 interface Props {
   overlay: IconOverlay
@@ -43,15 +44,6 @@ const vizBtnStyle = (active: boolean): React.CSSProperties => ({
   flexShrink: 0,
 })
 
-const SliderRow = ({ label, value, children }: { label: string; value: string; children: React.ReactNode }) => (
-  <div style={{ marginBottom: 10 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-      <span style={labelStyle}>{label}</span>
-      <span style={{ fontSize: 10, color: '#6a6a8a' }}>{value}</span>
-    </div>
-    {children}
-  </div>
-)
 
 const PREVIEW_FILL = '#a0a0c0'
 const PREVIEW_STROKE = '#6a6a8a'

@@ -1283,6 +1283,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     | null
   const paintHoverTargetRef = useRef<PaintHoverTarget>(null)
   const strokeTrailRef = useRef<Map<string, NonNullable<PaintHoverTarget>>>(new Map())
+  const strokeTypeRef = useRef<'hex' | 'edge' | null>(null)
 
   type ExportTarget = { canvas: HTMLCanvasElement; pw: number; ph: number }
 
@@ -2722,6 +2723,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
     const executePaint = (target: PaintHoverTarget) => {
       if (!target) return
+      if (strokeTypeRef.current !== null && target.type !== strokeTypeRef.current) return
       if (target.type === 'hex') {
         const key = `${target.q},${target.r}`
         if (key !== lastPaintedKeyRef.current) {
@@ -2762,6 +2764,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       strokeTrailRef.current.clear()
       setIsTerrainPainting(true)
       const target = computeHoverTarget(e.clientX, e.clientY)
+      strokeTypeRef.current = target?.type ?? null
       paintHoverTargetRef.current = target
       executePaint(target)
     }
@@ -2785,6 +2788,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (isPaintingRef.current && (terrainPaintModeRef.current || elevationPaintModeRef.current)) setIsTerrainPainting(false)
       isPaintingRef.current = false
       strokeTrailRef.current.clear()
+      strokeTypeRef.current = null
     }
 
     const onLeave = () => {

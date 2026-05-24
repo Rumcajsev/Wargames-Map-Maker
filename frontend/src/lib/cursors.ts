@@ -126,6 +126,8 @@ export function getToolCursor(
     }
     case 'urban':
       return activeTool.mode === 'erase' ? eraserCursor('#6a6a8a') : urbanPaintCursor()
+    case 'align-image':
+      return 'grab'
     default:
       return 'crosshair'
   }

@@ -3,6 +3,7 @@ import { useMapStore, type HexHighlight } from '../store/mapStore'
 import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_HIGHLIGHTS } from '../palettes'
 import { useFlyoutTop } from './useFlyoutTop'
+import { SliderRow } from './ui'
 
 interface Props {
   highlight: HexHighlight
@@ -43,15 +44,6 @@ const vizBtnStyle = (active: boolean): React.CSSProperties => ({
   flexShrink: 0,
 })
 
-const SliderRow = ({ label, value, children, dim }: { label: string; value: string; children: React.ReactNode; dim?: boolean }) => (
-  <div style={{ marginBottom: 10, opacity: dim ? 0.35 : 1, transition: 'opacity 0.15s' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-      <span style={labelStyle}>{label}</span>
-      <span style={{ fontSize: 10, color: '#6a6a8a' }}>{value}</span>
-    </div>
-    {children}
-  </div>
-)
 
 const PillToggle = ({ enabled, label, onToggle }: { enabled: boolean; label: string; onToggle: () => void }) => (
   <button

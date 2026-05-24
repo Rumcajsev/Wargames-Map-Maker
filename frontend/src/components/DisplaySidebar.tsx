@@ -92,6 +92,9 @@ const MEGA_HEX_SIZES: Record<number, string> = { 1: '7', 2: '19', 3: '37', 4: '6
 export function DisplaySidebar() {
   const {
     hexBorderMode, setHexBorderMode,
+    hexBorderOpacity, setHexBorderOpacity,
+    hexBorderColor, setHexBorderColor,
+    hexBorderDifference, setHexBorderDifference,
     hexNumbersEnabled, setHexNumbersEnabled,
     hexNumberStartCorner, setHexNumberStartCorner,
     hexNumberEdge, setHexNumberEdge,
@@ -123,7 +126,7 @@ export function DisplaySidebar() {
       {/* ── Hex borders ── */}
       <div style={sectionStyle}>
         <div style={labelStyle}>Hex Borders</div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, marginBottom: hexBorderMode !== 'none' ? 8 : 0 }}>
           {(['full', 'stubs', 'none'] as const).map(mode => (
             <button
               key={mode}
@@ -142,6 +145,73 @@ export function DisplaySidebar() {
             </button>
           ))}
         </div>
+
+        {hexBorderMode !== 'none' && (
+          <>
+            {/* Opacity */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a', width: 44, flexShrink: 0 }}>Opacity</div>
+              <input
+                type="range" min={0.05} max={1.0} step={0.05}
+                value={hexBorderOpacity}
+                onChange={e => setHexBorderOpacity(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: '#5a5a7a', width: 28, textAlign: 'right' }}>
+                {Math.round(hexBorderOpacity * 100)}%
+              </span>
+            </div>
+
+            {/* Color — hidden when difference mode is active */}
+            {!hexBorderDifference && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 10, color: '#5a5a7a', width: 44, flexShrink: 0 }}>Color</div>
+                {([['#000000', 'Dark'], ['#ffffff', 'Light']] as const).map(([c, label]) => (
+                  <button
+                    key={c}
+                    onClick={() => setHexBorderColor(c)}
+                    title={label}
+                    style={{
+                      padding: '2px 8px', fontSize: 10,
+                      background: hexBorderColor === c ? '#1a2a3a' : 'none',
+                      color: hexBorderColor === c ? '#7de0a0' : '#5a5a7a',
+                      border: '1px solid',
+                      borderColor: hexBorderColor === c ? '#4a9a6a' : '#1e1f2e',
+                      borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <input
+                  type="color"
+                  value={hexBorderColor}
+                  onChange={e => setHexBorderColor(e.target.value)}
+                  style={{ width: 24, height: 20, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                />
+              </div>
+            )}
+
+            {/* Auto-contrast */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+              <div style={{ fontSize: 10, color: '#5a5a7a' }}>Auto-contrast</div>
+              <button
+                onClick={() => setHexBorderDifference(!hexBorderDifference)}
+                style={{
+                  padding: '2px 8px',
+                  background: hexBorderDifference ? '#1a2a3a' : 'none',
+                  color: hexBorderDifference ? '#7de0a0' : '#5a5a7a',
+                  border: '1px solid',
+                  borderColor: hexBorderDifference ? '#4a9a6a' : '#1e1f2e',
+                  borderRadius: 3, cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 11,
+                }}
+              >
+                {hexBorderDifference ? 'On' : 'Off'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Hex Numbers ── */}
