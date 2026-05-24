@@ -41,6 +41,7 @@ export type UiSlice = {
   mapBorderWidth: number
   clipToHexGrid: boolean
   excludedHexKeys: string[]
+  disabledHexKeys: string[]
   setActivePanel: (panel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'areas' | 'elevation') => void
   setActiveTool: (tool: ActiveTool) => void
   toggleUrbanHex: (q: number, r: number) => void
@@ -80,6 +81,9 @@ export type UiSlice = {
   setClipToHexGrid: (v: boolean) => void
   toggleExcludedHex: (key: string, mode: 'exclude' | 'include') => void
   resetExcludedHexes: () => void
+  toggleDisabledHex: (key: string, mode: 'disable' | 'enable') => void
+  resetDisabledHexes: () => void
+  autoDisableOceanHexes: () => void
   mapStyle: 'standard' | 'historical_simple' | 'basic'
   setMapStyle: (v: 'standard' | 'historical_simple' | 'basic') => void
   styleSnapshots: Record<string, Record<string, unknown>>
@@ -153,6 +157,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   mapBorderWidth: 1.5,
   clipToHexGrid: false,
   excludedHexKeys: [],
+  disabledHexKeys: [],
 
   setActivePanel: (panel) => {
     get().setActiveTool({ type: 'none' })
@@ -299,6 +304,36 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     }
   }),
   resetExcludedHexes: () => set({ excludedHexKeys: [] }),
+  toggleDisabledHex: (key, mode) => set(s => {
+    const cur = s.disabledHexKeys
+    if (mode === 'disable') {
+      return cur.includes(key) ? {} : { disabledHexKeys: [...cur, key] }
+    } else {
+      return { disabledHexKeys: cur.filter(k => k !== key) }
+    }
+  }),
+  resetDisabledHexes: () => set({ disabledHexKeys: [] }),
+  autoDisableOceanHexes: () => set(s => {
+    const hexes = s.generatedHexes
+    if (!hexes || hexes.length === 0) return {}
+    const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
+    const hexByKey = new Map(hexes.map(h => [`${h.q},${h.r}`, h]))
+    const toDisable: string[] = []
+    for (const h of hexes) {
+      if (h.terrain !== 'sea') continue
+      const touchesLand = NEIGHBORS.some(([dq, dr]) => {
+        const nb = hexByKey.get(`${h.q + dq},${h.r + dr}`)
+        return nb && nb.terrain !== 'sea'
+      })
+      if (!touchesLand) toDisable.push(`${h.q},${h.r}`)
+    }
+    const existing = new Set(s.disabledHexKeys)
+    const merged = [...s.disabledHexKeys]
+    for (const k of toDisable) {
+      if (!existing.has(k)) merged.push(k)
+    }
+    return { disabledHexKeys: merged }
+  }),
   setMapStyle: (v) => set(s => {
     const current = s.mapStyle
     if (v === current) return {}
@@ -768,6 +803,9 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   if (fromVersion < 50) {
     if (!s.customTerrains) s.customTerrains = []
     if (!s.cliffEdges) s.cliffEdges = {}
+  }
+  if (fromVersion < 51) {
+    if (!s.disabledHexKeys) s.disabledHexKeys = []
   }
   return s
 }

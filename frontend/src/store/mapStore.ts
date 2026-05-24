@@ -118,6 +118,7 @@ export type ActiveTool =
   | { type: 'rail-node-edit' }
   | { type: 'rail-select' }
   | { type: 'hex-mask'; mode: 'exclude' | 'include' }
+  | { type: 'hex-disable'; mode: 'disable' | 'enable' }
   | { type: 'mega-hex-origin' }
   | { type: 'areas-draw' }
   | { type: 'areas-erase' }
@@ -807,6 +808,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapBorderWidth: s.mapBorderWidth,
     clipToHexGrid: s.clipToHexGrid,
     excludedHexKeys: s.excludedHexKeys,
+    disabledHexKeys: s.disabledHexKeys,
     hexNumbersEnabled: s.hexNumbersEnabled,
     hexNumberStartCorner: s.hexNumberStartCorner,
     hexNumberEdge: s.hexNumberEdge,
@@ -823,7 +825,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 50,
+  version: 51,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

@@ -218,6 +218,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     hachureParams,
     mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
     excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
+    disabledHexKeys, toggleDisabledHex, autoDisableOceanHexes,
     bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, setBridgeOverride, clearBridgeOverride,
     megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth,
     megaHexOriginQ, megaHexOriginR, setMegaHexOrigin,
@@ -965,6 +966,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const toggleExcludedHexRef = useRef(toggleExcludedHex)
   toggleExcludedHexRef.current = toggleExcludedHex
 
+  const disabledHexKeysRef = useRef(disabledHexKeys)
+  disabledHexKeysRef.current = disabledHexKeys
+  const toggleDisabledHexRef = useRef(toggleDisabledHex)
+  toggleDisabledHexRef.current = toggleDisabledHex
+  const autoDisableOceanHexesRef = useRef(autoDisableOceanHexes)
+  autoDisableOceanHexesRef.current = autoDisableOceanHexes
+
   const mapImageElementRef = useRef<HTMLImageElement | null>(null)
   const mapImageDataUrlRef = useRef(mapImageDataUrl)
   mapImageDataUrlRef.current = mapImageDataUrl
@@ -1271,6 +1279,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const borderMode = hexBorderModeRef.current
     const edgeMode = hexEdgeModeRef.current
     const excludedSet = new Set(excludedHexKeysRef.current)
+    const disabledSet = new Set(disabledHexKeysRef.current)
+    const bordersExcludedSet = disabledSet.size > 0
+      ? new Set([...excludedSet, ...disabledSet])
+      : excludedSet
     const { pw, ph, px, py } = exportTarget
       ? { pw: exportTarget.pw, ph: exportTarget.ph, px: 0, py: 0 }
       : computePaper(frameCssW, frameCssH, meta)
@@ -1522,7 +1534,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           oCtx.beginPath()
           oCtx.rect(px, py, pw, ph)
           oCtx.clip()
-          _drawHexBorders(oCtx, projected, borderMode, edgeMode, inMargin, 1, excludedSet, hexBorderOpacityRef.current, hexBorderColorRef.current, false)
+          _drawHexBorders(oCtx, projected, borderMode, edgeMode, inMargin, 1, bordersExcludedSet, hexBorderOpacityRef.current, hexBorderColorRef.current, false)
           oCtx.restore()
           hexBorderLayerRef.current = offscreen
           hexBorderDirtyRef.current = false
@@ -1532,10 +1544,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         ctx.drawImage(hexBorderLayerRef.current, px, py, pw, ph)
       }
       if (!isExport && hexBorderDifferenceRef.current) {
-        _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin, 1, excludedSet, hexBorderOpacityRef.current, hexBorderColorRef.current, true)
+        _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin, 1, bordersExcludedSet, hexBorderOpacityRef.current, hexBorderColorRef.current, true)
       }
       if (isExport) {
-        _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin, lineScale, excludedSet, hexBorderOpacityRef.current, hexBorderColorRef.current, hexBorderDifferenceRef.current)
+        _drawHexBorders(ctx, projected, borderMode, edgeMode, inMargin, lineScale, bordersExcludedSet, hexBorderOpacityRef.current, hexBorderColorRef.current, hexBorderDifferenceRef.current)
       }
     }
 
@@ -2428,7 +2440,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, mapStyle, hachureParams])
 
   // Mark other layer caches dirty when their relevant data changes
-  useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys])
+  useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys, disabledHexKeys])
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
   useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, smoothedRailData, riverEdges, canalEdges, generatedHexes])
@@ -2436,7 +2448,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, cliffPaintMode, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, cliffPaintMode, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, disabledHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2837,6 +2849,58 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       window.removeEventListener('mouseup', onUp)
     }
   }, [computeHoverTarget, draw])
+
+  // Hex disable paint — mark/unmark any hex as impassable by click-drag
+  const hexDisablePaintAtClient = useCallback((clientX: number, clientY: number, mode: 'disable' | 'enable', lastKey: { v: string | null }) => {
+    const meta = metaRef.current
+    if (!meta) return
+    const logical = clientToLogical(clientX, clientY)
+    if (!logical) return
+    const { lx, ly, cssW, cssH } = logical
+    const { pw, ph, px, py } = computePaper(cssW, cssH, meta)
+    for (const hex of hexesRef.current) {
+      const verts = hex.vertices.map(([lon, lat]) => projectToCanvas(lon, lat, meta, pw, ph, px, py))
+      if (pointInPolygon(lx, ly, verts)) {
+        const key = `${hex.q},${hex.r}`
+        if (key !== lastKey.v) {
+          lastKey.v = key
+          toggleDisabledHexRef.current(key, mode)
+        }
+        break
+      }
+    }
+  }, [clientToLogical])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    let active = false
+    let mode: 'disable' | 'enable' = 'disable'
+    const lastKey = { v: null as string | null }
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      if ((e.target as HTMLElement).tagName !== 'CANVAS') return
+      const tool = activeToolRef.current
+      if (tool.type !== 'hex-disable') return
+      active = true
+      mode = tool.mode
+      lastKey.v = null
+      hexDisablePaintAtClient(e.clientX, e.clientY, mode, lastKey)
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!active) return
+      hexDisablePaintAtClient(e.clientX, e.clientY, mode, lastKey)
+    }
+    const onUp = () => { active = false }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [hexDisablePaintAtClient])
 
   // Hex mask paint — exclude/include hexes by click-drag
   const hexMaskPaintAtClient = useCallback((clientX: number, clientY: number, mode: 'exclude' | 'include', lastKey: { v: string | null }) => {

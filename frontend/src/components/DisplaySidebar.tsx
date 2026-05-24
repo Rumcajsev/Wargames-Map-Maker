@@ -107,6 +107,7 @@ export function DisplaySidebar() {
     mapBorderWidth, setMapBorderWidth,
     clipToHexGrid, setClipToHexGrid,
     excludedHexKeys, resetExcludedHexes,
+    disabledHexKeys, resetDisabledHexes, autoDisableOceanHexes,
     activeTool, setActiveTool,
     megaHexEnabled, setMegaHexEnabled,
     megaHexRadius, setMegaHexRadius,
@@ -116,6 +117,7 @@ export function DisplaySidebar() {
   } = useMapStore()
 
   const hexMaskMode = activeTool.type === 'hex-mask' ? activeTool.mode : null
+  const hexDisableMode = activeTool.type === 'hex-disable' ? activeTool.mode : null
 
   const edgeLabels = hexOrientation === 'flat' ? FLAT_EDGE_LABELS : POINTY_EDGE_LABELS
   const currentLabel = edgeLabels[hexNumberEdge] ?? '?'
@@ -345,6 +347,66 @@ export function DisplaySidebar() {
         {excludedHexKeys.length > 0 && (
           <div style={{ fontSize: 10, color: '#5a5a7a', marginTop: 6 }}>
             {excludedHexKeys.length} hex{excludedHexKeys.length !== 1 ? 'es' : ''} removed
+          </div>
+        )}
+      </div>
+
+      {/* ── Impassable Hexes ── */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={labelStyle}>Impassable Hexes</div>
+          {disabledHexKeys.length > 0 && (
+            <button
+              onClick={resetDisabledHexes}
+              style={{
+                padding: '2px 8px', background: 'none',
+                color: '#7a4a4a', border: '1px solid #3a2a2a',
+                borderRadius: 3, cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: 11,
+              }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+        <button
+          onClick={autoDisableOceanHexes}
+          style={{
+            width: '100%', padding: '4px 0', marginBottom: 6,
+            background: 'none',
+            color: '#5a5a7a',
+            border: '1px solid #1e1f2e',
+            borderRadius: 3, cursor: 'pointer',
+            fontFamily: 'inherit', fontSize: 11,
+          }}
+        >
+          Auto-disable ocean hexes
+        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['disable', 'enable'] as const).map(mode => {
+            const active = hexDisableMode === mode
+            return (
+              <button
+                key={mode}
+                onClick={() => setActiveTool(active ? { type: 'none' } : { type: 'hex-disable', mode })}
+                style={{
+                  flex: 1, padding: '4px 0',
+                  background: active ? (mode === 'disable' ? '#3a1a1a' : '#1a2a1a') : 'none',
+                  color: active ? (mode === 'disable' ? '#e07070' : '#7de0a0') : '#5a5a7a',
+                  border: '1px solid',
+                  borderColor: active ? (mode === 'disable' ? '#8a3a3a' : '#4a9a6a') : '#1e1f2e',
+                  borderRadius: 3, cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 11,
+                }}
+              >
+                {mode === 'disable' ? '− Disable' : '+ Enable'}
+              </button>
+            )
+          })}
+        </div>
+        {disabledHexKeys.length > 0 && (
+          <div style={{ fontSize: 10, color: '#5a5a7a', marginTop: 6 }}>
+            {disabledHexKeys.length} hex{disabledHexKeys.length !== 1 ? 'es' : ''} disabled
           </div>
         )}
       </div>
