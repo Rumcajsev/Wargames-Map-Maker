@@ -1,5 +1,6 @@
 import type { MapStore, ActiveTool, UrbanStyle, RoadEdge } from '../mapStore'
 import { DEFAULT_URBAN_STYLE } from '../mapStore'
+import { STYLE_PRESET_KEYS } from '../../lib/stylePreset'
 
 export type UiSlice = {
   activePanel: 'terrain' | 'display' | 'roads' | 'settlements' | 'rivers' | 'style' | 'highlights' | 'areas' | 'elevation'
@@ -8,6 +9,9 @@ export type UiSlice = {
   urbanStyle: UrbanStyle
   urbanPaintMode: 'paint' | 'erase' | null
   hexBorderMode: 'full' | 'stubs' | 'none'
+  hexBorderOpacity: number
+  hexBorderColor: string
+  hexBorderDifference: boolean
   hexNumbersEnabled: boolean
   hexNumberStartCorner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   hexNumberEdge: number
@@ -43,6 +47,9 @@ export type UiSlice = {
   setUrbanStyle: (style: Partial<UrbanStyle>) => void
   setUrbanPaintMode: (mode: 'paint' | 'erase' | null) => void
   setHexBorderMode: (v: 'full' | 'stubs' | 'none') => void
+  setHexBorderOpacity: (v: number) => void
+  setHexBorderColor: (v: string) => void
+  setHexBorderDifference: (v: boolean) => void
   setHexNumbersEnabled: (v: boolean) => void
   setHexNumberStartCorner: (v: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right') => void
   setHexNumberEdge: (v: number) => void
@@ -73,11 +80,33 @@ export type UiSlice = {
   setClipToHexGrid: (v: boolean) => void
   toggleExcludedHex: (key: string, mode: 'exclude' | 'include') => void
   resetExcludedHexes: () => void
-  mapStyle: 'standard' | 'historical_simple'
-  setMapStyle: (v: 'standard' | 'historical_simple') => void
+  mapStyle: 'standard' | 'historical_simple' | 'basic'
+  setMapStyle: (v: 'standard' | 'historical_simple' | 'basic') => void
+  styleSnapshots: Record<string, Record<string, unknown>>
+  hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
+  setHachureParam: (key: 'spacing' | 'length' | 'wobble' | 'jitter' | 'hillWidth' | 'mtnWidth' | 'smoothing', value: number) => void
   applyMapPreset: (preset: 'default') => void
   saveProject: () => void
   restoreProject: (data: unknown) => void
+}
+
+// Applied when first visiting a style — only the keys that meaningfully differ per style.
+const STYLE_INITIAL_DEFAULTS: Record<string, Record<string, unknown>> = {
+  basic: {
+    roadWiggleAmp: 0,
+    roadWiggleFreq: 2.5,
+    railWiggleAmp: 0,
+  },
+  standard: {
+    roadWiggleAmp: 0.20,
+    roadWiggleFreq: 0.9,
+    railWiggleAmp: 0,
+  },
+  historical_simple: {
+    roadWiggleAmp: 0.3,
+    roadWiggleFreq: 0.9,
+    railWiggleAmp: 0,
+  },
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -89,7 +118,12 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanStyle: { ...DEFAULT_URBAN_STYLE },
   urbanPaintMode: null,
   mapStyle: 'standard',
+  styleSnapshots: {},
+  hachureParams: { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 },
   hexBorderMode: 'full',
+  hexBorderOpacity: 0.35,
+  hexBorderColor: '#000000',
+  hexBorderDifference: false,
   hexNumbersEnabled: false,
   hexNumberStartCorner: 'top-left',
   hexNumberEdge: 4,
@@ -223,6 +257,9 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   setUrbanPaintMode: (mode) => set({ urbanPaintMode: mode }),
 
   setHexBorderMode: (v) => set({ hexBorderMode: v }),
+  setHexBorderOpacity: (v) => set({ hexBorderOpacity: v }),
+  setHexBorderColor: (v) => set({ hexBorderColor: v }),
+  setHexBorderDifference: (v) => set({ hexBorderDifference: v }),
   setHexNumbersEnabled: (v) => set({ hexNumbersEnabled: v }),
   setHexNumberStartCorner: (v) => set({ hexNumberStartCorner: v }),
   setHexNumberEdge: (v) => set({ hexNumberEdge: v }),
@@ -260,7 +297,22 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     }
   }),
   resetExcludedHexes: () => set({ excludedHexKeys: [] }),
-  setMapStyle: (v) => set({ mapStyle: v }),
+  setMapStyle: (v) => set(s => {
+    const current = s.mapStyle
+    if (v === current) return {}
+    const snapshot: Record<string, unknown> = {}
+    for (const k of STYLE_PRESET_KEYS) {
+      if (k === 'mapStyle') continue
+      snapshot[k] = (s as Record<string, unknown>)[k]
+    }
+    const savedSnapshots = { ...s.styleSnapshots, [current]: snapshot }
+    const existing = s.styleSnapshots[v]
+    if (existing) {
+      return { ...existing, mapStyle: v, styleSnapshots: savedSnapshots }
+    }
+    return { ...(STYLE_INITIAL_DEFAULTS[v] ?? {}), mapStyle: v, styleSnapshots: savedSnapshots }
+  }),
+  setHachureParam: (key, value) => set(s => ({ hachureParams: { ...s.hachureParams, [key]: value } })),
 
   applyMapPreset: (preset) => {
     const presets = {
@@ -279,7 +331,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 35,
+      version: 36,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
         mapMode: s.mapMode, diptychJoin: s.diptychJoin,
@@ -314,8 +366,9 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         roadDensityMinChain: s.roadDensityMinChain, roadTierGeometry: s.roadTierGeometry,
         riverStyle: s.riverStyle, canalStyle: s.canalStyle,
         riverChainOverrides: s.riverChainOverrides,
-        riverFlowStyle: s.riverFlowStyle, riverCurveSteps: s.riverCurveSteps,
-        riverWobble: s.riverWobble, riverDetail: s.riverDetail, riverWiggliness: s.riverWiggliness,
+        // riverFlowStyle / riverWiggliness — detached
+        riverCurveSteps: s.riverCurveSteps,
+        riverWobble: s.riverWobble, riverDetail: s.riverDetail,
         riverWiggleAmp: s.riverWiggleAmp, riverWiggleFreq: s.riverWiggleFreq,
         riverSmoothing: s.riverSmoothing, riverWidthScale: s.riverWidthScale,
         riverPathSmoothing: s.riverPathSmoothing,
@@ -325,6 +378,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         classificationParams: s.classificationParams,
         mapStyle: s.mapStyle,
         activePanel: s.activePanel, hexBorderMode: s.hexBorderMode,
+        hexBorderOpacity: s.hexBorderOpacity, hexBorderColor: s.hexBorderColor, hexBorderDifference: s.hexBorderDifference,
         terrainDisplacement: s.terrainDisplacement, terrainNoiseFrequency: s.terrainNoiseFrequency,
         terrainNoiseSeed: s.terrainNoiseSeed, terrainNoiseOctaves: s.terrainNoiseOctaves,
         illustratedStyle: s.illustratedStyle,
@@ -379,6 +433,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         areasStyle: s.areasStyle, areasGenParams: s.areasGenParams,
         iconOverlays: s.iconOverlays, placedIcons: s.placedIcons,
         labelOverlays: s.labelOverlays, placedLabels: s.placedLabels,
+        styleSnapshots: s.styleSnapshots,
       },
     }
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
@@ -423,7 +478,7 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.canalStyle) s.canalStyle = { color: '#6a9a8a', strokeEnabled: true, strokeColor: '#3a5a4a', strokeWidth: 0.5 }
   }
   if (fromVersion < 5) {
-    if (s.riverFlowStyle === undefined) s.riverFlowStyle = 1
+    // if (s.riverFlowStyle === undefined) s.riverFlowStyle = 1  // detached
   }
   if (fromVersion < 7) {
     delete s.riverMeander; delete s.riverMeanderSeed
@@ -687,10 +742,24 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       }
     }
   }
+  if (fromVersion < 46) {
+    if (!s.hachureParams) s.hachureParams = { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 }
+    else if ((s.hachureParams as Record<string, unknown>).smoothing === undefined) (s.hachureParams as Record<string, unknown>).smoothing = 1
+  }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'
   }
   if (s.hexBorderMode === 'dots') s.hexBorderMode = 'full'
+  if (fromVersion < 47) {
+    if (!s.styleSnapshots) s.styleSnapshots = {}
+  }
+  if (fromVersion < 48) {
+    s.coastlineV3 = true
+    s.coastlineV2 = false
+    s.coastlineDPEpsilon = 1
+    s.coastlineChaikinPasses = 2
+    s.coastlineCatmullSteps = 1
+  }
   return s
 }
 

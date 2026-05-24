@@ -810,7 +810,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 47,
+  version: 48,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))
