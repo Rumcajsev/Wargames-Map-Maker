@@ -24,7 +24,6 @@ export function TerrainSidebar() {
     terrainLayersEnabled, setTerrainLayersEnabled,
     realisticCoastline, setRealisticCoastline,
     terrainEdgePaintEnabled, setTerrainEdgePaintEnabled,
-    cliffPaintMode,
     customTerrains, addCustomTerrain, updateCustomTerrain, removeCustomTerrain,
   } = useMapStore()
 
@@ -128,21 +127,7 @@ export function TerrainSidebar() {
           </label>
           {terrainEdgePaintEnabled && (
             <div style={{ fontSize: 10, color: '#5a8a5a', marginTop: 4, letterSpacing: 0.3, paddingLeft: 18 }}>
-              Near edge → paints edge blob
-            </div>
-          )}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: cliffPaintMode ? '#e0c090' : '#6a6a8a', marginTop: 6 }}>
-            <input
-              type="checkbox"
-              checked={cliffPaintMode}
-              onChange={e => setActiveTool(e.target.checked ? { type: 'cliff' } : { type: 'none' })}
-              style={{ accentColor: '#c08840' }}
-            />
-            Cliff painting
-          </label>
-          {cliffPaintMode && (
-            <div style={{ fontSize: 10, color: '#a07830', marginTop: 4, letterSpacing: 0.3, paddingLeft: 18 }}>
-              Near edge → paints cliff · right-click erases
+              Near edge → paints edge blob · mountains → cliff symbol
             </div>
           )}
         </div>

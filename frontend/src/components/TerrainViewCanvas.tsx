@@ -187,7 +187,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     edgeBlobPainted,
     paintEdgeBlob, eraseEdgeBlob,
     terrainEdgePaintEnabled,
-    cliffPaintMode, cliffEdges, paintCliffEdge, eraseCliffEdge,
     customTerrains,
     edgeBlobSmooth, edgeBlobOffset, edgeBlobBump,
     edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection,
@@ -254,10 +253,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const eraseEdgeBlobRef = useRef(eraseEdgeBlob)
   const edgeBlobPaintedRef = useRef(edgeBlobPainted)
   const edgeBlobOverridesRef = useRef(edgeBlobOverrides)
-  const cliffPaintModeRef = useRef(cliffPaintMode)
-  const cliffEdgesRef = useRef(cliffEdges)
-  const paintCliffEdgeRef = useRef(paintCliffEdge)
-  const eraseCliffEdgeRef = useRef(eraseCliffEdge)
   const customTerrainsRef = useRef(customTerrains)
   const edgeBlobSmoothRef = useRef(edgeBlobSmooth)
   const edgeBlobOffsetRef = useRef(edgeBlobOffset)
@@ -752,10 +747,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   eraseEdgeBlobRef.current = eraseEdgeBlob
   edgeBlobPaintedRef.current = edgeBlobPainted
   edgeBlobOverridesRef.current = edgeBlobOverrides
-  cliffPaintModeRef.current = cliffPaintMode
-  cliffEdgesRef.current = cliffEdges
-  paintCliffEdgeRef.current = paintCliffEdge
-  eraseCliffEdgeRef.current = eraseCliffEdge
   customTerrainsRef.current = customTerrains
   edgeBlobSmoothRef.current = edgeBlobSmooth
   edgeBlobOffsetRef.current = edgeBlobOffset
@@ -1413,7 +1404,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       hexVertMap: hexVertMapRef.current,
       mapStyle: mapStyleRef.current,
       hachureParams: hachureParamsRef.current,
-      cliffEdges: cliffEdgesRef.current,
       extraTextures: buildExtraTextures(),
     }
 
@@ -2219,22 +2209,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
-    // Cliff paint hover highlight
-    if (!isExport && cliffPaintModeRef.current) {
-      const hoverTarget = paintHoverTargetRef.current
-      if (hoverTarget && hoverTarget.type === 'edge') {
-        ctx.save()
-        ctx.globalAlpha = 0.60
-        ctx.strokeStyle = '#1a1208'
-        ctx.lineWidth = R * 0.10
-        ctx.lineCap = 'round'
-        ctx.beginPath()
-        ctx.moveTo(hoverTarget.p1[0], hoverTarget.p1[1])
-        ctx.lineTo(hoverTarget.p2[0], hoverTarget.p2[1])
-        ctx.stroke()
-        ctx.restore()
-      }
-    }
 
     ctx.restore() // clip
 
@@ -2443,7 +2417,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   //   forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, mapStyle, hachureParams])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys])
@@ -2454,7 +2428,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, cliffPaintMode, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2664,7 +2638,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   const isPaintingRef = useRef(false)
   const lastPaintedKeyRef = useRef<string | null>(null)
   const lastPaintedEdgeKeyRef = useRef<string | null>(null)
-  const cliffEraseStrokeRef = useRef(false)
 
   const computeHoverTarget = useCallback((clientX: number, clientY: number): PaintHoverTarget => {
     const meta = metaRef.current
@@ -2686,7 +2659,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const hexMap = new Map<string, GeneratedHex>()
     for (const hex of hexesRef.current) hexMap.set(`${hex.q},${hex.r}`, hex)
 
-    if (terrainEdgePaintEnabledRef.current || cliffPaintModeRef.current) {
+    if (terrainEdgePaintEnabledRef.current) {
       const threshold = R * 0.35
       let bestDist = threshold
       let bestEdge: { p1: [number, number]; p2: [number, number]; edgeKey: string } | null = null
@@ -2733,11 +2706,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
 
   // Clear hover when paint mode is deactivated
   useEffect(() => {
-    if (!terrainPaintMode && !elevationPaintMode && !cliffPaintMode && paintHoverTargetRef.current !== null) {
+    if (!terrainPaintMode && !elevationPaintMode && paintHoverTargetRef.current !== null) {
       paintHoverTargetRef.current = null
       draw()
     }
-  }, [terrainPaintMode, elevationPaintMode, cliffPaintMode, draw])
+  }, [terrainPaintMode, elevationPaintMode, draw])
 
   useEffect(() => {
     const el = containerRef.current
@@ -2772,37 +2745,24 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         if (target.edgeKey !== lastPaintedEdgeKeyRef.current) {
           lastPaintedEdgeKeyRef.current = target.edgeKey
           strokeTrailRef.current.set(`edge:${target.edgeKey}`, target)
-          if (cliffPaintModeRef.current) {
-            if (cliffEraseStrokeRef.current) {
-              eraseCliffEdgeRef.current(target.edgeKey)
-            } else {
-              paintCliffEdgeRef.current(target.edgeKey)
-            }
+          const brush = terrainPaintBrushRef.current
+          if (brush === 'clear') {
+            eraseEdgeBlobRef.current(target.edgeKey)
           } else {
-            const brush = terrainPaintBrushRef.current
-            if (brush === 'clear') {
-              eraseEdgeBlobRef.current(target.edgeKey)
-            } else {
-              paintEdgeBlobRef.current(target.edgeKey, brush)
-            }
+            paintEdgeBlobRef.current(target.edgeKey, brush)
           }
         }
       }
     }
 
     const onDown = (e: MouseEvent) => {
-      if (e.button !== 0 && e.button !== 2) return
+      if (e.button !== 0) return
       if ((e.target as HTMLElement).tagName !== 'CANVAS') return
-      if (!terrainPaintModeRef.current && !elevationPaintModeRef.current && !cliffPaintModeRef.current) return
-      if (e.button === 2 && !cliffPaintModeRef.current) return
-      if (e.button === 2) e.preventDefault()
+      if (!terrainPaintModeRef.current && !elevationPaintModeRef.current) return
       isPaintingRef.current = true
       lastPaintedKeyRef.current = null
       lastPaintedEdgeKeyRef.current = null
       strokeTrailRef.current.clear()
-      if (cliffPaintModeRef.current) {
-        cliffEraseStrokeRef.current = e.button === 2
-      }
       setIsTerrainPainting(true)
       const target = computeHoverTarget(e.clientX, e.clientY)
       strokeTypeRef.current = target?.type ?? null
@@ -2811,7 +2771,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     const onMove = (e: MouseEvent) => {
-      if (!terrainPaintModeRef.current && !elevationPaintModeRef.current && !cliffPaintModeRef.current) {
+      if (!terrainPaintModeRef.current && !elevationPaintModeRef.current) {
         if (paintHoverTargetRef.current !== null) {
           paintHoverTargetRef.current = null
           draw()
@@ -2826,7 +2786,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     }
 
     const onUp = () => {
-      if (isPaintingRef.current && (terrainPaintModeRef.current || elevationPaintModeRef.current || cliffPaintModeRef.current)) setIsTerrainPainting(false)
+      if (isPaintingRef.current && (terrainPaintModeRef.current || elevationPaintModeRef.current)) setIsTerrainPainting(false)
       isPaintingRef.current = false
       strokeTrailRef.current.clear()
       strokeTypeRef.current = null
@@ -2839,18 +2799,13 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       }
     }
 
-    const onContextMenu = (e: MouseEvent) => {
-      if (cliffPaintModeRef.current) e.preventDefault()
-    }
     el.addEventListener('mousedown', onDown)
     el.addEventListener('mouseleave', onLeave)
-    el.addEventListener('contextmenu', onContextMenu)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
       el.removeEventListener('mousedown', onDown)
       el.removeEventListener('mouseleave', onLeave)
-      el.removeEventListener('contextmenu', onContextMenu)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }

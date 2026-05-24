@@ -63,11 +63,6 @@ export type TerrainSlice = {
   addCustomTerrain: (terrain: CustomTerrain) => void
   updateCustomTerrain: (id: string, updates: Partial<CustomTerrain>) => void
   removeCustomTerrain: (id: string) => void
-  // Cliff edges
-  cliffEdges: Record<string, true>
-  cliffPaintMode: boolean
-  paintCliffEdge: (edgeKey: string) => void
-  eraseCliffEdge: (edgeKey: string) => void
   // Blank map
   blankMap: boolean
   setBlankMap: (v: boolean) => void
@@ -209,15 +204,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   })),
   removeCustomTerrain: (id) => set(s => ({ customTerrains: s.customTerrains.filter(t => t.id !== id) })),
 
-  cliffEdges: {},
-  cliffPaintMode: false,
-  paintCliffEdge: (edgeKey) => set(s => ({ cliffEdges: { ...s.cliffEdges, [edgeKey]: true } })),
-  eraseCliffEdge: (edgeKey) => set(s => {
-    const next = { ...s.cliffEdges }
-    delete next[edgeKey]
-    return { cliffEdges: next }
-  }),
-
   blankMap: false,
 
   setBlankMap: (v) => set({ blankMap: v }),
@@ -275,7 +261,6 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     elevationError: null,
     elevationProgress: null,
     terrainPaintMode: false,
-    cliffPaintMode: false,
     lakePaintMode: false,
     roadPaintMode: false,
     roadPaintEraser: false,

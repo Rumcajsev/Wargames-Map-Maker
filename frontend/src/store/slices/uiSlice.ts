@@ -173,8 +173,6 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     updates.terrainPaintMode = tool.type === 'terrain'
     if (tool.type === 'terrain') updates.terrainPaintBrush = tool.brush
 
-    updates.cliffPaintMode = tool.type === 'cliff'
-
     updates.elevationPaintMode = tool.type === 'elevation'
     if (tool.type === 'elevation') updates.elevationPaintBrush = tool.brush
 
@@ -428,7 +426,7 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
         urbanVertexRatio: s.urbanVertexRatio, urbanNoise: s.urbanNoise,
         urbanBuildingCount: s.urbanBuildingCount, urbanBuildingSize: s.urbanBuildingSize,
         terrainEdgePaintEnabled: s.terrainEdgePaintEnabled,
-        cliffEdges: s.cliffEdges, customTerrains: s.customTerrains,
+        customTerrains: s.customTerrains,
         edgeBlobPainted: s.edgeBlobPainted, edgeBlobSmooth: s.edgeBlobSmooth,
         edgeBlobOffset: s.edgeBlobOffset, edgeBlobBump: s.edgeBlobBump,
         edgeBlobSweepFreq: s.edgeBlobSweepFreq, edgeBlobLobeFreq: s.edgeBlobLobeFreq,
@@ -801,7 +799,6 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 50) {
     if (!s.customTerrains) s.customTerrains = []
-    if (!s.cliffEdges) s.cliffEdges = {}
   }
   if (fromVersion < 51) {
     if (!s.disabledHexKeys) s.disabledHexKeys = []

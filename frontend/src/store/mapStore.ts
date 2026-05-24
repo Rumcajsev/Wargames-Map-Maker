@@ -94,7 +94,6 @@ export type HexEdgeMode = 'whole' | 'half'
 export type ActiveTool =
   | { type: 'none' }
   | { type: 'terrain'; brush: string }
-  | { type: 'cliff' }
   | { type: 'elevation'; brush: 'flat' | 'hills' | 'mountains' }
   | { type: 'lake' }
   | { type: 'road'; tier: 0 | 1 | 2; erasing: boolean }
