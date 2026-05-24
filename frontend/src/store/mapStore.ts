@@ -284,6 +284,50 @@ export const DEFAULT_RAIL_STYLE: RailStyle = {
   railStyle: 'classic',
 }
 
+export const DEFAULT_TERRAIN_BLOB = {
+  smooth: 0,
+  offset: -0.10,
+  bump: 0.47,
+  sweepFreq: 1.0,
+  lobeFreq: 4.1,
+  lobeAmp: 0.49,
+  lobeThreshold: 0.08,
+  lobeDirection: -1 as const,
+}
+
+export const DEFAULT_EDGE_BLOB = {
+  ...DEFAULT_TERRAIN_BLOB,
+  width: 0.25,
+}
+
+export const DEFAULT_LAKE_BLOB = {
+  smooth: 2,
+  offset: -0.15,
+  bump: 0.15,
+  sweepFreq: 0.6,
+  lobeFreq: 2.8,
+  lobeAmp: 0.4,
+  lobeThreshold: 0.20,
+  lobeDirection: 1 as const,
+}
+
+// Field render defaults — detached from active use, kept for future reuse.
+// export const DEFAULT_FIELD_RENDER = {
+//   fieldFreq: 0.3, fieldAmp: 0.8, fieldOctaves: 3, fieldPersistence: 0.5,
+// }
+
+export const DEFAULT_RIVER_GEOM = {
+  widthScale: 1.0,
+  wiggleAmp: 0.25,
+  wiggleFreq: 2.5,
+  smoothing: 10,
+  pathSmoothing: 0,
+}
+
+export const DEFAULT_CANAL_GEOM = {
+  widthScale: 0.45,
+}
+
 export const DEFAULT_ROAD_GEOM = {
   wiggleAmp: 0.20,
   wiggleFreq: 0.9,
@@ -626,11 +670,10 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     riverStyle: s.riverStyle,
     canalStyle: s.canalStyle,
     riverChainOverrides: s.riverChainOverrides,
-    riverFlowStyle: s.riverFlowStyle,
+    // riverFlowStyle / riverWiggliness — detached
     riverCurveSteps: s.riverCurveSteps,
     riverWobble: s.riverWobble,
     riverDetail: s.riverDetail,
-    riverWiggliness: s.riverWiggliness,
     showRiverLabels: s.showRiverLabels,
     riverLabelColor: s.riverLabelColor,
     elevationStatus: s.elevationStatus,
@@ -711,11 +754,6 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     terrainColors: s.terrainColors,
     terrainTextureScales: s.terrainTextureScales,
     terrainRenderMode: s.terrainRenderMode,
-    fieldFreq: s.fieldFreq,
-    fieldAmp: s.fieldAmp,
-    fieldOctaves: s.fieldOctaves,
-    fieldPersistence: s.fieldPersistence,
-    fieldWildness: s.fieldWildness,
     autoLakesEnabled: s.autoLakesEnabled,
     lakeSensitivity: s.lakeSensitivity,
     lakeBlobSmooth: s.lakeBlobSmooth,
@@ -768,9 +806,8 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     dataSource: s.dataSource,
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
-    mapImageConfidenceVisible: s.mapImageConfidenceVisible,
   }),
-  version: 45,
+  version: 47,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

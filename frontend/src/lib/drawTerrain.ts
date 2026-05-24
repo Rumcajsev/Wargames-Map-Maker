@@ -2,8 +2,8 @@
  *  Pure canvas operations — no React or store imports except types. */
 
 import type { GeneratedHex, BlobOverride } from '../store/mapStore'
-import { buildTerrainBlobsV2, buildSmoothedRing, getCoastlineRuns, bleedPolygon } from './terrainBlobs'
-import { catmullRom } from './geometry'
+import { buildTerrainBlobsV2, buildSmoothedRing, bleedPolygon } from './terrainBlobs'
+import { catmullRom, chaikin, douglasPeucker } from './geometry'
 import { makePermutation } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams } from './edgeBlobs'
 import { drawHistoricalVegetation } from './drawHistoricalVegetation'
@@ -27,8 +27,6 @@ export type DrawTerrainParams = {
   forestTexture: HTMLImageElement | null
   lightWoodsTexture: HTMLImageElement | null
   marshTexture: HTMLImageElement | null
-  renderMode: string
-  fieldCanvas: HTMLCanvasElement | OffscreenCanvas | null
   px: number; py: number; pw: number; ph: number
   defaultTerrainBlobs: { terrain: string; polys: [number, number][][] }[]
   defaultLakeBlobs: { terrain: string; polys: [number, number][][] }[]
@@ -42,18 +40,26 @@ export type DrawTerrainParams = {
   hexTerrainLayers: (hex: GeneratedHex) => string[]
   R: number
   realisticCoastline: boolean
+  coastlineV2: boolean
   coastlineClips: Map<string, [number, number][][][]>
   seaCoastKeys: Set<string>
   oceanSeaKeys: Set<string>
   beachStrip: boolean
   beachColor: string
   beachWidth: number
+  coastlineDPEpsilon: number
+  coastlineChaikinPasses: number
+  coastlineCatmullSteps: number
+  /** Pre-stitched chains spanning multiple hexes — used for the global smooth line.
+   *  Computed in TerrainViewCanvas from projectedCoastlineClips + hexVertMap. */
+  coastlineChains: [number, number][][]
   // Edge blobs
   edgeBlobPainted: Record<string, string>
   edgeBlobParams: EdgeBlobParams
   edgeBlobOverrides: Record<string, BlobOverride>
   hexVertMap: Map<string, [number, number][]>
-  mapStyle: 'standard' | 'historical_simple'
+  mapStyle: 'standard' | 'historical_simple' | 'basic'
+  hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
 }
 
 export type { EdgeBlobParams, EdgeBlobChain }
@@ -94,32 +100,48 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     projected, edgeMode, inMargin,
     terrainColors, terrainTextureScales,
     clearTexture, forestTexture, lightWoodsTexture, marshTexture,
-    renderMode, fieldCanvas, px, py, pw, ph,
+    px, py, pw, ph,
     defaultTerrainBlobs, defaultLakeBlobs,
     terrainBlobOverrides, lakeOverrides,
     blobComponents, blobComponentsByTerrain,
     terrainBlobParams, lakeBlobParams,
     hexes, hexTerrainLayers, R,
-    realisticCoastline, coastlineClips, seaCoastKeys, oceanSeaKeys,
+    realisticCoastline, coastlineV2, coastlineClips, seaCoastKeys, oceanSeaKeys,
     beachStrip, beachColor, beachWidth,
+    coastlineDPEpsilon, coastlineChaikinPasses, coastlineCatmullSteps, coastlineChains,
     // edge blobs destructured inline below where used
   } = params
 
-  // ── 1. Clear fills ──────────────────────────────────────────────────────────
-  const clearFillColor = terrainColors['clear'] ?? '#ede8d5'
-  for (const { hex, verts } of projected) {
-    if (edgeMode === 'whole' && hex.partial) continue
-    if (!hex.partial && !inMargin(verts)) continue
-    tCtx.beginPath()
-    tCtx.moveTo(verts[0][0], verts[0][1])
-    for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-    tCtx.closePath()
-    tCtx.fillStyle = clearFillColor
-    tCtx.fill()
+  // ── 1. Base fills ───────────────────────────────────────────────────────────
+  if (params.mapStyle === 'basic') {
+    // Flat per-hex color fill — no blobs, no textures
+    for (const { hex, verts } of projected) {
+      if (edgeMode === 'whole' && hex.partial) continue
+      if (!hex.partial && !inMargin(verts)) continue
+      tCtx.beginPath()
+      tCtx.moveTo(verts[0][0], verts[0][1])
+      for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+      tCtx.closePath()
+      const t = (hex.isLake ?? false) ? 'lake' : hex.terrain
+      tCtx.fillStyle = terrainColors[t] ?? terrainColors['clear'] ?? '#ede8d5'
+      tCtx.fill()
+    }
+  } else {
+    const clearFillColor = terrainColors['clear'] ?? '#ede8d5'
+    for (const { hex, verts } of projected) {
+      if (edgeMode === 'whole' && hex.partial) continue
+      if (!hex.partial && !inMargin(verts)) continue
+      tCtx.beginPath()
+      tCtx.moveTo(verts[0][0], verts[0][1])
+      for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+      tCtx.closePath()
+      tCtx.fillStyle = clearFillColor
+      tCtx.fill()
+    }
   }
 
   // ── 2. Clear texture overlay ────────────────────────────────────────────────
-  if (clearTexture && clearTexture.complete) {
+  if (params.mapStyle !== 'basic' && clearTexture && clearTexture.complete) {
     const clearPattern = tCtx.createPattern(clearTexture, 'repeat')
     if (clearPattern) {
       const clearTexSize = R * (terrainTextureScales['clear'] ?? 3)
@@ -146,17 +168,14 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     }
   }
 
-  // ── 3. Field mode ───────────────────────────────────────────────────────────
-  if (renderMode === 'field' && fieldCanvas !== null) {
-    tCtx.save()
-    tCtx.imageSmoothingEnabled = true
-    tCtx.imageSmoothingQuality = 'high'
-    tCtx.drawImage(fieldCanvas, px, py, pw, ph)
-    tCtx.restore()
-  }
+  // ── 3. Field mode (detached — see terrainBlobs.ts) ─────────────────────────
+  // if (renderMode === 'field' && fieldCanvas !== null) {
+  //   tCtx.save(); tCtx.imageSmoothingEnabled = true; tCtx.imageSmoothingQuality = 'high'
+  //   tCtx.drawImage(fieldCanvas, px, py, pw, ph); tCtx.restore()
+  // }
 
   // ── 4. Blob mode ────────────────────────────────────────────────────────────
-  if (renderMode === 'blob') {
+  if (params.mapStyle !== 'basic') {
     const BLOB_Z: Record<string, number> = { rough: 1, marsh: 2, light_woods: 4, woods: 5, sea: 10 }
 
     // Build defaultBlobMap excluding lakes
@@ -306,7 +325,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
 
   // ── 5b. Edge blobs ───────────────────────────────────────────────────────────
   const { edgeBlobPainted, edgeBlobParams, edgeBlobOverrides, hexVertMap } = params
-  if (Object.keys(edgeBlobPainted).length > 0) {
+  if (params.mapStyle !== 'basic' && Object.keys(edgeBlobPainted).length > 0) {
     // Build terrain → hex-key set for the connection extension check
     const terrainToHexes = new Map<string, Set<string>>()
     for (const { hex } of projected) {
@@ -363,57 +382,33 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
 
   // ── 5d. Historical hachures (elevation) ──────────────────────────────────
   if (params.mapStyle === 'historical_simple') {
-    drawHachures(tCtx, { projected, R })
+    drawHachures(tCtx, { projected, R, hachureParams: params.hachureParams })
   }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
   if (realisticCoastline) {
     const seaColor = terrainColors['sea'] ?? '#3a6898'
 
-    // Layer A — Beach strip
-    if (beachStrip && coastlineClips.size > 0) {
-      const bw = beachWidth * R * 2
-      for (const { hex, verts } of projected) {
-        if (!inMargin(verts) && !hex.partial) continue
-        const key = `${hex.q},${hex.r}`
-        if (!seaCoastKeys.has(key)) continue
-        const rings = coastlineClips.get(key)
-        if (!rings || rings.length === 0) continue
-
-        tCtx.save()
+    // V1 beach strip — stroked before the sea fill so only the land-side half is visible
+    if (!coastlineV2 && beachStrip && coastlineChains.length > 0) {
+      tCtx.strokeStyle = beachColor
+      tCtx.lineWidth = beachWidth * R * 2
+      tCtx.lineJoin = 'round'
+      tCtx.lineCap = 'round'
+      for (const chain of coastlineChains) {
+        const simplified = coastlineDPEpsilon > 0 ? douglasPeucker(chain, coastlineDPEpsilon) : chain
+        const smoothed = catmullRom(chaikin(simplified, coastlineChaikinPasses, false), coastlineCatmullSteps)
+        if (smoothed.length < 2) continue
         tCtx.beginPath()
-        for (const ring of rings) {
-          if (ring.length < 3) continue
-          const smoothed = catmullRom([...ring, ring[0]], 3)
-          tCtx.moveTo(smoothed[0][0], smoothed[0][1])
-          for (let i = 1; i < smoothed.length; i++) tCtx.lineTo(smoothed[i][0], smoothed[i][1])
-          tCtx.closePath()
-        }
-        tCtx.clip()
-
-        tCtx.strokeStyle = beachColor
-        tCtx.lineWidth = bw
-        tCtx.lineJoin = 'round'
-        tCtx.lineCap = 'round'
-        for (const ring of rings) {
-          if (ring.length < 3) continue
-          for (const run of getCoastlineRuns(ring, verts, 3)) {
-            const smoothed = catmullRom(run, 3)
-            tCtx.beginPath()
-            tCtx.moveTo(smoothed[0][0], smoothed[0][1])
-            for (let i = 1; i < smoothed.length; i++) tCtx.lineTo(smoothed[i][0], smoothed[i][1])
-            tCtx.stroke()
-          }
-        }
-        tCtx.restore()
+        tCtx.moveTo(smoothed[0][0], smoothed[0][1])
+        for (let i = 1; i < smoothed.length; i++) tCtx.lineTo(smoothed[i][0], smoothed[i][1])
+        tCtx.stroke()
       }
     }
 
-    // Layer B — Sea mask (evenodd: hex outline + land clip punches the hole)
+    // Per-hex evenodd sea mask — identical in V1 and V2
     tCtx.fillStyle = seaColor
     tCtx.beginPath()
-
-    // Ocean sea hexes (pure sea connected to coastline)
     for (const { hex, verts } of projected) {
       const key = `${hex.q},${hex.r}`
       if (!oceanSeaKeys.has(key)) continue
@@ -422,8 +417,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
       tCtx.closePath()
     }
-
-    // Sea-coast hexes with land clip polygon punched out
     for (const { hex, verts } of projected) {
       if (!inMargin(verts) && !hex.partial) continue
       const key = `${hex.q},${hex.r}`
@@ -435,13 +428,29 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       tCtx.closePath()
       for (const ring of rings) {
         if (ring.length < 3) continue
-        const pts = buildSmoothedRing(ring, verts, 3, 3)
+        const pts = buildSmoothedRing(ring, verts, 3, coastlineCatmullSteps, coastlineChaikinPasses, coastlineDPEpsilon)
         tCtx.moveTo(pts[0][0], pts[0][1])
         for (let i = 1; i < pts.length; i++) tCtx.lineTo(pts[i][0], pts[i][1])
         tCtx.closePath()
       }
     }
-
     tCtx.fill('evenodd')
+
+    // V2 smooth global line — drawn on top of the sea mask to eliminate staircase edges
+    if (coastlineV2 && coastlineChains.length > 0) {
+      tCtx.strokeStyle = beachColor
+      tCtx.lineWidth = beachWidth * R * 2
+      tCtx.lineJoin = 'round'
+      tCtx.lineCap = 'round'
+      for (const chain of coastlineChains) {
+        const simplified = coastlineDPEpsilon > 0 ? douglasPeucker(chain, coastlineDPEpsilon) : chain
+        const smoothed = catmullRom(chaikin(simplified, coastlineChaikinPasses, false), coastlineCatmullSteps)
+        if (smoothed.length < 2) continue
+        tCtx.beginPath()
+        tCtx.moveTo(smoothed[0][0], smoothed[0][1])
+        for (let i = 1; i < smoothed.length; i++) tCtx.lineTo(smoothed[i][0], smoothed[i][1])
+        tCtx.stroke()
+      }
+    }
   }
 }

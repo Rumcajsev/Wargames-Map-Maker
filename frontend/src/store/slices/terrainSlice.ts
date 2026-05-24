@@ -4,6 +4,7 @@ import type {
 } from '../mapStore'
 import {
   DEFAULT_THRESHOLDS,
+  DEFAULT_TERRAIN_BLOB, DEFAULT_EDGE_BLOB, DEFAULT_LAKE_BLOB,
   combinedDimsMm, mapResolutionMpx,
 } from '../mapStore'
 import { classifyHex, classifyHexLayers } from '../../lib/terrainClassify'
@@ -27,20 +28,21 @@ export type TerrainSlice = {
   terrainBlobLobeThreshold: number
   terrainBlobLobeDirection: number
   realisticCoastline: boolean
+  coastlineV2: boolean
   beachStrip: boolean
   beachColor: string
   beachWidth: number
+  coastlineDPEpsilon: number
+  coastlineChaikinPasses: number
+  coastlineCatmullSteps: number
   terrainColors: Record<string, string>
   terrainTextureScales: Record<string, number>
   terrainBlobOverrides: Record<string, BlobOverride>
   terrainTypeBlobStyles: Record<string, BlobOverride>
-  // Terrain render mode
-  terrainRenderMode: 'blob' | 'field'
-  fieldFreq: number
-  fieldAmp: number
-  fieldOctaves: number
-  fieldPersistence: number
-  fieldWildness: Record<string, number>
+  // Terrain render mode (field mode detached — see terrainBlobs.ts / drawTerrain.ts)
+  terrainRenderMode: 'blob'
+  // fieldFreq: number; fieldAmp: number; fieldOctaves: number
+  // fieldPersistence: number; fieldWildness: Record<string, number>
   // Terrain paint
   terrainPaintMode: boolean
   terrainPaintBrush: string
@@ -94,19 +96,21 @@ export type TerrainSlice = {
   setTerrainBlobLobeThreshold: (v: number) => void
   setTerrainBlobLobeDirection: (v: number) => void
   setRealisticCoastline: (v: boolean) => void
+  setCoastlineV2: (v: boolean) => void
   setBeachStrip: (v: boolean) => void
   setBeachColor: (v: string) => void
   setBeachWidth: (v: number) => void
+  setCoastlineDPEpsilon: (v: number) => void
+  setCoastlineChaikinPasses: (v: number) => void
+  setCoastlineCatmullSteps: (v: number) => void
   setTerrainColor: (terrain: string, color: string) => void
   setTerrainTextureScale: (terrain: string, scale: number) => void
   setTerrainBlobOverride: (key: string, override: BlobOverride | null) => void
   setTerrainTypeBlobStyle: (terrain: string, style: BlobOverride | null) => void
-  setTerrainRenderMode: (v: 'blob' | 'field') => void
-  setFieldFreq: (v: number) => void
-  setFieldAmp: (v: number) => void
-  setFieldOctaves: (v: number) => void
-  setFieldPersistence: (v: number) => void
-  setFieldWildness: (terrain: string, v: number) => void
+  setTerrainRenderMode: (v: 'blob') => void
+  // setFieldFreq: (v: number) => void; setFieldAmp: (v: number) => void
+  // setFieldOctaves: (v: number) => void; setFieldPersistence: (v: number) => void
+  // setFieldWildness: (terrain: string, v: number) => void
   setTerrainPaintMode: (v: boolean) => void
   setTerrainPaintBrush: (v: string) => void
   setTerrainEdgePaintEnabled: (v: boolean) => void
@@ -151,29 +155,29 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   generateProgress: null,
   terrainLayersEnabled: true,
 
-  terrainBlobSmooth: 0,
-  terrainBlobOffset: -0.10,
-  terrainBlobBump: 0.47,
-  terrainBlobSweepFreq: 1.0,
-  terrainBlobLobeFreq: 4.1,
-  terrainBlobLobeAmp: 0.49,
-  terrainBlobLobeThreshold: 0.08,
-  terrainBlobLobeDirection: -1,
+  terrainBlobSmooth: DEFAULT_TERRAIN_BLOB.smooth,
+  terrainBlobOffset: DEFAULT_TERRAIN_BLOB.offset,
+  terrainBlobBump: DEFAULT_TERRAIN_BLOB.bump,
+  terrainBlobSweepFreq: DEFAULT_TERRAIN_BLOB.sweepFreq,
+  terrainBlobLobeFreq: DEFAULT_TERRAIN_BLOB.lobeFreq,
+  terrainBlobLobeAmp: DEFAULT_TERRAIN_BLOB.lobeAmp,
+  terrainBlobLobeThreshold: DEFAULT_TERRAIN_BLOB.lobeThreshold,
+  terrainBlobLobeDirection: DEFAULT_TERRAIN_BLOB.lobeDirection,
   realisticCoastline: false,
+  coastlineV2: false,
   beachStrip: false,
   beachColor: '#e4d5a0',
   beachWidth: 0.06,
+  coastlineDPEpsilon: 1.5,
+  coastlineChaikinPasses: 3,
+  coastlineCatmullSteps: 8,
   terrainColors: { ...TERRAIN_COLORS },
   terrainTextureScales: { clear: 3, woods: 3, light_woods: 3 },
   terrainBlobOverrides: {},
   terrainTypeBlobStyles: {},
 
   terrainRenderMode: 'blob',
-  fieldFreq: 0.3,
-  fieldAmp: 0.8,
-  fieldOctaves: 3,
-  fieldPersistence: 0.5,
-  fieldWildness: {},
+  // fieldFreq / fieldAmp / fieldOctaves / fieldPersistence / fieldWildness — detached
 
   terrainPaintMode: false,
   terrainPaintBrush: 'clear',
@@ -210,6 +214,8 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
 
   resetToSetup: () => set({
     step: 'setup',
+    dataSource: 'osm',
+    mapImageDataUrl: null,
     generatedHexes: [],
     generatedMetadata: null,
     generateStatus: 'idle',
@@ -358,6 +364,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
             })
             set({
               step: 'terrain',
+              dataSource: 'osm',
               generateStatus: 'done',
               generatedHexes: reclassified,
               generatedMetadata: event.metadata as GridMetadata,
@@ -388,6 +395,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
             if (get().blankMap) {
               set({
                 step: 'terrain',
+                dataSource: 'osm',
                 generatedMetadata: event.metadata as GridMetadata,
                 generatedHexes: placeholder,
                 generateStatus: 'done',
@@ -533,9 +541,13 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setTerrainBlobLobeThreshold: (v) => set({ terrainBlobLobeThreshold: v }),
   setTerrainBlobLobeDirection: (v) => set({ terrainBlobLobeDirection: v }),
   setRealisticCoastline: (v) => set({ realisticCoastline: v }),
+  setCoastlineV2: (v) => set({ coastlineV2: v }),
   setBeachStrip: (v) => set({ beachStrip: v }),
   setBeachColor: (v) => set({ beachColor: v }),
   setBeachWidth: (v) => set({ beachWidth: v }),
+  setCoastlineDPEpsilon: (v) => set({ coastlineDPEpsilon: v }),
+  setCoastlineChaikinPasses: (v) => set({ coastlineChaikinPasses: v }),
+  setCoastlineCatmullSteps: (v) => set({ coastlineCatmullSteps: v }),
   setTerrainColor: (terrain, color) => set((s) => ({ terrainColors: { ...s.terrainColors, [terrain]: color } })),
   setTerrainTextureScale: (terrain, scale) => set((s) => ({ terrainTextureScales: { ...s.terrainTextureScales, [terrain]: scale } })),
 
@@ -562,11 +574,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   }),
 
   setTerrainRenderMode: (v) => set({ terrainRenderMode: v }),
-  setFieldFreq: (v) => set({ fieldFreq: v }),
-  setFieldAmp: (v) => set({ fieldAmp: v }),
-  setFieldOctaves: (v) => set({ fieldOctaves: v }),
-  setFieldPersistence: (v) => set({ fieldPersistence: v }),
-  setFieldWildness: (terrain, v) => set((s) => ({ fieldWildness: { ...s.fieldWildness, [terrain]: v } })),
+  // setFieldFreq / setFieldAmp / setFieldOctaves / setFieldPersistence / setFieldWildness — detached
 
   setTerrainPaintMode: (v) => set({ terrainPaintMode: v, ...(v ? { roadPaintMode: false, railPaintMode: false, lakePaintMode: false, elevationPaintMode: false } : {}) }),
   setTerrainPaintBrush: (v) => set({ terrainPaintBrush: v }),
