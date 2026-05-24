@@ -219,6 +219,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
     excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
     disabledHexKeys, toggleDisabledHex, autoDisableOceanHexes,
+    autoDisabledOceanHexKeys, setAutoDisabledOceanHexKeys,
     bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, setBridgeOverride, clearBridgeOverride,
     megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth,
     megaHexOriginQ, megaHexOriginR, setMegaHexOrigin,
@@ -972,6 +973,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   toggleDisabledHexRef.current = toggleDisabledHex
   const autoDisableOceanHexesRef = useRef(autoDisableOceanHexes)
   autoDisableOceanHexesRef.current = autoDisableOceanHexes
+  const autoDisabledOceanHexKeysRef = useRef(autoDisabledOceanHexKeys)
+  autoDisabledOceanHexKeysRef.current = autoDisabledOceanHexKeys
+  const setAutoDisabledOceanHexKeysRef = useRef(setAutoDisabledOceanHexKeys)
+  setAutoDisabledOceanHexKeysRef.current = setAutoDisabledOceanHexKeys
 
   const mapImageElementRef = useRef<HTMLImageElement | null>(null)
   const mapImageDataUrlRef = useRef(mapImageDataUrl)
@@ -1280,8 +1285,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const edgeMode = hexEdgeModeRef.current
     const excludedSet = new Set(excludedHexKeysRef.current)
     const disabledSet = new Set(disabledHexKeysRef.current)
-    const bordersExcludedSet = disabledSet.size > 0
-      ? new Set([...excludedSet, ...disabledSet])
+    const autoDisabledSet = new Set(autoDisabledOceanHexKeysRef.current)
+    const bordersExcludedSet = (disabledSet.size > 0 || autoDisabledSet.size > 0)
+      ? new Set([...excludedSet, ...disabledSet, ...autoDisabledSet])
       : excludedSet
     const { pw, ph, px, py } = exportTarget
       ? { pw: exportTarget.pw, ph: exportTarget.ph, px: 0, py: 0 }
@@ -2440,7 +2446,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, mapStyle, hachureParams])
 
   // Mark other layer caches dirty when their relevant data changes
-  useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys, disabledHexKeys])
+  useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys])
   useEffect(() => { riversDirtyRef.current = true }, [riverEdges, canalEdges, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey])
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
   useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, smoothedRailData, riverEdges, canalEdges, generatedHexes])
@@ -2448,7 +2454,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
   useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
-  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, cliffPaintMode, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, disabledHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
+  useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, cliffEdges, cliffPaintMode, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
 
   useEffect(() => { drawOsmHighlight() }, [osmHighlightTier, osmSpotlightMode, osmSpotlightTiers, osmRailHighlight, hoveredOsmRiverIdx, drawOsmHighlight])
 
@@ -2953,6 +2959,25 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       window.removeEventListener('mouseup', onUp)
     }
   }, [hexMaskPaintAtClient])
+
+  // Recompute auto-disabled ocean hexes when coastline setting or hexes change
+  useEffect(() => {
+    if (autoDisabledOceanHexKeysRef.current.length === 0) return
+    const hexes = hexesRef.current
+    if (!hexes || hexes.length === 0) return
+    const NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]]
+    const hexByKey = new Map(hexes.map(h => [`${h.q},${h.r}`, h]))
+    const keys: string[] = []
+    for (const h of hexes) {
+      if (h.terrain !== 'sea') continue
+      const touchesLand = NEIGHBORS.some(([dq, dr]) => {
+        const nb = hexByKey.get(`${h.q + dq},${h.r + dr}`)
+        return nb && nb.terrain !== 'sea'
+      })
+      if (!touchesLand) keys.push(`${h.q},${h.r}`)
+    }
+    setAutoDisabledOceanHexKeysRef.current(keys)
+  }, [realisticCoastline, generatedHexes])
 
   // Mega hex origin drag — click or drag to place the lattice origin on a hex
   useEffect(() => {

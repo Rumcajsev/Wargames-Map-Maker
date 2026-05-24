@@ -107,7 +107,7 @@ export function DisplaySidebar() {
     mapBorderWidth, setMapBorderWidth,
     clipToHexGrid, setClipToHexGrid,
     excludedHexKeys, resetExcludedHexes,
-    disabledHexKeys, resetDisabledHexes, autoDisableOceanHexes,
+    disabledHexKeys, autoDisabledOceanHexKeys, resetDisabledHexes, autoDisableOceanHexes,
     activeTool, setActiveTool,
     megaHexEnabled, setMegaHexEnabled,
     megaHexRadius, setMegaHexRadius,
@@ -355,7 +355,7 @@ export function DisplaySidebar() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <div style={labelStyle}>Impassable Hexes</div>
-          {disabledHexKeys.length > 0 && (
+          {(disabledHexKeys.length > 0 || autoDisabledOceanHexKeys.length > 0) && (
             <button
               onClick={resetDisabledHexes}
               style={{
@@ -404,9 +404,12 @@ export function DisplaySidebar() {
             )
           })}
         </div>
-        {disabledHexKeys.length > 0 && (
+        {(disabledHexKeys.length > 0 || autoDisabledOceanHexKeys.length > 0) && (
           <div style={{ fontSize: 10, color: '#5a5a7a', marginTop: 6 }}>
-            {disabledHexKeys.length} hex{disabledHexKeys.length !== 1 ? 'es' : ''} disabled
+            {disabledHexKeys.length + autoDisabledOceanHexKeys.length} hex{disabledHexKeys.length + autoDisabledOceanHexKeys.length !== 1 ? 'es' : ''} disabled
+            {autoDisabledOceanHexKeys.length > 0 && disabledHexKeys.length > 0 && (
+              <span> ({autoDisabledOceanHexKeys.length} auto, {disabledHexKeys.length} manual)</span>
+            )}
           </div>
         )}
       </div>

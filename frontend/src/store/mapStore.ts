@@ -809,6 +809,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     clipToHexGrid: s.clipToHexGrid,
     excludedHexKeys: s.excludedHexKeys,
     disabledHexKeys: s.disabledHexKeys,
+    autoDisabledOceanHexKeys: s.autoDisabledOceanHexKeys,
     hexNumbersEnabled: s.hexNumbersEnabled,
     hexNumberStartCorner: s.hexNumberStartCorner,
     hexNumberEdge: s.hexNumberEdge,
@@ -825,7 +826,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 51,
+  version: 52,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))
