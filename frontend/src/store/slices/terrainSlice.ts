@@ -5,7 +5,7 @@ import type {
 import {
   DEFAULT_THRESHOLDS,
   DEFAULT_TERRAIN_BLOB, DEFAULT_EDGE_BLOB, DEFAULT_LAKE_BLOB,
-  combinedDimsMm, mapResolutionMpx,
+  pageGridTotalMm, mapResolutionMpx,
 } from '../mapStore'
 import { type BlobPresetId, BLOB_PRESETS } from '../blobPresets'
 import { classifyHex, classifyHexLayers } from '../../lib/terrainClassify'
@@ -316,7 +316,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, marginMm, bearing, center, zoom, framePixelWidth, blankMap, realisticCoastline } = get()
     if (framePixelWidth === 0 && !blankMap) return
 
-    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
+    const [cwMm, chMm] = pageGridTotalMm(pageGrid)
 
     let widthM: number, heightM: number, usedCenter: [number, number], usedBearing: number
     if (blankMap) {

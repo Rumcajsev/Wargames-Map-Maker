@@ -128,8 +128,8 @@ export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
 
 export interface PageGrid {
-  cols: number
-  rows: number
+  colWidths: number[]   // mm width of each column
+  rowHeights: number[]  // mm height of each row
 }
 
 export interface Hex {
@@ -237,13 +237,67 @@ export function paperDimsMm(size: PaperSize, orientation: Orientation): [number,
   return orientation === 'landscape' ? [l, s] : [s, l]
 }
 
+export function pageGridTotalMm(grid: PageGrid): [number, number] {
+  return [
+    grid.colWidths.reduce((a, b) => a + b, 0),
+    grid.rowHeights.reduce((a, b) => a + b, 0),
+  ]
+}
+
+// Legacy alias kept for any remaining call sites during transition
 export function combinedDimsMm(
-  size: PaperSize,
-  orientation: Orientation,
+  _size: PaperSize,
+  _orientation: Orientation,
   pageGrid: PageGrid,
 ): [number, number] {
+  return pageGridTotalMm(pageGrid)
+}
+
+// All A-size dimension pairs [width, height] in mm (both orientations)
+const A_SIZE_DIMS: { size: PaperSize; orientation: Orientation; w: number; h: number }[] = (
+  ['A4', 'A3', 'A2', 'A1'] as PaperSize[]
+).flatMap(size => {
+  const [s, l] = PAPER_MM[size]
+  return [
+    { size, orientation: 'landscape' as Orientation, w: l, h: s },
+    { size, orientation: 'portrait'  as Orientation, w: s, h: l },
+  ]
+})
+
+// Returns the paper size/orientation for a cell of given mm dimensions (null if none match)
+export function cellPaperInfo(
+  colW: number, rowH: number,
+): { size: PaperSize; orientation: Orientation } | null {
+  const match = A_SIZE_DIMS.find(d => Math.abs(d.w - colW) < 0.5 && Math.abs(d.h - rowH) < 0.5)
+  return match ? { size: match.size, orientation: match.orientation } : null
+}
+
+// Column widths (mm) that form a valid A-size paper with every existing row height
+export function validColWidthsForRows(rowHeights: number[]): number[] {
+  const candidates = [...new Set(A_SIZE_DIMS.map(d => d.w))]
+  return candidates.filter(w =>
+    rowHeights.every(h => A_SIZE_DIMS.some(d => Math.abs(d.w - w) < 0.5 && Math.abs(d.h - h) < 0.5))
+  ).sort((a, b) => a - b)
+}
+
+// Row heights (mm) that form a valid A-size paper with every existing column width
+export function validRowHeightsForCols(colWidths: number[]): number[] {
+  const candidates = [...new Set(A_SIZE_DIMS.map(d => d.h))]
+  return candidates.filter(h =>
+    colWidths.every(w => A_SIZE_DIMS.some(d => Math.abs(d.w - w) < 0.5 && Math.abs(d.h - h) < 0.5))
+  ).sort((a, b) => a - b)
+}
+
+// Build a uniform PageGrid from a paper size (all cells the same size)
+export function uniformPageGrid(
+  size: PaperSize, orientation: Orientation,
+  cols = 1, rows = 1,
+): PageGrid {
   const [pw, ph] = paperDimsMm(size, orientation)
-  return [pw * pageGrid.cols, ph * pageGrid.rows]
+  return {
+    colWidths:  Array(cols).fill(pw),
+    rowHeights: Array(rows).fill(ph),
+  }
 }
 
 export const FRAME_MARGIN = 0.86
@@ -805,7 +859,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 54,
+  version: 55,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

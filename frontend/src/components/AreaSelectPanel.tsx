@@ -109,7 +109,7 @@ export function AreaSelectPanel({ onBack }: { onBack: () => void }) {
       {/* Live stats */}
       <div style={{ padding: '14px 18px', borderBottom: '1px solid #1a1b28', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ color: '#7a9e8a', fontSize: 13, fontWeight: 600 }}>
-          {cols} × {rows} hexes{pageGrid.cols * pageGrid.rows > 1 ? ' / sheet' : ''}
+          {cols} × {rows} hexes{pageGrid.colWidths.length * pageGrid.rowHeights.length > 1 ? ' / sheet' : ''}
         </div>
         <div style={{ color: '#5a7a68', fontSize: 11 }}>{hexKmStr} km / hex</div>
         <div style={{ color: '#5a7a68', fontSize: 11 }}>~{terrainW} × {terrainH} km terrain</div>

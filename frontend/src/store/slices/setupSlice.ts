@@ -1,5 +1,5 @@
 import type { MapStore, PaperSize, Orientation, PageGrid, HexOrientation, HexEdgeMode, Hex, GridMetadata } from '../mapStore'
-import { combinedDimsMm, mapResolutionMpx } from '../mapStore'
+import { pageGridTotalMm, uniformPageGrid, paperDimsMm, mapResolutionMpx } from '../mapStore'
 
 export type SetupSlice = {
   step: 'setup' | 'terrain' | 'image-align'
@@ -40,7 +40,7 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   step: 'setup',
   paperSize: 'A3',
   orientation: 'landscape',
-  pageGrid: { cols: 1, rows: 1 },
+  pageGrid: uniformPageGrid('A3', 'landscape'),
   hexSizeMm: 20,
   hexOrientation: 'flat',
   marginMm: 8,
@@ -55,8 +55,14 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   error: null,
   flyTarget: null,
 
-  setPaperSize: (v) => set({ paperSize: v }),
-  setOrientation: (v) => set({ orientation: v }),
+  setPaperSize: (v) => set((s) => ({
+    paperSize: v,
+    pageGrid: uniformPageGrid(v, s.orientation, s.pageGrid.colWidths.length, s.pageGrid.rowHeights.length),
+  })),
+  setOrientation: (v) => set((s) => ({
+    orientation: v,
+    pageGrid: uniformPageGrid(s.paperSize, v, s.pageGrid.colWidths.length, s.pageGrid.rowHeights.length),
+  })),
   setPageGrid: (v) => set({ pageGrid: v }),
   setHexSizeMm: (v) => set({ hexSizeMm: v }),
   setHexOrientation: (v) => set({ hexOrientation: v }),
@@ -73,7 +79,7 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
     const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth } = get()
     if (framePixelWidth === 0) return
 
-    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
+    const [cwMm, chMm] = pageGridTotalMm(pageGrid)
     const res = mapResolutionMpx(center[1], zoom)
     const widthM = framePixelWidth * res
     const heightM = widthM * (chMm / cwMm)
@@ -92,7 +98,7 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
           height_m: heightM,
           hex_size_mm: hexSizeMm,
           paper_size: paperSize,
-          orientation,
+          orientation: orientation,
           hex_orientation: hexOrientation,
           paper_width_mm: cwMm,
           paper_height_mm: chMm,

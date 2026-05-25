@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMapStore, paperDimsMm, combinedDimsMm, mapResolutionMpx } from '../store/mapStore'
-import type { PaperSize, Orientation, HexOrientation, HexEdgeMode } from '../store/mapStore'
+import type { PaperSize, HexOrientation, HexEdgeMode } from '../store/mapStore'
 
 type StartMode = 'osm' | 'blank' | 'reference'
 
@@ -170,7 +170,7 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
 
       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ color: '#7a9e8a', fontSize: 13, fontWeight: 600 }}>
-          {cols} × {rows} hexes{pageGrid.cols * pageGrid.rows > 1 ? ' / sheet' : ''}
+          {cols} × {rows} hexes{pageGrid.colWidths.length * pageGrid.rowHeights.length > 1 ? ' / sheet' : ''}
         </div>
         <div style={{ color: '#5a7a68', fontSize: 12 }}>
           {hexSizeKmStr} km / hex
@@ -178,9 +178,9 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
         <div style={{ color: '#5a7a68', fontSize: 12 }}>
           ~{terrainWKm} × {terrainHKm} km terrain
         </div>
-        {pageGrid.cols * pageGrid.rows > 1 && (
+        {pageGrid.colWidths.length * pageGrid.rowHeights.length > 1 && (
           <div style={{ color: '#404a44', fontSize: 11 }}>
-            {pageGrid.cols}×{pageGrid.rows} pages · {Math.round(cwMm)} × {Math.round(chMm)} mm total
+            {pageGrid.colWidths.length}×{pageGrid.rowHeights.length} pages · {Math.round(cwMm)} × {Math.round(chMm)} mm total
           </div>
         )}
         {bearingDisplay !== 0 && (

@@ -828,6 +828,21 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       }
     }
   }
+  if (fromVersion < 55) {
+    const g = s.pageGrid as unknown as { cols?: number; rows?: number; colWidths?: number[]; rowHeights?: number[] }
+    if (g && 'cols' in g && !Array.isArray(g.colWidths)) {
+      const paperSize = (s.paperSize as string) ?? 'A3'
+      const orientation = (s.orientation as string) ?? 'landscape'
+      const PAPER_MM: Record<string, [number, number]> = {
+        A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841],
+      }
+      const [sh, ln] = PAPER_MM[paperSize] ?? [297, 420]
+      const [pw, ph] = orientation === 'landscape' ? [ln, sh] : [sh, ln]
+      const cols = g.cols ?? 1
+      const rows = g.rows ?? 1
+      s.pageGrid = { colWidths: Array(cols).fill(pw), rowHeights: Array(rows).fill(ph) }
+    }
+  }
   return s
 }
 

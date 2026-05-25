@@ -333,8 +333,6 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
             <FieldLabel style={{ marginTop: 14 }}>SHEETS</FieldLabel>
             <div style={{ marginTop: 4 }}>
               <PageGridEditor
-                paperSize={paperSize}
-                orientation={orientation}
                 pageGrid={pageGrid}
                 setPageGrid={setPageGrid}
                 marginMm={marginMm}
@@ -454,8 +452,6 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
           {showMap ? <MapView /> : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: TK.paper2 }}>
               <PaperHexPreview
-                paperSize={paperSize}
-                orientation={orientation}
                 pageGrid={pageGrid}
                 marginMm={marginMm}
                 hexSizeMm={hexSizeMm}

@@ -29,12 +29,14 @@ export type DrawPaperMarginParams = {
   ph: number
   mgPx: number
   zoom: number
-  pageGrid: { cols: number; rows: number }
+  pageGrid: { colWidths: number[]; rowHeights: number[] }
 }
 
 export function drawPaperMargin(p: DrawPaperMarginParams): void {
   const { ctx, px, py, pw, ph, mgPx, zoom, pageGrid } = p
-  const { cols, rows } = pageGrid
+  const { colWidths, rowHeights } = pageGrid
+  const totalW = colWidths.reduce((a, b) => a + b, 0)
+  const totalH = rowHeights.reduce((a, b) => a + b, 0)
 
   ctx.strokeStyle = 'rgba(0,0,0,0.25)'
   ctx.lineWidth = 0.75
@@ -42,17 +44,21 @@ export function drawPaperMargin(p: DrawPaperMarginParams): void {
   ctx.strokeRect(px + mgPx, py + mgPx, pw - mgPx * 2, ph - mgPx * 2)
   ctx.setLineDash([])
 
-  if (cols > 1 || rows > 1) {
+  if (colWidths.length > 1 || rowHeights.length > 1) {
     ctx.strokeStyle = 'rgba(220, 60, 0, 0.9)'
     ctx.lineWidth = 2 / zoom
     ctx.beginPath()
-    for (let i = 1; i < cols; i++) {
-      const x = px + (pw * i) / cols
+    let xAcc = 0
+    for (let i = 0; i < colWidths.length - 1; i++) {
+      xAcc += colWidths[i]
+      const x = px + (pw * xAcc) / totalW
       ctx.moveTo(x, py)
       ctx.lineTo(x, py + ph)
     }
-    for (let j = 1; j < rows; j++) {
-      const y = py + (ph * j) / rows
+    let yAcc = 0
+    for (let j = 0; j < rowHeights.length - 1; j++) {
+      yAcc += rowHeights[j]
+      const y = py + (ph * yAcc) / totalH
       ctx.moveTo(px, y)
       ctx.lineTo(px + pw, y)
     }

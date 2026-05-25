@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMapStore, combinedDimsMm, mapResolutionMpx } from '../store/mapStore'
+import { useMapStore, pageGridTotalMm, mapResolutionMpx } from '../store/mapStore'
 import type { PaperSize, HexOrientation, HexEdgeMode } from '../store/mapStore'
 import { PageGridEditor, PAGE_GRID_EDITOR_DARK } from './PaperHexPreview'
 
@@ -26,7 +26,7 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
   const [startMode, setStartMode] = useState<StartMode>('osm')
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
-  const [cwMm] = combinedDimsMm(paperSize, orientation, pageGrid)
+  const [cwMm] = pageGridTotalMm(pageGrid)
   const res = mapResolutionMpx(center[1], zoom)
   const widthM = framePixelWidth * res
   const scaleMpMm = framePixelWidth > 0 ? widthM / cwMm : 0
@@ -84,8 +84,6 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
 
           <div style={{ borderTop: '1px solid #1a1b28', paddingTop: 28, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
             <PageGridEditor
-              paperSize={paperSize}
-              orientation={orientation}
               pageGrid={pageGrid}
               setPageGrid={setPageGrid}
               marginMm={marginMm}

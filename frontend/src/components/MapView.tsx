@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, combinedDimsMm, FRAME_MARGIN, type HexEdgeMode } from '../store/mapStore'
+import { useMapStore, pageGridTotalMm, FRAME_MARGIN, type HexEdgeMode } from '../store/mapStore'
 
 const OSM_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -151,8 +151,8 @@ export function MapView() {
 
   const [frameDims, setFrameDims] = useState({ w: 0, h: 0 })
 
-  const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
-  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
+  const { pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
+  const [cwMm, chMm] = pageGridTotalMm(pageGrid)
 
   // Recompute frame pixel size when viewport or paper settings change
   useEffect(() => {
@@ -278,24 +278,24 @@ export function MapView() {
           marginMm={marginMm}
           hexEdgeMode={hexEdgeMode}
         />
-        {pageGrid.cols > 1 && Array.from({ length: pageGrid.cols - 1 }, (_, i) => (
+        {pageGrid.colWidths.slice(0, -1).reduce<{ seams: number[]; acc: number }>(
+          ({ seams, acc }, w) => ({ seams: [...seams, acc + w], acc: acc + w }), { seams: [], acc: 0 }
+        ).seams.map((xMm, i) => (
           <div key={`sv-${i}`} style={{
             position: 'absolute',
-            left: `${(i + 1) / pageGrid.cols * 100}%`,
-            top: 0,
-            width: 0,
-            height: '100%',
+            left: `${xMm / cwMm * 100}%`,
+            top: 0, width: 0, height: '100%',
             borderLeft: '2px solid rgba(220, 60, 0, 0.9)',
             pointerEvents: 'none',
           }} />
         ))}
-        {pageGrid.rows > 1 && Array.from({ length: pageGrid.rows - 1 }, (_, j) => (
+        {pageGrid.rowHeights.slice(0, -1).reduce<{ seams: number[]; acc: number }>(
+          ({ seams, acc }, h) => ({ seams: [...seams, acc + h], acc: acc + h }), { seams: [], acc: 0 }
+        ).seams.map((yMm, j) => (
           <div key={`sh-${j}`} style={{
             position: 'absolute',
-            left: 0,
-            top: `${(j + 1) / pageGrid.rows * 100}%`,
-            width: '100%',
-            height: 0,
+            left: 0, top: `${yMm / chMm * 100}%`,
+            width: '100%', height: 0,
             borderTop: '2px solid rgba(220, 60, 0, 0.9)',
             pointerEvents: 'none',
           }} />
