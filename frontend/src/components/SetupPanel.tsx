@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMapStore, paperDimsMm, combinedDimsMm, mapResolutionMpx } from '../store/mapStore'
-import type { PaperSize, Orientation, HexOrientation, HexEdgeMode, MapMode, DiptychJoin } from '../store/mapStore'
+import type { PaperSize, Orientation, HexOrientation, HexEdgeMode } from '../store/mapStore'
 
 type StartMode = 'osm' | 'blank' | 'reference'
 
@@ -8,12 +8,12 @@ const PAPER_SIZES: PaperSize[] = ['A4', 'A3', 'A2', 'A1']
 
 export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
   const {
-    paperSize, orientation, mapMode, diptychJoin,
+    paperSize, orientation, pageGrid,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     center, zoom, framePixelWidth, bearing,
     generateStatus, generateError, generateProgress,
     blankMap,
-    setPaperSize, setOrientation, setMapMode, setDiptychJoin,
+    setPaperSize, setOrientation,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     generateMap, setBlankMap,
     startImageImport,
@@ -43,7 +43,7 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
   }, [generateProgress])
 
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
-  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
   const res = mapResolutionMpx(center[1], zoom)
   const widthM = framePixelWidth * res
   const scaleMpMm = framePixelWidth > 0 ? widthM / cwMm : 0
@@ -134,30 +134,6 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
         </div>
       </Section>
 
-      <Section label="Mode">
-        <div style={{ display: 'flex', gap: 6 }}>
-          <IconBtn active={mapMode === 'single'} onClick={() => setMapMode('single' as MapMode)} label="Single">
-            <SingleIcon />
-          </IconBtn>
-          <IconBtn active={mapMode === 'diptych'} onClick={() => setMapMode('diptych' as MapMode)} label="Diptych">
-            <DiptychIcon />
-          </IconBtn>
-        </div>
-      </Section>
-
-      {mapMode === 'diptych' && (
-        <Section label="Seam along">
-          <div style={{ display: 'flex', gap: 6 }}>
-            <IconBtn active={diptychJoin === 'long'} onClick={() => setDiptychJoin('long' as DiptychJoin)} label="Long edge">
-              <SeamLongIcon />
-            </IconBtn>
-            <IconBtn active={diptychJoin === 'short'} onClick={() => setDiptychJoin('short' as DiptychJoin)} label="Short edge">
-              <SeamShortIcon />
-            </IconBtn>
-          </div>
-        </Section>
-      )}
-
       <Section label={`Hex size — ${hexSizeMm} mm`}>
         <input
           type="range" min={5} max={50} step={1} value={hexSizeMm}
@@ -194,7 +170,7 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
 
       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ color: '#7a9e8a', fontSize: 13, fontWeight: 600 }}>
-          {cols} × {rows}{mapMode === 'diptych' ? ' / sheet' : ''} hexes
+          {cols} × {rows} hexes{pageGrid.cols * pageGrid.rows > 1 ? ' / sheet' : ''}
         </div>
         <div style={{ color: '#5a7a68', fontSize: 12 }}>
           {hexSizeKmStr} km / hex
@@ -202,9 +178,9 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
         <div style={{ color: '#5a7a68', fontSize: 12 }}>
           ~{terrainWKm} × {terrainHKm} km terrain
         </div>
-        {mapMode === 'diptych' && (
+        {pageGrid.cols * pageGrid.rows > 1 && (
           <div style={{ color: '#404a44', fontSize: 11 }}>
-            combined {Math.round(cwMm)} × {Math.round(chMm)} mm
+            {pageGrid.cols}×{pageGrid.rows} pages · {Math.round(cwMm)} × {Math.round(chMm)} mm total
           </div>
         )}
         {bearingDisplay !== 0 && (
@@ -425,41 +401,6 @@ function LandscapeIcon() {
   return (
     <svg width="22" height="16" viewBox="0 0 22 16">
       <rect x="1.5" y="1.5" width="19" height="13" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function SingleIcon() {
-  return (
-    <svg width="13" height="20" viewBox="0 0 13 20">
-      <rect x="1.5" y="1.5" width="10" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function DiptychIcon() {
-  return (
-    <svg width="22" height="20" viewBox="0 0 22 20">
-      <rect x="1" y="1.5" width="9" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="12" y="1.5" width="9" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function SeamLongIcon() {
-  return (
-    <svg width="22" height="18" viewBox="0 0 22 18">
-      <rect x="1" y="1" width="9" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="12" y="1" width="9" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function SeamShortIcon() {
-  return (
-    <svg width="18" height="22" viewBox="0 0 18 22">
-      <rect x="1" y="1" width="16" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="1" y="12" width="16" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   )
 }

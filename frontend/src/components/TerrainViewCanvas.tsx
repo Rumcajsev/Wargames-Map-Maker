@@ -214,7 +214,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
     showElevationDebug,
     activeTool,
     setActiveTool,
-    mapMode, diptychJoin, paperSize, orientation,
+    pageGrid, paperSize, orientation,
     hexOrientation,
     hexNumbersEnabled, hexNumberStartCorner, hexNumberEdge, hexNumberColor, hexNumberFontScale,
     mapStyle,
@@ -234,8 +234,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   // dev-only: expose store for dry-run console injection
   useEffect(() => { (window as any).__mapStore = useMapStore }, [])
 
-  const mapModeRef = useRef(mapMode)
-  const diptychJoinRef = useRef(diptychJoin)
+  const pageGridRef = useRef(pageGrid)
   const paperSizeRef = useRef(paperSize)
   const orientationRef = useRef(orientation)
   const hexesRef = useRef(generatedHexes)
@@ -511,8 +510,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   const labelSnapRef = useRef<[number, number] | null>(null)
   const draggingLabelRef = useRef<{ overlayId: string; index: number } | null>(null)
 
-  mapModeRef.current = mapMode
-  diptychJoinRef.current = diptychJoin
+  pageGridRef.current = pageGrid
   paperSizeRef.current = paperSize
   orientationRef.current = orientation
   hexesRef.current = generatedHexes
@@ -2271,10 +2269,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
       // Margin indicator + diptych seam (screen only)
       _drawPaperMargin({
         ctx, px, py, pw, ph, mgPx, zoom,
-        mapMode: mapModeRef.current,
-        paperSize: paperSizeRef.current,
-        orientation: orientationRef.current,
-        diptychJoin: diptychJoinRef.current,
+        pageGrid: pageGridRef.current,
       })
     }
 

@@ -1,4 +1,4 @@
-import type { PaperSize, Orientation, HexOrientation, MapMode, DiptychJoin } from '../store/mapStore'
+import type { PaperSize, Orientation, HexOrientation, PageGrid } from '../store/mapStore'
 import { paperDimsMm } from '../store/mapStore'
 
 export interface PaperPreviewColors {
@@ -20,14 +20,14 @@ export const PAPER_PREVIEW_DARK: PaperPreviewColors = {
 }
 
 export function PaperHexPreview({
-  paperSize, orientation, mapMode, diptychJoin,
+  paperSize, orientation, pageGrid,
   marginMm, hexSizeMm, hexOrientation,
   hexKm = 0,
   maxW = 260, maxH = 280,
   colors = PAPER_PREVIEW_DARK,
 }: {
   paperSize: PaperSize; orientation: Orientation
-  mapMode: MapMode; diptychJoin: DiptychJoin
+  pageGrid: PageGrid
   marginMm: number; hexSizeMm: number; hexOrientation: HexOrientation
   hexKm?: number
   maxW?: number; maxH?: number
@@ -35,17 +35,11 @@ export function PaperHexPreview({
 }) {
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
 
-  let totalWMm = pwMm, totalHMm = phMm
-  if (mapMode === 'diptych') {
-    if (diptychJoin === 'long') totalWMm = 2 * pwMm
-    else totalHMm = 2 * phMm
-  }
-
-  const scale = Math.min(maxW / totalWMm, maxH / totalHMm)
-  const totalW = Math.round(totalWMm * scale)
-  const totalH = Math.round(totalHMm * scale)
+  const scale = Math.min(maxW / (pwMm * pageGrid.cols), maxH / (phMm * pageGrid.rows))
   const sheetW = Math.round(pwMm * scale)
   const sheetH = Math.round(phMm * scale)
+  const totalW = sheetW * pageGrid.cols
+  const totalH = sheetH * pageGrid.rows
   const marginPx = marginMm * scale
   const hexR = Math.max(3.5, Math.min(14, (hexSizeMm / Math.sqrt(3)) * scale))
 
@@ -53,62 +47,67 @@ export function PaperHexPreview({
   const R_mm = hexSizeMm / sq3
   const iWMm = pwMm - 2 * marginMm
   const iHMm = phMm - 2 * marginMm
-  let cols: number, rows: number
+  let hexCols: number, hexRows: number
   if (hexOrientation === 'flat') {
     const maxQ = Math.max(0, Math.floor((iWMm / 2 - R_mm) / (1.5 * R_mm)))
     const maxR = Math.max(0, Math.floor((iHMm / 2 - (sq3 / 2) * R_mm) / (sq3 * R_mm)))
-    cols = 2 * maxQ + 1; rows = 2 * maxR + 1
+    hexCols = 2 * maxQ + 1; hexRows = 2 * maxR + 1
   } else {
     const maxR = Math.max(0, Math.floor((iHMm / 2 - R_mm) / (1.5 * R_mm)))
     const maxQ = Math.max(0, Math.floor((iWMm / 2 - (sq3 / 2) * R_mm) / (sq3 * R_mm)))
-    cols = 2 * maxQ + 1; rows = 2 * maxR + 1
+    hexCols = 2 * maxQ + 1; hexRows = 2 * maxR + 1
   }
 
-  const sheets = mapMode === 'diptych'
-    ? diptychJoin === 'long'
-      ? [{ x: 0, y: 0 }, { x: sheetW, y: 0 }]
-      : [{ x: 0, y: 0 }, { x: 0, y: sheetH }]
-    : [{ x: 0, y: 0 }]
+  const totalPages = pageGrid.cols * pageGrid.rows
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <svg width={totalW} height={totalH} style={{ overflow: 'visible' }}>
-        {sheets.map((s, i) => (
-          <SheetPreview
-            key={i}
-            id={`sheet-${i}`}
-            x={s.x} y={s.y}
-            w={sheetW} h={sheetH}
-            margin={marginPx}
-            hexR={hexR}
-            hexOrientation={hexOrientation}
-            colors={colors}
-          />
-        ))}
-        {mapMode === 'diptych' && (
+        {Array.from({ length: pageGrid.rows }, (_, row) =>
+          Array.from({ length: pageGrid.cols }, (_, col) => (
+            <SheetPreview
+              key={`${col}-${row}`}
+              id={`sheet-${col}-${row}`}
+              x={col * sheetW} y={row * sheetH}
+              w={sheetW} h={sheetH}
+              margin={marginPx}
+              hexR={hexR}
+              hexOrientation={hexOrientation}
+              colors={colors}
+            />
+          ))
+        )}
+        {Array.from({ length: pageGrid.cols - 1 }, (_, col) => (
           <line
-            x1={diptychJoin === 'long' ? sheetW : 0}
-            y1={diptychJoin === 'long' ? 0 : sheetH}
-            x2={diptychJoin === 'long' ? sheetW : totalW}
-            y2={diptychJoin === 'long' ? totalH : sheetH}
+            key={`sv-${col}`}
+            x1={(col + 1) * sheetW} y1={0}
+            x2={(col + 1) * sheetW} y2={totalH}
             stroke={colors.margin} strokeWidth={1} strokeDasharray="3,2"
           />
-        )}
+        ))}
+        {Array.from({ length: pageGrid.rows - 1 }, (_, row) => (
+          <line
+            key={`sh-${row}`}
+            x1={0} y1={(row + 1) * sheetH}
+            x2={totalW} y2={(row + 1) * sheetH}
+            stroke={colors.margin} strokeWidth={1} strokeDasharray="3,2"
+          />
+        ))}
       </svg>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
         <div style={{ color: colors.labelPrimary, fontSize: 11 }}>
-          {paperSize} · {orientation}{mapMode === 'diptych' ? ' · ×2' : ''}
+          {paperSize} · {orientation}{totalPages > 1 ? ` · ${pageGrid.cols}×${pageGrid.rows} pages` : ''}
         </div>
         <div style={{ color: colors.labelSecondary, fontSize: 10 }}>
-          {cols} × {rows} hexes{hexKm > 0 ? ` · ${hexKm.toFixed(1)} km each` : ''}
+          {hexCols} × {hexRows} hexes{hexKm > 0 ? ` · ${hexKm.toFixed(1)} km each` : ''}
         </div>
       </div>
     </div>
   )
 }
 
-function SheetPreview({ id, x, y, w, h, margin, hexR, hexOrientation, colors }: {
+export function SheetPreview({ id, x, y, w, h, margin, hexR, hexOrientation, colors }: {
   id: string; x: number; y: number; w: number; h: number
   margin: number; hexR: number; hexOrientation: HexOrientation
   colors: PaperPreviewColors

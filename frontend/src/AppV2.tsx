@@ -35,6 +35,13 @@ export function AppV2() {
     if (step === 'setup') setSetupPhase('landing')
   }, [step])
 
+  // When step resets to 'setup' (e.g. resetToSetup from the editor), ensure
+  // showWizard is true so the editor doesn't re-appear mid-generation when
+  // the grid SSE event changes step → 'terrain' while showWizard is still false.
+  useEffect(() => {
+    if (step === 'setup' && !showLanding) setShowWizard(true)
+  }, [step, showLanding])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return

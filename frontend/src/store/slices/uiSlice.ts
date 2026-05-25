@@ -365,10 +365,10 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   saveProject: () => {
     const s = get()
     const snapshot = {
-      version: 37,
+      version: 38,
       state: {
         step: s.step, paperSize: s.paperSize, orientation: s.orientation,
-        mapMode: s.mapMode, diptychJoin: s.diptychJoin,
+        pageGrid: s.pageGrid,
         hexSizeMm: s.hexSizeMm, hexOrientation: s.hexOrientation,
         marginMm: s.marginMm, hexEdgeMode: s.hexEdgeMode,
         generatedHexes: s.generatedHexes, generatedMetadata: s.generatedMetadata,
@@ -810,6 +810,23 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (s.hillsColor === undefined) s.hillsColor = '#c8b87a'
     if (s.mountainsColor === undefined) s.mountainsColor = '#9a9080'
     if (s.reliefShadingOpacity === undefined) s.reliefShadingOpacity = 0.45
+  }
+  if (fromVersion < 54) {
+    if (!s.pageGrid) {
+      const mapMode = s.mapMode as string | undefined
+      const diptychJoin = s.diptychJoin as string | undefined
+      const orientation = s.orientation as string | undefined
+      if (mapMode === 'diptych') {
+        const isPortrait = orientation === 'portrait'
+        if (diptychJoin === 'long') {
+          s.pageGrid = isPortrait ? { cols: 2, rows: 1 } : { cols: 1, rows: 2 }
+        } else {
+          s.pageGrid = isPortrait ? { cols: 1, rows: 2 } : { cols: 2, rows: 1 }
+        }
+      } else {
+        s.pageGrid = { cols: 1, rows: 1 }
+      }
+    }
   }
   return s
 }

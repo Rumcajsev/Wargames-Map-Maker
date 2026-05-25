@@ -3,7 +3,7 @@ import { useMapStore, paperDimsMm, combinedDimsMm, mapResolutionMpx } from '../s
 
 export function AreaSelectPanel({ onBack }: { onBack: () => void }) {
   const {
-    paperSize, orientation, mapMode, diptychJoin,
+    paperSize, orientation, pageGrid,
     hexSizeMm, hexOrientation, marginMm,
     center, zoom, framePixelWidth, bearing,
     generateStatus, generateError, generateProgress,
@@ -33,7 +33,7 @@ export function AreaSelectPanel({ onBack }: { onBack: () => void }) {
   }, [generateProgress])
 
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
-  const [cwMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+  const [cwMm] = combinedDimsMm(paperSize, orientation, pageGrid)
   const res = mapResolutionMpx(center[1], zoom)
   const widthM = framePixelWidth * res
   const scaleMpMm = framePixelWidth > 0 ? widthM / cwMm : 0
@@ -109,7 +109,7 @@ export function AreaSelectPanel({ onBack }: { onBack: () => void }) {
       {/* Live stats */}
       <div style={{ padding: '14px 18px', borderBottom: '1px solid #1a1b28', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ color: '#7a9e8a', fontSize: 13, fontWeight: 600 }}>
-          {cols} × {rows}{mapMode === 'diptych' ? ' / sheet' : ''} hexes
+          {cols} × {rows} hexes{pageGrid.cols * pageGrid.rows > 1 ? ' / sheet' : ''}
         </div>
         <div style={{ color: '#5a7a68', fontSize: 11 }}>{hexKmStr} km / hex</div>
         <div style={{ color: '#5a7a68', fontSize: 11 }}>~{terrainW} × {terrainH} km terrain</div>

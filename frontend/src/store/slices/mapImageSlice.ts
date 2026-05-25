@@ -65,10 +65,10 @@ export const createMapImageSlice = (set: Set, get: () => MapStore): MapImageSlic
   })),
 
   startImageImport: async () => {
-    const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth, marginMm } = get()
+    const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth, marginMm } = get()
     if (framePixelWidth === 0) return
 
-    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
     const res = mapResolutionMpx(center[1], zoom)
     const widthM = framePixelWidth * res
     const heightM = widthM * (chMm / cwMm)

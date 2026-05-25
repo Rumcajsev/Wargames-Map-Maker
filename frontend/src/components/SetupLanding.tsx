@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMapStore, paperDimsMm, combinedDimsMm, mapResolutionMpx } from '../store/mapStore'
-import type { PaperSize, Orientation, HexOrientation, HexEdgeMode, MapMode, DiptychJoin } from '../store/mapStore'
-import { PaperHexPreview, PAPER_PREVIEW_DARK } from './PaperHexPreview'
+import type { PaperSize, Orientation, HexOrientation, HexEdgeMode, PageGrid } from '../store/mapStore'
+import { SheetPreview, PAPER_PREVIEW_DARK } from './PaperHexPreview'
 
 type StartMode = 'osm' | 'blank' | 'reference'
 
@@ -12,10 +12,10 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
   onOsmContinue: () => void
 }) {
   const {
-    paperSize, orientation, mapMode, diptychJoin,
+    paperSize, orientation, pageGrid,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     center, zoom, framePixelWidth,
-    setPaperSize, setOrientation, setMapMode, setDiptychJoin,
+    setPaperSize, setOrientation, setPageGrid,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     setBlankMap, generateMap, startImageImport,
     generatedHexes, generatedMetadata, resumeMap,
@@ -26,8 +26,7 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
   const [startMode, setStartMode] = useState<StartMode>('osm')
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
-  // hexKm — shown in preview label when the map viewport is known
-  const [cwMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+  const [cwMm] = combinedDimsMm(paperSize, orientation, pageGrid)
   const res = mapResolutionMpx(center[1], zoom)
   const widthM = framePixelWidth * res
   const scaleMpMm = framePixelWidth > 0 ? widthM / cwMm : 0
@@ -70,7 +69,7 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
         overflow: 'hidden',
       }}>
 
-        {/* ── Left: Live paper preview ── */}
+        {/* ── Left: Interactive page grid preview ── */}
         <div style={{
           flex: 1,
           padding: '40px 32px',
@@ -84,16 +83,15 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
           <div style={{ fontSize: 10, color: '#3a6a4a', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 32 }}>Hex Map Generator</div>
 
           <div style={{ borderTop: '1px solid #1a1b28', paddingTop: 28, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-            <PaperHexPreview
+            <PageGridEditor
               paperSize={paperSize}
               orientation={orientation}
-              mapMode={mapMode}
-              diptychJoin={diptychJoin}
+              pageGrid={pageGrid}
+              setPageGrid={setPageGrid}
               marginMm={marginMm}
               hexSizeMm={hexSizeMm}
               hexOrientation={hexOrientation}
               hexKm={hexKm}
-              colors={PAPER_PREVIEW_DARK}
             />
           </div>
         </div>
@@ -123,22 +121,6 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
               <IconBtn active={orientation === 'landscape'} onClick={() => setOrientation('landscape')} label="Landscape"><LandscapeIcon /></IconBtn>
             </div>
           </Field>
-
-          <Field label="Mode">
-            <div style={{ display: 'flex', gap: 6 }}>
-              <IconBtn active={mapMode === 'single'} onClick={() => setMapMode('single' as MapMode)} label="Single"><SingleIcon /></IconBtn>
-              <IconBtn active={mapMode === 'diptych'} onClick={() => setMapMode('diptych' as MapMode)} label="Two sheets"><DiptychIcon /></IconBtn>
-            </div>
-          </Field>
-
-          {mapMode === 'diptych' && (
-            <Field label="Seam along">
-              <div style={{ display: 'flex', gap: 6 }}>
-                <IconBtn active={diptychJoin === 'long'} onClick={() => setDiptychJoin('long' as DiptychJoin)} label="Side by side"><SeamLongIcon /></IconBtn>
-                <IconBtn active={diptychJoin === 'short'} onClick={() => setDiptychJoin('short' as DiptychJoin)} label="Stacked"><SeamShortIcon /></IconBtn>
-              </div>
-            </Field>
-          )}
 
           <Field label={`Hex size — ${hexSizeMm} mm`}>
             <input type="range" min={5} max={50} step={1} value={hexSizeMm}
@@ -258,6 +240,194 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
               </button>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Interactive page grid editor ──
+
+function PageGridEditor({ paperSize, orientation, pageGrid, setPageGrid, marginMm, hexSizeMm, hexOrientation, hexKm }: {
+  paperSize: PaperSize; orientation: Orientation
+  pageGrid: PageGrid; setPageGrid: (v: PageGrid) => void
+  marginMm: number; hexSizeMm: number; hexOrientation: HexOrientation
+  hexKm: number
+}) {
+  const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
+  const ZONE = 22
+  const maxW = 230, maxH = 230
+
+  const scale = Math.min(maxW / (pwMm * pageGrid.cols), maxH / (phMm * pageGrid.rows))
+  const sheetW = Math.round(pwMm * scale)
+  const sheetH = Math.round(phMm * scale)
+  const totalW = sheetW * pageGrid.cols
+  const totalH = sheetH * pageGrid.rows
+  const marginPx = marginMm * scale
+  const hexR = Math.max(3.5, Math.min(14, (hexSizeMm / Math.sqrt(3)) * scale))
+
+  const [hoveredSheet, setHoveredSheet] = useState<{ col: number; row: number } | null>(null)
+  const [hoveredEdge, setHoveredEdge] = useState<'top' | 'bottom' | 'left' | 'right' | null>(null)
+
+  const canAddCol = pageGrid.cols < 3
+  const canAddRow = pageGrid.rows < 3
+  const canRemoveCol = pageGrid.cols > 1
+  const canRemoveRow = pageGrid.rows > 1
+  const totalPages = pageGrid.cols * pageGrid.rows
+
+  const svgW = totalW + ZONE * 2
+  const svgH = totalH + ZONE * 2
+
+  const C = PAPER_PREVIEW_DARK
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+      <svg width={svgW} height={svgH}>
+        {/* Sheet cells */}
+        {Array.from({ length: pageGrid.rows }, (_, row) =>
+          Array.from({ length: pageGrid.cols }, (_, col) => {
+            const x = ZONE + col * sheetW
+            const y = ZONE + row * sheetH
+            const isLastCol = col === pageGrid.cols - 1
+            const isLastRow = row === pageGrid.rows - 1
+            const canRemove = (isLastCol && canRemoveCol) || (isLastRow && canRemoveRow)
+            const isHovered = hoveredSheet?.col === col && hoveredSheet?.row === row
+
+            function handleRemove() {
+              if (isLastCol && canRemoveCol) {
+                setPageGrid({ cols: pageGrid.cols - 1, rows: pageGrid.rows })
+              } else if (isLastRow && canRemoveRow) {
+                setPageGrid({ cols: pageGrid.cols, rows: pageGrid.rows - 1 })
+              }
+            }
+
+            return (
+              <g key={`${col}-${row}`}>
+                <SheetPreview
+                  id={`pg-${col}-${row}`}
+                  x={x} y={y} w={sheetW} h={sheetH}
+                  margin={marginPx} hexR={hexR}
+                  hexOrientation={hexOrientation}
+                  colors={C}
+                />
+                <rect
+                  x={x} y={y} width={sheetW} height={sheetH}
+                  fill={isHovered && canRemove ? 'rgba(200,60,60,0.07)' : 'transparent'}
+                  rx={1.5}
+                  style={{ cursor: canRemove ? 'pointer' : 'default' }}
+                  onMouseEnter={() => setHoveredSheet({ col, row })}
+                  onMouseLeave={() => setHoveredSheet(null)}
+                  onClick={handleRemove}
+                />
+                {isHovered && canRemove && (
+                  <g transform={`translate(${x + sheetW - 11},${y + 11})`} style={{ pointerEvents: 'none' }}>
+                    <circle r={7} fill="#200e0e" stroke="#6a2a2a" strokeWidth={1} />
+                    <text textAnchor="middle" dominantBaseline="central" fill="#c05050" fontSize={10} fontWeight="bold" style={{ userSelect: 'none' }}>×</text>
+                  </g>
+                )}
+              </g>
+            )
+          })
+        )}
+
+        {/* Seam lines */}
+        {Array.from({ length: pageGrid.cols - 1 }, (_, col) => (
+          <line key={`sv-${col}`}
+            x1={ZONE + (col + 1) * sheetW} y1={ZONE}
+            x2={ZONE + (col + 1) * sheetW} y2={ZONE + totalH}
+            stroke={C.margin} strokeWidth={1} strokeDasharray="3,2"
+          />
+        ))}
+        {Array.from({ length: pageGrid.rows - 1 }, (_, row) => (
+          <line key={`sh-${row}`}
+            x1={ZONE} y1={ZONE + (row + 1) * sheetH}
+            x2={ZONE + totalW} y2={ZONE + (row + 1) * sheetH}
+            stroke={C.margin} strokeWidth={1} strokeDasharray="3,2"
+          />
+        ))}
+
+        {/* Add zone: right */}
+        {canAddCol && (
+          <g>
+            <rect x={ZONE + totalW} y={ZONE} width={ZONE} height={totalH}
+              fill={hoveredEdge === 'right' ? 'rgba(58,122,74,0.18)' : 'transparent'}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredEdge('right')}
+              onMouseLeave={() => setHoveredEdge(null)}
+              onClick={() => setPageGrid({ cols: pageGrid.cols + 1, rows: pageGrid.rows })}
+            />
+            {hoveredEdge === 'right' && (
+              <text x={ZONE + totalW + ZONE / 2} y={ZONE + totalH / 2}
+                textAnchor="middle" dominantBaseline="central"
+                fill="#5a9e6f" fontSize={14} fontWeight="bold" style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
+            )}
+          </g>
+        )}
+
+        {/* Add zone: left */}
+        {canAddCol && (
+          <g>
+            <rect x={0} y={ZONE} width={ZONE} height={totalH}
+              fill={hoveredEdge === 'left' ? 'rgba(58,122,74,0.18)' : 'transparent'}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredEdge('left')}
+              onMouseLeave={() => setHoveredEdge(null)}
+              onClick={() => setPageGrid({ cols: pageGrid.cols + 1, rows: pageGrid.rows })}
+            />
+            {hoveredEdge === 'left' && (
+              <text x={ZONE / 2} y={ZONE + totalH / 2}
+                textAnchor="middle" dominantBaseline="central"
+                fill="#5a9e6f" fontSize={14} fontWeight="bold" style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
+            )}
+          </g>
+        )}
+
+        {/* Add zone: bottom */}
+        {canAddRow && (
+          <g>
+            <rect x={ZONE} y={ZONE + totalH} width={totalW} height={ZONE}
+              fill={hoveredEdge === 'bottom' ? 'rgba(58,122,74,0.18)' : 'transparent'}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredEdge('bottom')}
+              onMouseLeave={() => setHoveredEdge(null)}
+              onClick={() => setPageGrid({ cols: pageGrid.cols, rows: pageGrid.rows + 1 })}
+            />
+            {hoveredEdge === 'bottom' && (
+              <text x={ZONE + totalW / 2} y={ZONE + totalH + ZONE / 2}
+                textAnchor="middle" dominantBaseline="central"
+                fill="#5a9e6f" fontSize={14} fontWeight="bold" style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
+            )}
+          </g>
+        )}
+
+        {/* Add zone: top */}
+        {canAddRow && (
+          <g>
+            <rect x={ZONE} y={0} width={totalW} height={ZONE}
+              fill={hoveredEdge === 'top' ? 'rgba(58,122,74,0.18)' : 'transparent'}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredEdge('top')}
+              onMouseLeave={() => setHoveredEdge(null)}
+              onClick={() => setPageGrid({ cols: pageGrid.cols, rows: pageGrid.rows + 1 })}
+            />
+            {hoveredEdge === 'top' && (
+              <text x={ZONE + totalW / 2} y={ZONE / 2}
+                textAnchor="middle" dominantBaseline="central"
+                fill="#5a9e6f" fontSize={14} fontWeight="bold" style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
+            )}
+          </g>
+        )}
+      </svg>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+        <div style={{ color: '#5a7a68', fontSize: 11 }}>
+          {paperSize} · {orientation}{totalPages > 1 ? ` · ${pageGrid.cols}×${pageGrid.rows} pages` : ''}
+        </div>
+        {hexKm > 0 && (
+          <div style={{ color: '#3a4a40', fontSize: 10 }}>{hexKm.toFixed(1)} km / hex</div>
+        )}
+        <div style={{ color: '#2a3a30', fontSize: 10, marginTop: 2 }}>
+          Click edges to add pages · hover page to remove
         </div>
       </div>
     </div>
@@ -396,41 +566,6 @@ function LandscapeIcon() {
   return (
     <svg width="16" height="11" viewBox="0 0 22 16">
       <rect x="1.5" y="1.5" width="19" height="13" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function SingleIcon() {
-  return (
-    <svg width="9" height="14" viewBox="0 0 13 20">
-      <rect x="1.5" y="1.5" width="10" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function DiptychIcon() {
-  return (
-    <svg width="16" height="14" viewBox="0 0 22 20">
-      <rect x="1" y="1.5" width="9" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="12" y="1.5" width="9" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function SeamLongIcon() {
-  return (
-    <svg width="16" height="13" viewBox="0 0 22 18">
-      <rect x="1" y="1" width="9" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="12" y="1" width="9" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
-function SeamShortIcon() {
-  return (
-    <svg width="13" height="16" viewBox="0 0 18 22">
-      <rect x="1" y="1" width="16" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="1" y="12" width="16" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   )
 }

@@ -127,6 +127,11 @@ export type ActiveTool =
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
 
+export interface PageGrid {
+  cols: number
+  rows: number
+}
+
 export interface Hex {
   q: number
   r: number
@@ -235,17 +240,10 @@ export function paperDimsMm(size: PaperSize, orientation: Orientation): [number,
 export function combinedDimsMm(
   size: PaperSize,
   orientation: Orientation,
-  mode: MapMode,
-  join: DiptychJoin,
+  pageGrid: PageGrid,
 ): [number, number] {
   const [pw, ph] = paperDimsMm(size, orientation)
-  if (mode === 'single') return [pw, ph]
-  const portrait = ph > pw
-  if (join === 'long') {
-    return portrait ? [2 * pw, ph] : [pw, 2 * ph]
-  } else {
-    return portrait ? [pw, 2 * ph] : [2 * pw, ph]
-  }
+  return [pw * pageGrid.cols, ph * pageGrid.rows]
 }
 
 export const FRAME_MARGIN = 0.86
@@ -807,7 +805,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageTransform: s.mapImageTransform,
     mapImageOpacity: s.mapImageOpacity,
   }),
-  version: 53,
+  version: 54,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

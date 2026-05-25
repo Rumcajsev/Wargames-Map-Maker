@@ -151,9 +151,9 @@ export function MapView() {
 
   const [frameDims, setFrameDims] = useState({ w: 0, h: 0 })
 
-  const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
+  const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
-  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+  const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
 
   // Recompute frame pixel size when viewport or paper settings change
   useEffect(() => {
@@ -279,21 +279,28 @@ export function MapView() {
           marginMm={marginMm}
           hexEdgeMode={hexEdgeMode}
         />
-        {mapMode === 'diptych' && (() => {
-          const seamVertical = cwMm === 2 * pwMm
-          return (
-            <div style={{
-              position: 'absolute',
-              left: seamVertical ? '50%' : 0,
-              top: seamVertical ? 0 : '50%',
-              width: seamVertical ? 0 : '100%',
-              height: seamVertical ? '100%' : 0,
-              borderLeft: seamVertical ? '2px solid rgba(220, 60, 0, 0.9)' : 'none',
-              borderTop: seamVertical ? 'none' : '2px solid rgba(220, 60, 0, 0.9)',
-              pointerEvents: 'none',
-            }} />
-          )
-        })()}
+        {pageGrid.cols > 1 && Array.from({ length: pageGrid.cols - 1 }, (_, i) => (
+          <div key={`sv-${i}`} style={{
+            position: 'absolute',
+            left: `${(i + 1) / pageGrid.cols * 100}%`,
+            top: 0,
+            width: 0,
+            height: '100%',
+            borderLeft: '2px solid rgba(220, 60, 0, 0.9)',
+            pointerEvents: 'none',
+          }} />
+        ))}
+        {pageGrid.rows > 1 && Array.from({ length: pageGrid.rows - 1 }, (_, j) => (
+          <div key={`sh-${j}`} style={{
+            position: 'absolute',
+            left: 0,
+            top: `${(j + 1) / pageGrid.rows * 100}%`,
+            width: '100%',
+            height: 0,
+            borderTop: '2px solid rgba(220, 60, 0, 0.9)',
+            pointerEvents: 'none',
+          }} />
+        ))}
       </div>
     </div>
   )

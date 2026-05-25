@@ -1,12 +1,11 @@
-import type { MapStore, PaperSize, Orientation, MapMode, DiptychJoin, HexOrientation, HexEdgeMode, Hex, GridMetadata } from '../mapStore'
+import type { MapStore, PaperSize, Orientation, PageGrid, HexOrientation, HexEdgeMode, Hex, GridMetadata } from '../mapStore'
 import { combinedDimsMm, mapResolutionMpx } from '../mapStore'
 
 export type SetupSlice = {
   step: 'setup' | 'terrain' | 'image-align'
   paperSize: PaperSize
   orientation: Orientation
-  mapMode: MapMode
-  diptychJoin: DiptychJoin
+  pageGrid: PageGrid
   hexSizeMm: number
   hexOrientation: HexOrientation
   marginMm: number
@@ -21,8 +20,7 @@ export type SetupSlice = {
   error: string | null
   setPaperSize: (v: PaperSize) => void
   setOrientation: (v: Orientation) => void
-  setMapMode: (v: MapMode) => void
-  setDiptychJoin: (v: DiptychJoin) => void
+  setPageGrid: (v: PageGrid) => void
   setHexSizeMm: (v: number) => void
   setHexOrientation: (v: HexOrientation) => void
   setMarginMm: (v: number) => void
@@ -42,8 +40,7 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   step: 'setup',
   paperSize: 'A3',
   orientation: 'landscape',
-  mapMode: 'single',
-  diptychJoin: 'long',
+  pageGrid: { cols: 1, rows: 1 },
   hexSizeMm: 20,
   hexOrientation: 'flat',
   marginMm: 8,
@@ -60,8 +57,7 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
 
   setPaperSize: (v) => set({ paperSize: v }),
   setOrientation: (v) => set({ orientation: v }),
-  setMapMode: (v) => set({ mapMode: v }),
-  setDiptychJoin: (v) => set({ diptychJoin: v }),
+  setPageGrid: (v) => set({ pageGrid: v }),
   setHexSizeMm: (v) => set({ hexSizeMm: v }),
   setHexOrientation: (v) => set({ hexOrientation: v }),
   setMarginMm: (v) => set({ marginMm: v }),
@@ -74,10 +70,10 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   resumeMap: () => set({ step: 'terrain' }),
 
   generateGrid: async () => {
-    const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth } = get()
+    const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth } = get()
     if (framePixelWidth === 0) return
 
-    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
     const res = mapResolutionMpx(center[1], zoom)
     const widthM = framePixelWidth * res
     const heightM = widthM * (chMm / cwMm)

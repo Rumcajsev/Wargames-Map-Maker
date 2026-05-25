@@ -313,10 +313,10 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   }),
 
   generateMap: async () => {
-    const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, bearing, center, zoom, framePixelWidth, blankMap, realisticCoastline } = get()
+    const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, marginMm, bearing, center, zoom, framePixelWidth, blankMap, realisticCoastline } = get()
     if (framePixelWidth === 0 && !blankMap) return
 
-    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
+    const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
 
     let widthM: number, heightM: number, usedCenter: [number, number], usedBearing: number
     if (blankMap) {

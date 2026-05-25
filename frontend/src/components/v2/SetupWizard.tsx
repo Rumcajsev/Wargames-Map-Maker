@@ -291,10 +291,10 @@ const QUICK_JUMPS = [
 
 function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => void; onGenerate: () => void; showMap?: boolean }) {
   const {
-    paperSize, orientation, mapMode,
+    paperSize, orientation, pageGrid,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     zoom, framePixelWidth,
-    setPaperSize, setOrientation, setMapMode, setDiptychJoin,
+    setPaperSize, setOrientation,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     flyTo,
   } = useMapStore()
@@ -453,8 +453,7 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
               <PaperHexPreview
                 paperSize={paperSize}
                 orientation={orientation}
-                mapMode={mapMode}
-                diptychJoin={'long'}
+                pageGrid={pageGrid}
                 marginMm={marginMm}
                 hexSizeMm={hexSizeMm}
                 hexOrientation={hexOrientation}
@@ -686,49 +685,49 @@ const LAYER_STEPS = [
 function GeneratingStep({ onDone }: { onDone: () => void }) {
   const {
     generateStatus, generateProgress, center,
-    roadsStatus, railsStatus, riversOsmStatus, settlementsStatus, elevationStatus,
+    roadsStatus, railsStatus, riversOsmStatus, settlementsStatus,
+    elevationStatus, elevationProgress,
     fetchRoads, fetchRails, fetchRivers, fetchSettlements, fetchElevation,
   } = useMapStore()
 
-  const [cityName, setCityName] = useState<string | null>(null)
-  const [elapsed, setElapsed] = useState(0)
-  const [phase, setPhase] = useState<'terrain' | 'layers'>('terrain')
-  const stepStartRef = useRef(Date.now())
-  const prevStepRef = useRef<string | null>(null)
-  const layersFetchedRef = useRef(false)
+  const [cityName, setCityName]   = useState<string | null>(null)
+  const [phase, setPhase]         = useState<'terrain' | 'layers'>('terrain')
+  // tick fires every second purely to trigger re-renders for elapsed time display
+  const [tick, setTick]           = useState(0)
 
-  // Reverse geocode for map name
+  const terrainStepStartRef = useRef(Date.now())
+  const prevTerrainStepRef  = useRef<string | null>(null)
+  const layerStartsRef      = useRef<Record<string, number>>({})
+  const layersFetchedRef    = useRef(false)
+
   useEffect(() => {
     fetch(`https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json`)
       .then(r => r.json())
-      .then(d => {
-        const a = d.address ?? {}
-        setCityName(a.city || a.town || a.village || a.county || null)
-      })
+      .then(d => { const a = d.address ?? {}; setCityName(a.city || a.town || a.village || a.county || null) })
       .catch(() => {})
   }, [])
 
-  // Reset elapsed timer when SSE step changes
+  // Single 1-second ticker for all elapsed timers
   useEffect(() => {
-    const step = generateProgress?.step ?? null
-    if (step !== prevStepRef.current) {
-      prevStepRef.current = step
-      stepStartRef.current = Date.now()
-      setElapsed(0)
-    }
-  }, [generateProgress?.step])
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - stepStartRef.current) / 1000))
-    }, 1000)
+    const id = setInterval(() => setTick(n => n + 1), 1000)
     return () => clearInterval(id)
   }, [])
 
-  // When terrain done, kick off all layer fetches in parallel
+  // Track which terrain SSE step we're on so elapsed resets per step
+  useEffect(() => {
+    const step = generateProgress?.step ?? null
+    if (step !== prevTerrainStepRef.current) {
+      prevTerrainStepRef.current = step
+      terrainStepStartRef.current = Date.now()
+    }
+  }, [generateProgress?.step])
+
+  // Kick off all layer fetches the moment terrain completes
   useEffect(() => {
     if (generateStatus === 'done' && !layersFetchedRef.current) {
       layersFetchedRef.current = true
+      const now = Date.now()
+      layerStartsRef.current = { 'roads-rails': now, rivers: now, settlements: now, elevation: now }
       setPhase('layers')
       fetchRoads()
       fetchRails()
@@ -738,15 +737,14 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     }
   }, [generateStatus, fetchRoads, fetchRails, fetchRivers, fetchSettlements, fetchElevation])
 
-  // Layer completion (done or errored counts as finished)
-  const roadsRailsDone = (roadsStatus === 'done' || roadsStatus === 'error')
-                      && (railsStatus === 'done' || railsStatus === 'error')
-  const riversDone      = riversOsmStatus === 'done'    || riversOsmStatus === 'error'
-  const settlementsDone = settlementsStatus === 'done'  || settlementsStatus === 'error'
-  const elevationDone   = elevationStatus === 'done'    || elevationStatus === 'error'
+  // Layer completion (error counts as finished so we don't block forever)
+  const roadsRailsDone  = (roadsStatus === 'done' || roadsStatus === 'error')
+                       && (railsStatus === 'done' || railsStatus === 'error')
+  const riversDone      = riversOsmStatus === 'done'   || riversOsmStatus === 'error'
+  const settlementsDone = settlementsStatus === 'done' || settlementsStatus === 'error'
+  const elevationDone   = elevationStatus === 'done'   || elevationStatus === 'error'
   const allLayersDone   = roadsRailsDone && riversDone && settlementsDone && elevationDone
 
-  // Transition once everything is done
   useEffect(() => {
     if (phase === 'layers' && allLayersDone) {
       const t = setTimeout(onDone, 700)
@@ -754,42 +752,47 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     }
   }, [phase, allLayersDone, onDone])
 
-  // Progress bar
-  const terrainProgress = generateStatus === 'done' ? 100 : (generateProgress?.progress ?? 0)
-  const doneLayerCount  = [roadsRailsDone, riversDone, settlementsDone, elevationDone].filter(Boolean).length
-  const layersProgress  = (doneLayerCount / 4) * 100
-  const progress        = phase === 'terrain' ? terrainProgress : layersProgress
-
-  // Terrain checklist state
-  const currentStepId    = generateProgress?.step ?? null
-  const currentTerrainIdx = TERRAIN_STEPS.findIndex(s => s.id === currentStepId)
-  const terrainAllDone   = generateStatus === 'done'
-
-  // Layer checklist states (active = currently loading)
-  const layerState = {
-    'roads-rails': {
-      done:   roadsRailsDone,
-      active: phase === 'layers' && (roadsStatus === 'loading' || railsStatus === 'loading'),
-    },
-    'rivers': {
-      done:   riversDone,
-      active: phase === 'layers' && riversOsmStatus === 'loading',
-    },
-    'settlements': {
-      done:   settlementsDone,
-      active: phase === 'layers' && settlementsStatus === 'loading',
-    },
-    'elevation': {
-      done:   elevationDone,
-      active: phase === 'layers' && elevationStatus === 'loading',
-    },
+  // Elapsed helpers (recomputed on every tick)
+  void tick
+  const now = Date.now()
+  const terrainElapsed = Math.floor((now - terrainStepStartRef.current) / 1000)
+  const layerElapsed   = (id: string) => {
+    const s = layerStartsRef.current[id]
+    return s ? Math.floor((now - s) / 1000) : 0
   }
 
-  const statusLine = phase === 'terrain' && generateProgress
-    ? `${generateProgress.message} · ${elapsed}s`
-    : phase === 'layers' && !allLayersDone
-    ? 'FETCHING MAP LAYERS'
-    : null
+  // Smooth progress bar: elevation SSE drives a continuous fraction, others are 0 or 1
+  const terrainProgress  = generateStatus === 'done' ? 100 : (generateProgress?.progress ?? 0)
+  const elevFrac         = elevationDone ? 100 : (elevationProgress?.progress ?? 0)
+  const nonElevDoneCount = [roadsRailsDone, riversDone, settlementsDone].filter(Boolean).length
+  const layersProgress   = (nonElevDoneCount * 100 + elevFrac) / 4
+  const progress         = phase === 'terrain' ? terrainProgress : layersProgress
+
+  // Terrain checklist
+  const currentStepId     = generateProgress?.step ?? null
+  const currentTerrainIdx = TERRAIN_STEPS.findIndex(s => s.id === currentStepId)
+  const terrainAllDone    = generateStatus === 'done'
+
+  // Layer active flags
+  const roadsRailsActive  = phase === 'layers' && (roadsStatus === 'loading' || railsStatus === 'loading')
+  const riversActive      = phase === 'layers' && riversOsmStatus === 'loading'
+  const settlementsActive = phase === 'layers' && settlementsStatus === 'loading'
+  const elevationActive   = phase === 'layers' && elevationStatus === 'loading'
+
+  // Detail annotations shown inline on each active row
+  const layerDetail: Record<string, string | undefined> = {
+    'roads-rails':  roadsRailsActive  ? `${layerElapsed('roads-rails')}s`            : undefined,
+    'rivers':       riversActive      ? `${layerElapsed('rivers')}s`                 : undefined,
+    'settlements':  settlementsActive ? `${layerElapsed('settlements')}s`            : undefined,
+    'elevation':    elevationActive   ? `${elevationProgress?.progress ?? 0}%`       : undefined,
+  }
+
+  const layerState = {
+    'roads-rails': { done: roadsRailsDone,  active: roadsRailsActive  },
+    'rivers':      { done: riversDone,      active: riversActive      },
+    'settlements': { done: settlementsDone, active: settlementsActive },
+    'elevation':   { done: elevationDone,   active: elevationActive   },
+  }
 
   return (
     <div style={{
@@ -814,27 +817,26 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
 
       <HexDotBar progress={progress} />
 
-      {statusLine && (
+      {/* Terrain phase status line */}
+      {phase === 'terrain' && generateProgress && (
         <div style={{
           fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
           letterSpacing: 0.5, textAlign: 'center',
         }}>
-          {statusLine}
+          {generateProgress.message} · {terrainElapsed}s
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Terrain steps */}
         {TERRAIN_STEPS.map((s, i) => {
           const done   = terrainAllDone || currentTerrainIdx > i
           const active = !terrainAllDone && s.id === currentStepId
-          return <CheckRow key={s.id} label={s.label} done={done} active={active} />
+          const detail = active ? `${terrainElapsed}s` : undefined
+          return <CheckRow key={s.id} label={s.label} done={done} active={active} detail={detail} />
         })}
 
-        {/* Divider between terrain and layer steps */}
         <div style={{ height: 1, background: TK.line2, margin: '4px 0' }} />
 
-        {/* Layer steps */}
         {LAYER_STEPS.map(s => {
           const ls = layerState[s.id as keyof typeof layerState]
           return (
@@ -844,6 +846,7 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
               done={ls.done}
               active={ls.active}
               pending={phase === 'terrain'}
+              detail={layerDetail[s.id]}
             />
           )
         })}
@@ -852,8 +855,8 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   )
 }
 
-function CheckRow({ label, done, active, pending }: {
-  label: string; done: boolean; active: boolean; pending?: boolean
+function CheckRow({ label, done, active, pending, detail }: {
+  label: string; done: boolean; active: boolean; pending?: boolean; detail?: string
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -874,6 +877,9 @@ function CheckRow({ label, done, active, pending }: {
         color: done ? TK.ink : active ? TK.ink2 : TK.inkFaint,
       }}>
         {label}
+        {detail && (
+          <span style={{ marginLeft: 8, color: TK.inkFaint }}>· {detail}</span>
+        )}
       </span>
     </div>
   )
