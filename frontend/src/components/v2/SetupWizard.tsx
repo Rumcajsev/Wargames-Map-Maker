@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
-import type { PaperSize, Orientation, HexOrientation, MapMode } from '../../store/mapStore'
+import type { PaperSize, Orientation, HexOrientation } from '../../store/mapStore'
 import { PaperHexPreview } from '../PaperHexPreview'
 import { MapView } from '../MapView'
 
@@ -44,7 +44,7 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
       background: TK.paper, fontFamily: TK.sans, color: TK.ink,
       overflow: 'hidden',
     }}>
-      <WizardTopBar step={step} source={source} onExit={onCancel} />
+      <WizardTopBar step={step} onExit={onCancel} />
 
       {step === 'source' && (
         <SourcePickerStep
@@ -72,14 +72,10 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
 
 // ── Wizard top bar ──────────────────────────────────────────────────────────
 
-function WizardTopBar({ step, source, onExit }: {
+function WizardTopBar({ step, onExit }: {
   step: WizardStep
-  source: SourceMode
   onExit: () => void
 }) {
-  const { paperSize, orientation, hexSizeMm, hexOrientation } = useMapStore()
-  const sourceLabel = source === 'osm' ? 'OSM' : source === 'blank' ? 'BLANK' : 'REF'
-
   return (
     <div style={{
       height: TK.topBarHeight,
@@ -282,19 +278,12 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
   )
 }
 
-const QUICK_JUMPS = [
-  { label: 'London',     center: [-0.1276, 51.5074] as [number,number], zoom: 11 },
-  { label: 'Stalingrad', center: [44.5167, 48.7086] as [number,number], zoom: 11 },
-  { label: 'Verdun',     center: [5.3833,  49.1667] as [number,number], zoom: 12 },
-  { label: 'Helmand',    center: [64.5,    31.5]    as [number,number], zoom: 9  },
-]
-
 function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => void; onGenerate: () => void; showMap?: boolean }) {
   const {
     paperSize, orientation, pageGrid,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     zoom, framePixelWidth,
-    setPaperSize, setOrientation,
+    setPaperSize, setOrientation, setPageGrid,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     flyTo,
   } = useMapStore()
@@ -343,8 +332,8 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
 
             <FieldLabel style={{ marginTop: 14 }}>SHEETS</FieldLabel>
             <ToggleGroup>
-              <ToggleBtn active={mapMode === 'single'}  onClick={() => setMapMode('single'  as MapMode)}>Single</ToggleBtn>
-              <ToggleBtn active={mapMode === 'diptych'} onClick={() => setMapMode('diptych' as MapMode)}>Two sheets</ToggleBtn>
+              <ToggleBtn active={pageGrid.cols === 1 && pageGrid.rows === 1} onClick={() => setPageGrid({ cols: 1, rows: 1 })}>Single</ToggleBtn>
+              <ToggleBtn active={pageGrid.cols > 1 || pageGrid.rows > 1}    onClick={() => setPageGrid({ cols: 2, rows: 1 })}>Two sheets</ToggleBtn>
             </ToggleGroup>
           </PanelSection>
 

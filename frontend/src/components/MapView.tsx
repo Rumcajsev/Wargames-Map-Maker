@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, paperDimsMm, combinedDimsMm, FRAME_MARGIN, type HexEdgeMode } from '../store/mapStore'
+import { useMapStore, combinedDimsMm, FRAME_MARGIN, type HexEdgeMode } from '../store/mapStore'
 
 const OSM_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -152,7 +152,6 @@ export function MapView() {
   const [frameDims, setFrameDims] = useState({ w: 0, h: 0 })
 
   const { paperSize, orientation, pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
-  const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
   const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, pageGrid)
 
   // Recompute frame pixel size when viewport or paper settings change
