@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval'
 
 import { type SetupSlice, createSetupSlice } from './slices/setupSlice'
 import { type TerrainSlice, createTerrainSlice } from './slices/terrainSlice'
@@ -622,29 +623,11 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
   ...createMapImageSlice(set, get),
 }), {
   name: 'ig2-map-store',
-  storage: {
-    getItem: (name) => {
-      try {
-        const value = localStorage.getItem(name)
-        return value ? JSON.parse(value) : null
-      } catch {
-        return null
-      }
-    },
-    setItem: (name, value) => {
-      try {
-        localStorage.setItem(name, JSON.stringify(value))
-      } catch (e) {
-        if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-          try { localStorage.removeItem(name) } catch { /* ignore */ }
-          try { localStorage.setItem(name, JSON.stringify(value)) } catch { /* ignore */ }
-        }
-      }
-    },
-    removeItem: (name) => {
-      try { localStorage.removeItem(name) } catch { /* ignore */ }
-    },
-  },
+  storage: createJSONStorage(() => ({
+    getItem: (name) => idbGet(name).catch(() => null),
+    setItem: (name, value) => idbSet(name, value).catch(() => {}),
+    removeItem: (name) => idbDel(name).catch(() => {}),
+  })),
   partialize: (s) => ({
     step: s.step,
     paperSize: s.paperSize,
