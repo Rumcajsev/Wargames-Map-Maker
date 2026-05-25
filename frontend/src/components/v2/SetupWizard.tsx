@@ -4,7 +4,7 @@ import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation, MapMode } from '../../store/mapStore'
 import { MapView } from '../MapView'
 
-type WizardStep = 'source' | 'paper-area' | 'generating'
+type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
 type SourceMode = 'osm' | 'blank' | 'reference'
 
 export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
@@ -15,15 +15,19 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
   function handleContinue() {
     if (step === 'source') {
       if (source === 'blank') {
-        setBlankMap(true)
-        setStep('generating')
-        generateMap()
+        setStep('paper-blank')
       } else if (source === 'reference') {
         startImageImport()
       } else {
         setStep('paper-area')
       }
     }
+  }
+
+  function handleStartBlank() {
+    setBlankMap(true)
+    generateMap()
+    onDone()
   }
 
   function handleGenerate() {
@@ -48,6 +52,10 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
           onBack={onCancel}
           onContinue={handleContinue}
         />
+      )}
+
+      {step === 'paper-blank' && (
+        <PaperBlankStep onBack={() => setStep('source')} onStart={handleStartBlank} />
       )}
 
       {step === 'paper-area' && (
@@ -273,7 +281,131 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
   )
 }
 
-// ── Screen 02 — Paper & Area ────────────────────────────────────────────────
+// ── Screen 02a — Paper (Blank) ──────────────────────────────────────────────
+
+function PaperBlankStep({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {
+  const {
+    paperSize, orientation, hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
+    setPaperSize, setOrientation, setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
+  } = useMapStore()
+
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{
+        flex: 1,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '32px 40px',
+        gap: 32,
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontFamily: TK.mono, fontSize: 10, letterSpacing: 2,
+            color: TK.rust, textTransform: 'uppercase', marginBottom: 12,
+          }}>
+            Step 02 of 02
+          </div>
+          <h2 style={{
+            fontFamily: TK.serif, fontSize: 52, fontWeight: 400,
+            color: TK.ink, margin: '0 0 14px 0', lineHeight: 1.05,
+          }}>
+            Set up your <em>paper.</em>
+          </h2>
+          <p style={{
+            fontFamily: TK.sans, fontSize: 13, color: TK.inkMute,
+            maxWidth: 420, lineHeight: 1.6, margin: '0 auto',
+          }}>
+            Choose paper size and hex dimensions. You can paint terrain freely once you're in the editor.
+          </p>
+        </div>
+
+        <div style={{
+          width: 420,
+          border: `1px solid ${TK.line}`,
+          background: TK.surface,
+        }}>
+          <PanelSection label="PAPER">
+            <FieldLabel>SIZE</FieldLabel>
+            <ToggleGroup>
+              {(['A4','A3','A2','A1'] as PaperSize[]).map(s => (
+                <ToggleBtn key={s} active={paperSize === s} onClick={() => setPaperSize(s)}>{s}</ToggleBtn>
+              ))}
+            </ToggleGroup>
+            <FieldLabel style={{ marginTop: 14 }}>ORIENTATION</FieldLabel>
+            <ToggleGroup>
+              <ToggleBtn active={orientation === 'landscape'} onClick={() => setOrientation('landscape' as Orientation)}>Landscape</ToggleBtn>
+              <ToggleBtn active={orientation === 'portrait'}  onClick={() => setOrientation('portrait'  as Orientation)}>Portrait</ToggleBtn>
+            </ToggleGroup>
+          </PanelSection>
+
+          <PanelSection>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 8 }}>
+              <div>
+                <FieldLabel>HEX SIZE</FieldLabel>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontFamily: TK.serif, fontSize: 40, lineHeight: 1, color: TK.ink }}>{hexSizeMm}</span>
+                  <span style={{ fontFamily: TK.mono, fontSize: 11, color: TK.inkMute }}>mm</span>
+                </div>
+              </div>
+            </div>
+            <input
+              type="range" min={5} max={50} step={1} value={hexSizeMm}
+              onChange={e => setHexSizeMm(Number(e.target.value))}
+              style={{ width: '100%', accentColor: TK.rust, marginBottom: 14 }}
+            />
+            <FieldLabel>STYLE</FieldLabel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ToggleGroup>
+                <ToggleBtn active={hexOrientation === 'pointy'} onClick={() => setHexOrientation('pointy' as HexOrientation)}>Pointy</ToggleBtn>
+                <ToggleBtn active={hexOrientation === 'flat'}   onClick={() => setHexOrientation('flat'   as HexOrientation)}>Flat</ToggleBtn>
+              </ToggleGroup>
+              <HexOrientIcon orientation={hexOrientation} />
+            </div>
+          </PanelSection>
+
+          <PanelSection>
+            <button
+              onClick={() => setAdvancedOpen(v => !v)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 8,
+                fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
+                letterSpacing: 1, textTransform: 'uppercase',
+              }}
+            >
+              <span style={{ transform: advancedOpen ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s', fontSize: 8 }}>▶</span>
+              ADVANCED
+              <span style={{ color: TK.inkFaint }}>{advancedOpen ? '' : '· SHOW'}</span>
+            </button>
+            {advancedOpen && (
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <FieldLabel>PRINT MARGIN — {marginMm}mm</FieldLabel>
+                  <input type="range" min={0} max={25} step={1} value={marginMm}
+                    onChange={e => setMarginMm(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: TK.rust }} />
+                </div>
+                <div>
+                  <FieldLabel>EDGE HEXES</FieldLabel>
+                  <ToggleGroup>
+                    <ToggleBtn active={hexEdgeMode === 'whole'} onClick={() => setHexEdgeMode('whole')}>Full only</ToggleBtn>
+                    <ToggleBtn active={hexEdgeMode === 'half'}  onClick={() => setHexEdgeMode('half')}>Partial</ToggleBtn>
+                  </ToggleGroup>
+                </div>
+              </div>
+            )}
+          </PanelSection>
+        </div>
+      </div>
+
+      <BottomNav
+        left={<NavButton onClick={onBack} ghost>← BACK</NavButton>}
+        right={<NavButton onClick={onStart}>START EDITING →</NavButton>}
+      />
+    </div>
+  )
+}
 
 const QUICK_JUMPS = [
   { label: 'London',     center: [-0.1276, 51.5074] as [number,number], zoom: 11 },

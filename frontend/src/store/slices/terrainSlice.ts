@@ -313,20 +313,32 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   }),
 
   generateMap: async () => {
-    const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, bearing, center, zoom, framePixelWidth, realisticCoastline } = get()
-    if (framePixelWidth === 0) return
+    const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, bearing, center, zoom, framePixelWidth, blankMap, realisticCoastline } = get()
+    if (framePixelWidth === 0 && !blankMap) return
 
     const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
-    const res = mapResolutionMpx(center[1], zoom)
-    const widthM = framePixelWidth * res
-    const heightM = widthM * (chMm / cwMm)
+
+    let widthM: number, heightM: number, usedCenter: [number, number], usedBearing: number
+    if (blankMap) {
+      const mPerMm = 1000 / hexSizeMm
+      widthM = cwMm * mPerMm
+      heightM = chMm * mPerMm
+      usedCenter = [0, 0]
+      usedBearing = 0
+    } else {
+      const res = mapResolutionMpx(center[1], zoom)
+      widthM = framePixelWidth * res
+      heightM = widthM * (chMm / cwMm)
+      usedCenter = center
+      usedBearing = bearing
+    }
 
     set({ generateStatus: 'loading', generateError: null, generateProgress: null, generatedHexes: [], generatedMetadata: null })
 
     const params = new URLSearchParams({
-      center_lon: String(center[0]),
-      center_lat: String(center[1]),
-      bearing: String(bearing),
+      center_lon: String(usedCenter[0]),
+      center_lat: String(usedCenter[1]),
+      bearing: String(usedBearing),
       width_m: String(widthM),
       height_m: String(heightM),
       hex_size_mm: String(hexSizeMm),
