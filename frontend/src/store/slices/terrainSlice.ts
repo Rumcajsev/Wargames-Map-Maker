@@ -7,6 +7,7 @@ import {
   DEFAULT_TERRAIN_BLOB, DEFAULT_EDGE_BLOB, DEFAULT_LAKE_BLOB,
   combinedDimsMm, mapResolutionMpx,
 } from '../mapStore'
+import { type BlobPresetId, BLOB_PRESETS } from '../blobPresets'
 import { classifyHex, classifyHexLayers } from '../../lib/terrainClassify'
 
 export type TerrainSlice = {
@@ -102,6 +103,7 @@ export type TerrainSlice = {
   setTerrainBlobLobeAmp: (v: number) => void
   setTerrainBlobLobeThreshold: (v: number) => void
   setTerrainBlobLobeDirection: (v: number) => void
+  applyTerrainBlobPreset: (id: BlobPresetId) => void
   setRealisticCoastline: (v: boolean) => void
   setCoastlineDebugRaw: (v: boolean) => void
   setBeachStrip: (v: boolean) => void
@@ -558,6 +560,19 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setTerrainBlobLobeAmp: (v) => set({ terrainBlobLobeAmp: v }),
   setTerrainBlobLobeThreshold: (v) => set({ terrainBlobLobeThreshold: v }),
   setTerrainBlobLobeDirection: (v) => set({ terrainBlobLobeDirection: v }),
+  applyTerrainBlobPreset: (id) => {
+    const values = BLOB_PRESETS[id].values
+    set({
+      terrainBlobSmooth: values.smooth,
+      terrainBlobOffset: values.offset,
+      terrainBlobBump: values.bump,
+      terrainBlobSweepFreq: values.sweepFreq,
+      terrainBlobLobeFreq: values.lobeFreq,
+      terrainBlobLobeAmp: values.lobeAmp,
+      terrainBlobLobeThreshold: values.lobeThreshold,
+      terrainBlobLobeDirection: values.lobeDirection,
+    })
+  },
   setRealisticCoastline: (v) => set({ realisticCoastline: v }),
   setCoastlineDebugRaw: (v) => set({ coastlineDebugRaw: v }),
   setBeachStrip: (v) => set({ beachStrip: v }),
