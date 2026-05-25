@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation, MapMode } from '../../store/mapStore'
+import { paperDimsMm } from '../../store/mapStore'
 import { MapView } from '../MapView'
 
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
@@ -55,7 +56,7 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
       )}
 
       {step === 'paper-blank' && (
-        <PaperBlankStep onBack={() => setStep('source')} onStart={handleStartBlank} />
+        <PaperAreaStep showMap={false} onBack={() => setStep('source')} onGenerate={handleStartBlank} />
       )}
 
       {step === 'paper-area' && (
@@ -281,132 +282,6 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
   )
 }
 
-// ── Screen 02a — Paper (Blank) ──────────────────────────────────────────────
-
-function PaperBlankStep({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {
-  const {
-    paperSize, orientation, hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
-    setPaperSize, setOrientation, setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
-  } = useMapStore()
-
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{
-        flex: 1,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: '32px 40px',
-        gap: 32,
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            fontFamily: TK.mono, fontSize: 10, letterSpacing: 2,
-            color: TK.rust, textTransform: 'uppercase', marginBottom: 12,
-          }}>
-            Step 02 of 02
-          </div>
-          <h2 style={{
-            fontFamily: TK.serif, fontSize: 52, fontWeight: 400,
-            color: TK.ink, margin: '0 0 14px 0', lineHeight: 1.05,
-          }}>
-            Set up your <em>paper.</em>
-          </h2>
-          <p style={{
-            fontFamily: TK.sans, fontSize: 13, color: TK.inkMute,
-            maxWidth: 420, lineHeight: 1.6, margin: '0 auto',
-          }}>
-            Choose paper size and hex dimensions. You can paint terrain freely once you're in the editor.
-          </p>
-        </div>
-
-        <div style={{
-          width: 420,
-          border: `1px solid ${TK.line}`,
-          background: TK.surface,
-        }}>
-          <PanelSection label="PAPER">
-            <FieldLabel>SIZE</FieldLabel>
-            <ToggleGroup>
-              {(['A4','A3','A2','A1'] as PaperSize[]).map(s => (
-                <ToggleBtn key={s} active={paperSize === s} onClick={() => setPaperSize(s)}>{s}</ToggleBtn>
-              ))}
-            </ToggleGroup>
-            <FieldLabel style={{ marginTop: 14 }}>ORIENTATION</FieldLabel>
-            <ToggleGroup>
-              <ToggleBtn active={orientation === 'landscape'} onClick={() => setOrientation('landscape' as Orientation)}>Landscape</ToggleBtn>
-              <ToggleBtn active={orientation === 'portrait'}  onClick={() => setOrientation('portrait'  as Orientation)}>Portrait</ToggleBtn>
-            </ToggleGroup>
-          </PanelSection>
-
-          <PanelSection>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 8 }}>
-              <div>
-                <FieldLabel>HEX SIZE</FieldLabel>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span style={{ fontFamily: TK.serif, fontSize: 40, lineHeight: 1, color: TK.ink }}>{hexSizeMm}</span>
-                  <span style={{ fontFamily: TK.mono, fontSize: 11, color: TK.inkMute }}>mm</span>
-                </div>
-              </div>
-            </div>
-            <input
-              type="range" min={5} max={50} step={1} value={hexSizeMm}
-              onChange={e => setHexSizeMm(Number(e.target.value))}
-              style={{ width: '100%', accentColor: TK.rust, marginBottom: 14 }}
-            />
-            <FieldLabel>STYLE</FieldLabel>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <ToggleGroup>
-                <ToggleBtn active={hexOrientation === 'pointy'} onClick={() => setHexOrientation('pointy' as HexOrientation)}>Pointy</ToggleBtn>
-                <ToggleBtn active={hexOrientation === 'flat'}   onClick={() => setHexOrientation('flat'   as HexOrientation)}>Flat</ToggleBtn>
-              </ToggleGroup>
-              <HexOrientIcon orientation={hexOrientation} />
-            </div>
-          </PanelSection>
-
-          <PanelSection>
-            <button
-              onClick={() => setAdvancedOpen(v => !v)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                display: 'flex', alignItems: 'center', gap: 8,
-                fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
-                letterSpacing: 1, textTransform: 'uppercase',
-              }}
-            >
-              <span style={{ transform: advancedOpen ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s', fontSize: 8 }}>▶</span>
-              ADVANCED
-              <span style={{ color: TK.inkFaint }}>{advancedOpen ? '' : '· SHOW'}</span>
-            </button>
-            {advancedOpen && (
-              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <FieldLabel>PRINT MARGIN — {marginMm}mm</FieldLabel>
-                  <input type="range" min={0} max={25} step={1} value={marginMm}
-                    onChange={e => setMarginMm(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: TK.rust }} />
-                </div>
-                <div>
-                  <FieldLabel>EDGE HEXES</FieldLabel>
-                  <ToggleGroup>
-                    <ToggleBtn active={hexEdgeMode === 'whole'} onClick={() => setHexEdgeMode('whole')}>Full only</ToggleBtn>
-                    <ToggleBtn active={hexEdgeMode === 'half'}  onClick={() => setHexEdgeMode('half')}>Partial</ToggleBtn>
-                  </ToggleGroup>
-                </div>
-              </div>
-            )}
-          </PanelSection>
-        </div>
-      </div>
-
-      <BottomNav
-        left={<NavButton onClick={onBack} ghost>← BACK</NavButton>}
-        right={<NavButton onClick={onStart}>START EDITING →</NavButton>}
-      />
-    </div>
-  )
-}
-
 const QUICK_JUMPS = [
   { label: 'London',     center: [-0.1276, 51.5074] as [number,number], zoom: 11 },
   { label: 'Stalingrad', center: [44.5167, 48.7086] as [number,number], zoom: 11 },
@@ -414,7 +289,7 @@ const QUICK_JUMPS = [
   { label: 'Helmand',    center: [64.5,    31.5]    as [number,number], zoom: 9  },
 ]
 
-function PaperAreaStep({ onBack, onGenerate }: { onBack: () => void; onGenerate: () => void }) {
+function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => void; onGenerate: () => void; showMap?: boolean }) {
   const {
     paperSize, orientation, mapMode,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
@@ -427,7 +302,7 @@ function PaperAreaStep({ onBack, onGenerate }: { onBack: () => void; onGenerate:
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const isDisabled = framePixelWidth === 0
+  const isDisabled = showMap && framePixelWidth === 0
 
   async function handleSearch() {
     if (!searchQuery.trim()) return
@@ -538,42 +413,42 @@ function PaperAreaStep({ onBack, onGenerate }: { onBack: () => void; onGenerate:
             )}
           </PanelSection>
 
-          {/* AREA */}
-          <PanelSection label="AREA">
-            {/* Search */}
-            <div style={{
-              display: 'flex', alignItems: 'center',
-              border: `1px solid ${TK.line}`,
-              background: TK.paper,
-              marginBottom: 10,
-            }}>
-              <span style={{ padding: '0 10px', color: TK.inkFaint, fontSize: 13 }}>⌕</span>
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                placeholder="Search location…"
-                style={{
-                  flex: 1, border: 'none', background: 'transparent',
-                  fontFamily: TK.sans, fontSize: 12, color: TK.ink,
-                  padding: '8px 0', outline: 'none',
-                }}
-              />
-              <span style={{
-                padding: '0 10px',
-                fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint,
-                letterSpacing: 0.5,
+          {/* AREA — OSM only */}
+          {showMap && (
+            <PanelSection label="AREA">
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                border: `1px solid ${TK.line}`,
+                background: TK.paper,
+                marginBottom: 10,
               }}>
-                {zoomDisplay}
-              </span>
-            </div>
-
-          </PanelSection>
+                <span style={{ padding: '0 10px', color: TK.inkFaint, fontSize: 13 }}>⌕</span>
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="Search location…"
+                  style={{
+                    flex: 1, border: 'none', background: 'transparent',
+                    fontFamily: TK.sans, fontSize: 12, color: TK.ink,
+                    padding: '8px 0', outline: 'none',
+                  }}
+                />
+                <span style={{
+                  padding: '0 10px',
+                  fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint,
+                  letterSpacing: 0.5,
+                }}>
+                  {zoomDisplay}
+                </span>
+              </div>
+            </PanelSection>
+          )}
         </div>
 
-        {/* ── Map ── */}
+        {/* ── Right: map or paper preview ── */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <MapView />
+          {showMap ? <MapView /> : <PaperPreview paperSize={paperSize} orientation={orientation} hexSizeMm={hexSizeMm} hexOrientation={hexOrientation} marginMm={marginMm} />}
         </div>
       </div>
 
@@ -587,8 +462,93 @@ function PaperAreaStep({ onBack, onGenerate }: { onBack: () => void; onGenerate:
       }}>
         <NavButton onClick={onBack} ghost>← BACK</NavButton>
         <NavButton onClick={onGenerate} disabled={isDisabled}>
-          GENERATE →
+          {showMap ? 'GENERATE →' : 'START EDITING →'}
         </NavButton>
+      </div>
+    </div>
+  )
+}
+
+// ── Paper preview (blank mode) ───────────────────────────────────────────────
+
+function PaperPreview({ paperSize, orientation, hexSizeMm, hexOrientation, marginMm }: {
+  paperSize: PaperSize; orientation: Orientation
+  hexSizeMm: number; hexOrientation: HexOrientation; marginMm: number
+}) {
+  const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
+  const maxW = 480, maxH = 520
+  const scale = Math.min(maxW / pwMm, maxH / phMm)
+  const W = Math.round(pwMm * scale)
+  const H = Math.round(phMm * scale)
+  const marginPx = marginMm * scale
+  const sq3 = Math.sqrt(3)
+
+  const hexR = Math.max(4, Math.min(18, (hexSizeMm / sq3) * scale))
+  const iW = W - 2 * marginPx
+  const iH = H - 2 * marginPx
+
+  const hexes: { cx: number; cy: number }[] = []
+  if (hexOrientation === 'flat') {
+    const colSpacing = 1.5 * hexR
+    const rowSpacing = sq3 * hexR
+    for (let q = -1; q * colSpacing < iW + hexR * 2; q++) {
+      const cx = marginPx + hexR + q * colSpacing
+      const offset = q % 2 !== 0 ? rowSpacing / 2 : 0
+      for (let r = -1; r * rowSpacing < iH + rowSpacing; r++) {
+        hexes.push({ cx, cy: marginPx + hexR * (sq3 / 2) + r * rowSpacing - offset })
+      }
+    }
+  } else {
+    const rowSpacing = 1.5 * hexR
+    const colSpacing = sq3 * hexR
+    for (let r = -1; r * rowSpacing < iH + hexR * 2; r++) {
+      const cy = marginPx + hexR + r * rowSpacing
+      const offset = r % 2 !== 0 ? colSpacing / 2 : 0
+      for (let q = -1; q * colSpacing < iW + colSpacing; q++) {
+        hexes.push({ cx: marginPx + hexR * (sq3 / 2) + q * colSpacing - offset, cy })
+      }
+    }
+  }
+
+  const angles = hexOrientation === 'flat' ? [0,60,120,180,240,300] : [30,90,150,210,270,330]
+  const pts = (cx: number, cy: number) =>
+    angles.map(a => {
+      const rad = a * Math.PI / 180
+      return `${cx + hexR * Math.cos(rad)},${cy + hexR * Math.sin(rad)}`
+    }).join(' ')
+
+  const cols = hexOrientation === 'flat'
+    ? Math.max(0, Math.floor((iW / 2 - hexR) / (1.5 * hexR))) * 2 + 1
+    : Math.max(0, Math.floor((iW / 2 - (sq3 / 2) * hexR) / (sq3 * hexR))) * 2 + 1
+  const rows = hexOrientation === 'flat'
+    ? Math.max(0, Math.floor((iH / 2 - (sq3 / 2) * hexR) / (sq3 * hexR))) * 2 + 1
+    : Math.max(0, Math.floor((iH / 2 - hexR) / (1.5 * hexR))) * 2 + 1
+
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: TK.paper2, gap: 20,
+    }}>
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        <rect width={W} height={H} fill={TK.paper} stroke={TK.line} strokeWidth={1} />
+        <defs>
+          <clipPath id="paper-clip">
+            <rect x={marginPx} y={marginPx} width={Math.max(0, iW)} height={Math.max(0, iH)} />
+          </clipPath>
+        </defs>
+        <g clipPath="url(#paper-clip)">
+          {hexes.map((h, i) => (
+            <polygon key={i} points={pts(h.cx, h.cy)} fill="none" stroke={TK.line} strokeWidth={0.8} />
+          ))}
+        </g>
+        {marginMm > 0 && (
+          <rect x={marginPx} y={marginPx} width={Math.max(0, iW)} height={Math.max(0, iH)}
+            fill="none" stroke={TK.line2} strokeWidth={0.75} strokeDasharray="3,2" />
+        )}
+      </svg>
+      <div style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkMute, letterSpacing: 0.5 }}>
+        {paperSize} · {orientation} · {cols} × {rows} hexes
       </div>
     </div>
   )
@@ -780,20 +740,35 @@ function ReferenceIllustration() {
 
 // ── Screen 03 — Generating ──────────────────────────────────────────────────
 
-const GEN_STEPS = [
+const TERRAIN_STEPS = [
   { id: 'grid',      label: 'INITIALISING GRID' },
   { id: 'raster',    label: 'FETCHING RASTER DATA' },
   { id: 'classify',  label: 'CLASSIFYING TERRAIN' },
-  { id: 'coastline', label: 'COMPOSITING LAYERS' },
+  { id: 'coastline', label: 'COMPOSITING COASTLINE' },
+]
+
+const LAYER_STEPS = [
+  { id: 'roads-rails',  label: 'ROADS & RAILS' },
+  { id: 'rivers',       label: 'RIVERS' },
+  { id: 'settlements',  label: 'SETTLEMENTS' },
+  { id: 'elevation',    label: 'ELEVATION' },
 ]
 
 function GeneratingStep({ onDone }: { onDone: () => void }) {
-  const { generateStatus, generateProgress, center } = useMapStore()
+  const {
+    generateStatus, generateProgress, center,
+    roadsStatus, railsStatus, riversOsmStatus, settlementsStatus, elevationStatus,
+    fetchRoads, fetchRails, fetchRivers, fetchSettlements, fetchElevation,
+  } = useMapStore()
+
   const [cityName, setCityName] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [phase, setPhase] = useState<'terrain' | 'layers'>('terrain')
   const stepStartRef = useRef(Date.now())
   const prevStepRef = useRef<string | null>(null)
+  const layersFetchedRef = useRef(false)
 
+  // Reverse geocode for map name
   useEffect(() => {
     fetch(`https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json`)
       .then(r => r.json())
@@ -804,6 +779,7 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
       .catch(() => {})
   }, [])
 
+  // Reset elapsed timer when SSE step changes
   useEffect(() => {
     const step = generateProgress?.step ?? null
     if (step !== prevStepRef.current) {
@@ -820,17 +796,71 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     return () => clearInterval(id)
   }, [])
 
+  // When terrain done, kick off all layer fetches in parallel
   useEffect(() => {
-    if (generateStatus === 'done') {
+    if (generateStatus === 'done' && !layersFetchedRef.current) {
+      layersFetchedRef.current = true
+      setPhase('layers')
+      fetchRoads()
+      fetchRails()
+      fetchRivers()
+      fetchSettlements()
+      fetchElevation()
+    }
+  }, [generateStatus, fetchRoads, fetchRails, fetchRivers, fetchSettlements, fetchElevation])
+
+  // Layer completion (done or errored counts as finished)
+  const roadsRailsDone = (roadsStatus === 'done' || roadsStatus === 'error')
+                      && (railsStatus === 'done' || railsStatus === 'error')
+  const riversDone      = riversOsmStatus === 'done'    || riversOsmStatus === 'error'
+  const settlementsDone = settlementsStatus === 'done'  || settlementsStatus === 'error'
+  const elevationDone   = elevationStatus === 'done'    || elevationStatus === 'error'
+  const allLayersDone   = roadsRailsDone && riversDone && settlementsDone && elevationDone
+
+  // Transition once everything is done
+  useEffect(() => {
+    if (phase === 'layers' && allLayersDone) {
       const t = setTimeout(onDone, 700)
       return () => clearTimeout(t)
     }
-  }, [generateStatus, onDone])
+  }, [phase, allLayersDone, onDone])
 
-  const isDone = generateStatus === 'done'
-  const progress = isDone ? 100 : (generateProgress?.progress ?? 0)
-  const currentStepId = generateProgress?.step ?? null
-  const currentIdx = GEN_STEPS.findIndex(s => s.id === currentStepId)
+  // Progress bar
+  const terrainProgress = generateStatus === 'done' ? 100 : (generateProgress?.progress ?? 0)
+  const doneLayerCount  = [roadsRailsDone, riversDone, settlementsDone, elevationDone].filter(Boolean).length
+  const layersProgress  = (doneLayerCount / 4) * 100
+  const progress        = phase === 'terrain' ? terrainProgress : layersProgress
+
+  // Terrain checklist state
+  const currentStepId    = generateProgress?.step ?? null
+  const currentTerrainIdx = TERRAIN_STEPS.findIndex(s => s.id === currentStepId)
+  const terrainAllDone   = generateStatus === 'done'
+
+  // Layer checklist states (active = currently loading)
+  const layerState = {
+    'roads-rails': {
+      done:   roadsRailsDone,
+      active: phase === 'layers' && (roadsStatus === 'loading' || railsStatus === 'loading'),
+    },
+    'rivers': {
+      done:   riversDone,
+      active: phase === 'layers' && riversOsmStatus === 'loading',
+    },
+    'settlements': {
+      done:   settlementsDone,
+      active: phase === 'layers' && settlementsStatus === 'loading',
+    },
+    'elevation': {
+      done:   elevationDone,
+      active: phase === 'layers' && elevationStatus === 'loading',
+    },
+  }
+
+  const statusLine = phase === 'terrain' && generateProgress
+    ? `${generateProgress.message} · ${elapsed}s`
+    : phase === 'layers' && !allLayersDone
+    ? 'FETCHING MAP LAYERS'
+    : null
 
   return (
     <div style={{
@@ -843,7 +873,7 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
           fontFamily: TK.mono, fontSize: 9, letterSpacing: 2,
           color: TK.inkFaint, textTransform: 'uppercase', marginBottom: 10,
         }}>
-          {isDone ? 'COMPLETE' : 'GENERATING'}
+          {allLayersDone && phase === 'layers' ? 'COMPLETE' : 'GENERATING'}
         </div>
         <h1 style={{
           fontFamily: TK.serif, fontSize: 52, fontWeight: 400,
@@ -855,43 +885,67 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
 
       <HexDotBar progress={progress} />
 
-      {generateProgress && !isDone && (
+      {statusLine && (
         <div style={{
           fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
           letterSpacing: 0.5, textAlign: 'center',
         }}>
-          {generateProgress.message} · {elapsed}s
+          {statusLine}
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {GEN_STEPS.map((s, i) => {
-          const done = isDone || currentIdx > i
-          const active = !isDone && s.id === currentStepId
+        {/* Terrain steps */}
+        {TERRAIN_STEPS.map((s, i) => {
+          const done   = terrainAllDone || currentTerrainIdx > i
+          const active = !terrainAllDone && s.id === currentStepId
+          return <CheckRow key={s.id} label={s.label} done={done} active={active} />
+        })}
+
+        {/* Divider between terrain and layer steps */}
+        <div style={{ height: 1, background: TK.line2, margin: '4px 0' }} />
+
+        {/* Layer steps */}
+        {LAYER_STEPS.map(s => {
+          const ls = layerState[s.id as keyof typeof layerState]
           return (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {done ? (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <circle cx="7" cy="7" r="6" stroke={TK.rust} strokeWidth="1" />
-                    <path d="M4.5 7l2 2 3.5-3.5" stroke={TK.rust} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : active ? (
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: TK.rust }} />
-                ) : (
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: TK.line }} />
-                )}
-              </div>
-              <span style={{
-                fontFamily: TK.mono, fontSize: 10, letterSpacing: 1,
-                color: done ? TK.ink : active ? TK.ink2 : TK.inkFaint,
-              }}>
-                {s.label}
-              </span>
-            </div>
+            <CheckRow
+              key={s.id}
+              label={s.label}
+              done={ls.done}
+              active={ls.active}
+              pending={phase === 'terrain'}
+            />
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function CheckRow({ label, done, active, pending }: {
+  label: string; done: boolean; active: boolean; pending?: boolean
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {done ? (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="6" stroke={TK.rust} strokeWidth="1" />
+            <path d="M4.5 7l2 2 3.5-3.5" stroke={TK.rust} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : active ? (
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: TK.rust }} />
+        ) : (
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: pending ? TK.line2 : TK.line }} />
+        )}
+      </div>
+      <span style={{
+        fontFamily: TK.mono, fontSize: 10, letterSpacing: 1,
+        color: done ? TK.ink : active ? TK.ink2 : TK.inkFaint,
+      }}>
+        {label}
+      </span>
     </div>
   )
 }
