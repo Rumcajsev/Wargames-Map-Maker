@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation } from '../../store/mapStore'
-import { PaperHexPreview } from '../PaperHexPreview'
+import { PaperHexPreview, PageGridEditor } from '../PaperHexPreview'
 import { MapView } from '../MapView'
 
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
@@ -331,10 +331,24 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
             </ToggleGroup>
 
             <FieldLabel style={{ marginTop: 14 }}>SHEETS</FieldLabel>
-            <ToggleGroup>
-              <ToggleBtn active={pageGrid.cols === 1 && pageGrid.rows === 1} onClick={() => setPageGrid({ cols: 1, rows: 1 })}>Single</ToggleBtn>
-              <ToggleBtn active={pageGrid.cols > 1 || pageGrid.rows > 1}    onClick={() => setPageGrid({ cols: 2, rows: 1 })}>Two sheets</ToggleBtn>
-            </ToggleGroup>
+            <div style={{ marginTop: 4 }}>
+              <PageGridEditor
+                paperSize={paperSize}
+                orientation={orientation}
+                pageGrid={pageGrid}
+                setPageGrid={setPageGrid}
+                marginMm={marginMm}
+                hexSizeMm={hexSizeMm}
+                hexOrientation={hexOrientation}
+                maxW={260} maxH={160} zone={20}
+                colors={{
+                  paper: TK.paper, border: TK.line, hex: TK.line2, margin: TK.line2,
+                  labelPrimary: TK.inkMute, labelSecondary: TK.inkFaint,
+                  addZone: 'rgba(180,50,0,0.07)', addText: TK.rust,
+                  removeZone: 'rgba(200,60,60,0.07)',
+                }}
+              />
+            </div>
           </PanelSection>
 
           {/* HEX SIZE + STYLE */}
