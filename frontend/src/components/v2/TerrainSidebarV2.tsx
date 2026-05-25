@@ -134,26 +134,6 @@ function BlobSlidersContent({ storeValues, setters, accentColor }: {
       <MiniSlider label="Scale" display={local.lobeFreq.toFixed(1)} value={Math.round(local.lobeFreq * 10)} min={20} max={50} step={1} onChange={v => set('lobeFreq', v / 10)} />
       <MiniSlider label="Strength" display={`${Math.round(local.lobeAmp * 100)}%`} value={Math.round(local.lobeAmp * 100)} min={0} max={100} step={1} onChange={v => set('lobeAmp', v / 100)} />
       <MiniSlider label="Sparsity" display={`${Math.round(local.lobeThreshold * 100)}%`} value={Math.round(local.lobeThreshold * 100)} min={0} max={40} step={1} onChange={v => set('lobeThreshold', v / 100)} />
-      <div style={{ padding: '4px 14px 8px' }}>
-        <div style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>Direction</div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {(['Outward', 'Inward'] as const).map(dir => {
-            const val = dir === 'Outward' ? 1 : -1
-            const active = dir === 'Outward' ? local.lobeDirection >= 0 : local.lobeDirection < 0
-            return (
-              <button key={dir} onClick={() => set('lobeDirection', val)} style={{
-                flex: 1, padding: '4px 0', fontFamily: TK.mono, fontSize: 10,
-                letterSpacing: 0.5, textTransform: 'uppercase',
-                background: active ? tintBg(color, 0.15) : 'transparent',
-                border: `1px solid ${active ? color : TK.line}`,
-                cursor: 'pointer', color: active ? color : TK.inkMute,
-              }}>
-                {dir}
-              </button>
-            )
-          })}
-        </div>
-      </div>
     </>
   )
 }
@@ -351,29 +331,6 @@ function BlobView({ terrain, onBack }: { terrain: string | null; onBack: () => v
         <MiniSlider label="Scale" display={local.lobeFreq.toFixed(1)} value={Math.round(local.lobeFreq * 10)} min={20} max={50} step={1} onChange={v => setBlob('lobeFreq', v / 10)} />
         <MiniSlider label="Strength" display={`${Math.round(local.lobeAmp * 100)}%`} value={Math.round(local.lobeAmp * 100)} min={0} max={100} step={1} onChange={v => setBlob('lobeAmp', v / 100)} />
         <MiniSlider label="Sparsity" display={`${Math.round(local.lobeThreshold * 100)}%`} value={Math.round(local.lobeThreshold * 100)} min={0} max={40} step={1} onChange={v => setBlob('lobeThreshold', v / 100)} />
-        <div style={{ padding: '4px 14px 8px' }}>
-          <div style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
-            Direction
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['Outward', 'Inward'] as const).map(dir => {
-              const val = dir === 'Outward' ? 1 : -1
-              const active = dir === 'Outward' ? local.lobeDirection >= 0 : local.lobeDirection < 0
-              return (
-                <button key={dir} onClick={() => setBlob('lobeDirection', val)} style={{
-                  flex: 1, padding: '4px 0', fontFamily: TK.mono, fontSize: 10,
-                  letterSpacing: 0.5, textTransform: 'uppercase',
-                  background: active ? tintBg(color, 0.2) : 'transparent',
-                  border: `1px solid ${active ? color : TK.line}`,
-                  cursor: 'pointer',
-                  color: active ? color : TK.inkMute,
-                }}>
-                  {dir}
-                </button>
-              )
-            })}
-          </div>
-        </div>
       </div>
     </>
   )
@@ -502,7 +459,6 @@ function EdgeBlobView({ onBack }: { onBack: () => void }) {
     edgeBlobLobeFreq, setEdgeBlobLobeFreq,
     edgeBlobLobeAmp, setEdgeBlobLobeAmp,
     edgeBlobLobeThreshold, setEdgeBlobLobeThreshold,
-    edgeBlobLobeDirection, setEdgeBlobLobeDirection,
     edgeBlobWidth, setEdgeBlobWidth,
   } = useMapStore()
 
@@ -518,29 +474,6 @@ function EdgeBlobView({ onBack }: { onBack: () => void }) {
         <MiniSlider label="Scale" display={edgeBlobLobeFreq.toFixed(1)} value={Math.round(edgeBlobLobeFreq * 10)} min={20} max={50} step={1} onChange={v => setEdgeBlobLobeFreq(v / 10)} />
         <MiniSlider label="Strength" display={`${Math.round(edgeBlobLobeAmp * 100)}%`} value={Math.round(edgeBlobLobeAmp * 100)} min={0} max={100} step={1} onChange={v => setEdgeBlobLobeAmp(v / 100)} />
         <MiniSlider label="Sparsity" display={`${Math.round(edgeBlobLobeThreshold * 100)}%`} value={Math.round(edgeBlobLobeThreshold * 100)} min={0} max={40} step={1} onChange={v => setEdgeBlobLobeThreshold(v / 100)} />
-        <div style={{ padding: '4px 14px 8px' }}>
-          <div style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
-            Direction
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['Outward', 'Inward'] as const).map(dir => {
-              const val = dir === 'Outward' ? 1 : -1
-              const active = dir === 'Outward' ? edgeBlobLobeDirection >= 0 : edgeBlobLobeDirection < 0
-              return (
-                <button key={dir} onClick={() => setEdgeBlobLobeDirection(val)} style={{
-                  flex: 1, padding: '4px 0', fontFamily: TK.mono, fontSize: 10,
-                  letterSpacing: 0.5, textTransform: 'uppercase',
-                  background: active ? tintBg(TK.rust, 0.15) : 'transparent',
-                  border: `1px solid ${active ? TK.rust : TK.line}`,
-                  cursor: 'pointer',
-                  color: active ? TK.rust : TK.inkMute,
-                }}>
-                  {dir}
-                </button>
-              )
-            })}
-          </div>
-        </div>
       </DetailSection>
     </DetailViewShell>
   )
