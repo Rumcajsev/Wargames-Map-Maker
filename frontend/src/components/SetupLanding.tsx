@@ -17,7 +17,10 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
     setPaperSize, setOrientation, setMapMode, setDiptychJoin,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     setBlankMap, generateMap, startImageImport,
+    generatedHexes, generatedMetadata, resumeMap,
   } = useMapStore()
+
+  const hasResumableMap = generatedHexes.length > 0
 
   const [startMode, setStartMode] = useState<StartMode>('osm')
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -206,6 +209,36 @@ export function SetupLanding({ onOpenPresets, onOsmContinue }: {
           display: 'flex',
           flexDirection: 'column',
         }}>
+          {hasResumableMap && (
+            <>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: '#3a3a5a', marginBottom: 14 }}>Resume</div>
+              <button
+                onClick={resumeMap}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '11px 14px',
+                  background: '#111a14',
+                  border: '1px solid #2a4a34',
+                  borderRadius: 7, cursor: 'pointer',
+                  fontFamily: 'inherit', textAlign: 'left',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#162010'; e.currentTarget.style.borderColor = '#3a6a4a' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#111a14'; e.currentTarget.style.borderColor = '#2a4a34' }}
+              >
+                <ResumeIcon />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#6ab87e' }}>Continue last map</span>
+                  <span style={{ fontSize: 10, color: '#3a5a44', lineHeight: 1.3 }}>
+                    {generatedMetadata
+                      ? `${generatedMetadata.hex_count} hexes · ${generatedMetadata.hex_size_km.toFixed(1)} km each`
+                      : `${generatedHexes.length} hexes`}
+                  </span>
+                </div>
+              </button>
+              <div style={{ borderTop: '1px solid #1a1b28', margin: '14px 0' }} />
+            </>
+          )}
+
           <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: '#3a3a5a', marginBottom: 14 }}>Start with</div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -563,6 +596,14 @@ function PointyHexIcon() {
   return (
     <svg width="14" height="16" viewBox="0 0 20 22">
       <polygon points="10,2 17.8,6.5 17.8,15.5 10,20 2.2,15.5 2.2,6.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ResumeIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4a8a5a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="5,3 19,12 5,21" fill="#1a3628" stroke="#4a8a5a" strokeWidth="1.5" />
     </svg>
   )
 }

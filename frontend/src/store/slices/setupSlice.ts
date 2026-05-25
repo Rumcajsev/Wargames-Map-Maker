@@ -33,6 +33,7 @@ export type SetupSlice = {
   flyTo: (center: [number, number], zoom: number) => void
   clearFlyTarget: () => void
   generateGrid: () => Promise<void>
+  resumeMap: () => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -69,6 +70,8 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   setFramePixelWidth: (w) => set({ framePixelWidth: w }),
   flyTo: (center, zoom) => set({ flyTarget: { center, zoom, id: Date.now() } }),
   clearFlyTarget: () => set({ flyTarget: null }),
+
+  resumeMap: () => set({ step: 'terrain' }),
 
   generateGrid: async () => {
     const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth } = get()
