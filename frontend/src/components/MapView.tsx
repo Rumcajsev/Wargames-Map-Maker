@@ -1,7 +1,11 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useMapStore, pageGridTotalMm, FRAME_MARGIN, type HexEdgeMode } from '../store/mapStore'
+import {
+  useMapStore, pageGridTotalMm, FRAME_MARGIN,
+  validColWidthsForRows, validRowHeightsForCols, cellPaperInfo,
+  type HexEdgeMode,
+} from '../store/mapStore'
 
 const OSM_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -144,14 +148,20 @@ function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation
 // Main map view
 // ---------------------------------------------------------------------------
 
-export function MapView() {
+type Edge = 'left' | 'right' | 'top' | 'bottom'
+
+export function MapView({ editable = false }: { editable?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const frameRef = useRef<HTMLDivElement>(null)
 
   const [frameDims, setFrameDims] = useState({ w: 0, h: 0 })
+  const [containerDims, setContainerDims] = useState({ w: 0, h: 0 })
+  const [hoveredEdge, setHoveredEdge] = useState<Edge | null>(null)
+  const [hoveredCell, setHoveredCell] = useState<{ col: number; row: number } | null>(null)
+  const [pickerEdge, setPickerEdge] = useState<Edge | null>(null)
 
-  const { pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
+  const { pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget, setPageGrid } = useMapStore()
   const [cwMm, chMm] = pageGridTotalMm(pageGrid)
 
   // Recompute frame pixel size when viewport or paper settings change
@@ -162,6 +172,7 @@ export function MapView() {
     const compute = () => {
       const vw = el.clientWidth
       const vh = el.clientHeight
+      setContainerDims({ w: vw, h: vh })
       const aspect = cwMm / chMm
       const margin = FRAME_MARGIN
 
@@ -252,8 +263,110 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Editable-mode geometry ──────────────────────────────────────────────────
+
+  const EDGE_ZONE = 52
+  const fw = frameDims.w, fh = frameDims.h
+  const fx = (containerDims.w - fw) / 2
+  const fy = (containerDims.h - fh) / 2
+
+  // Pixel boundaries of each column / row, relative to container
+  const colBounds = pageGrid.colWidths.reduce<number[]>(
+    (acc, w) => [...acc, acc[acc.length - 1] + fw * w / cwMm], [fx]
+  )
+  const rowBounds = pageGrid.rowHeights.reduce<number[]>(
+    (acc, h) => [...acc, acc[acc.length - 1] + fh * h / chMm], [fy]
+  )
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!editable || fw === 0) return
+    const rect = containerRef.current!.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    if (x >= fx && x <= fx + fw && y >= fy && y <= fy + fh) {
+      if (!pickerEdge) setHoveredEdge(null)
+      let col = pageGrid.colWidths.length - 1
+      for (let c = 0; c < colBounds.length - 1; c++) {
+        if (x < colBounds[c + 1]) { col = c; break }
+      }
+      let row = pageGrid.rowHeights.length - 1
+      for (let r = 0; r < rowBounds.length - 1; r++) {
+        if (y < rowBounds[r + 1]) { row = r; break }
+      }
+      setHoveredCell({ col, row })
+      return
+    }
+    setHoveredCell(null)
+    if (pickerEdge) return
+    const inYBand = y >= fy && y <= fy + fh
+    const inXBand = x >= fx && x <= fx + fw
+    if (x >= fx - EDGE_ZONE && x < fx && inYBand) setHoveredEdge('left')
+    else if (x > fx + fw && x <= fx + fw + EDGE_ZONE && inYBand) setHoveredEdge('right')
+    else if (y >= fy - EDGE_ZONE && y < fy && inXBand) setHoveredEdge('top')
+    else if (y > fy + fh && y <= fy + fh + EDGE_ZONE && inXBand) setHoveredEdge('bottom')
+    else setHoveredEdge(null)
+  }
+
+  function handleMouseLeave() {
+    if (!pickerEdge) { setHoveredEdge(null); setHoveredCell(null) }
+  }
+
+  function edgeSizeLabel(isCol: boolean, mm: number) {
+    const info = isCol ? cellPaperInfo(mm, pageGrid.rowHeights[0]) : cellPaperInfo(pageGrid.colWidths[0], mm)
+    return info ? `${info.size} ${info.orientation === 'landscape' ? '↔' : '↕'}` : `${mm}mm`
+  }
+
+  function handleAddClick(edge: Edge) {
+    const isCol = edge === 'left' || edge === 'right'
+    const opts = isCol ? validColWidthsForRows(pageGrid.rowHeights) : validRowHeightsForCols(pageGrid.colWidths)
+    if (opts.length === 0) return
+    if (opts.length === 1) { applyAdd(edge, opts[0]); return }
+    setPickerEdge(edge)
+  }
+
+  function applyAdd(edge: Edge, mm: number) {
+    const g = pageGrid
+    if (edge === 'left') setPageGrid({ ...g, colWidths: [mm, ...g.colWidths] })
+    else if (edge === 'right') setPageGrid({ ...g, colWidths: [...g.colWidths, mm] })
+    else if (edge === 'top') setPageGrid({ ...g, rowHeights: [mm, ...g.rowHeights] })
+    else setPageGrid({ ...g, rowHeights: [...g.rowHeights, mm] })
+    setPickerEdge(null); setHoveredEdge(null)
+  }
+
+  function removeCol(col: number) {
+    setPageGrid({ ...pageGrid, colWidths: pageGrid.colWidths.filter((_, i) => i !== col) })
+    setHoveredCell(null)
+  }
+  function removeRow(row: number) {
+    setPageGrid({ ...pageGrid, rowHeights: pageGrid.rowHeights.filter((_, i) => i !== row) })
+    setHoveredCell(null)
+  }
+
+  // ── Overlay element positions ───────────────────────────────────────────────
+
+  const BTN = 28
+  const addBtnCenter: Record<Edge, { x: number; y: number }> = {
+    left:   { x: fx - BTN / 2 - 10, y: fy + fh / 2 },
+    right:  { x: fx + fw + BTN / 2 + 10, y: fy + fh / 2 },
+    top:    { x: fx + fw / 2, y: fy - BTN / 2 - 10 },
+    bottom: { x: fx + fw / 2, y: fy + fh + BTN / 2 + 10 },
+  }
+
+  const pickerPos: Record<Edge, React.CSSProperties> = {
+    left:   { right: containerDims.w - fx + 4, top: fy + fh / 2 - 40 },
+    right:  { left: fx + fw + BTN + 18, top: fy + fh / 2 - 40 },
+    top:    { left: fx + fw / 2 - 50, bottom: containerDims.h - fy + 4 },
+    bottom: { left: fx + fw / 2 - 50, top: fy + fh + BTN + 18 },
+  }
+
   return (
-    <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      style={{ flex: 1, position: 'relative', overflow: 'hidden' }}
+      onMouseMove={editable ? handleMouseMove : undefined}
+      onMouseLeave={editable ? handleMouseLeave : undefined}
+    >
       {/* Paper frame — stays fixed on screen while map rotates beneath */}
       <div
         ref={frameRef}
@@ -301,6 +414,117 @@ export function MapView() {
           }} />
         ))}
       </div>
+
+      {/* ── Page-grid edit overlays ── */}
+      {editable && fw > 0 && (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6 }}>
+
+          {/* + buttons on edges */}
+          {(['left', 'right', 'top', 'bottom'] as Edge[]).map(edge => {
+            if (hoveredEdge !== edge && pickerEdge !== edge) return null
+            const isCol = edge === 'left' || edge === 'right'
+            const opts = isCol ? validColWidthsForRows(pageGrid.rowHeights) : validRowHeightsForCols(pageGrid.colWidths)
+            if (opts.length === 0) return null
+            const { x, y } = addBtnCenter[edge]
+            return (
+              <div
+                key={edge}
+                onClick={() => handleAddClick(edge)}
+                style={{
+                  position: 'absolute',
+                  left: x - BTN / 2, top: y - BTN / 2,
+                  width: BTN, height: BTN,
+                  borderRadius: '50%',
+                  background: 'rgba(220,60,0,0.88)',
+                  color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 20, fontWeight: 300, lineHeight: 1,
+                  cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto',
+                }}
+              >+</div>
+            )
+          })}
+
+          {/* Size picker */}
+          {pickerEdge && (() => {
+            const isCol = pickerEdge === 'left' || pickerEdge === 'right'
+            const opts = isCol ? validColWidthsForRows(pageGrid.rowHeights) : validRowHeightsForCols(pageGrid.colWidths)
+            return (
+              <div style={{
+                position: 'absolute',
+                ...pickerPos[pickerEdge],
+                background: 'rgba(22,18,16,0.96)',
+                border: '1px solid rgba(220,60,0,0.5)',
+                borderRadius: 4,
+                padding: 5,
+                display: 'flex',
+                flexDirection: isCol ? 'column' : 'row',
+                gap: 4,
+                pointerEvents: 'auto',
+              }}>
+                {opts.map(mm => (
+                  <button
+                    key={mm}
+                    onClick={() => applyAdd(pickerEdge, mm)}
+                    style={{
+                      padding: '4px 10px',
+                      background: 'rgba(220,60,0,0.15)',
+                      border: '1px solid rgba(220,60,0,0.4)',
+                      borderRadius: 3,
+                      color: '#ffd0b0',
+                      cursor: 'pointer',
+                      fontFamily: 'ui-monospace, monospace',
+                      fontSize: 11, whiteSpace: 'nowrap',
+                    }}
+                  >{edgeSizeLabel(isCol, mm)}</button>
+                ))}
+              </div>
+            )
+          })()}
+
+          {/* × remove column */}
+          {hoveredCell && hoveredCell.col > 0 && (() => {
+            const col = hoveredCell.col
+            const cx = (colBounds[col] + colBounds[col + 1]) / 2
+            return (
+              <div
+                onClick={() => removeCol(col)}
+                style={{
+                  position: 'absolute',
+                  left: cx - BTN / 2, top: fy + 14,
+                  width: BTN, height: BTN,
+                  borderRadius: '50%',
+                  background: 'rgba(200,50,50,0.88)',
+                  color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto',
+                }}
+              >×</div>
+            )
+          })()}
+
+          {/* × remove row */}
+          {hoveredCell && hoveredCell.row > 0 && (() => {
+            const row = hoveredCell.row
+            const cy = (rowBounds[row] + rowBounds[row + 1]) / 2
+            return (
+              <div
+                onClick={() => removeRow(row)}
+                style={{
+                  position: 'absolute',
+                  left: fx + 14, top: cy - BTN / 2,
+                  width: BTN, height: BTN,
+                  borderRadius: '50%',
+                  background: 'rgba(200,50,50,0.88)',
+                  color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto',
+                }}
+              >×</div>
+            )
+          })()}
+        </div>
+      )}
     </div>
   )
 }

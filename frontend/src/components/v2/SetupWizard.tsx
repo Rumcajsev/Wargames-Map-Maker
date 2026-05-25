@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation } from '../../store/mapStore'
-import { PaperHexPreview, PageGridEditor } from '../PaperHexPreview'
+import { PaperHexPreview } from '../PaperHexPreview'
 import { MapView } from '../MapView'
 
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
@@ -330,23 +330,6 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
               <ToggleBtn active={orientation === 'portrait'}  onClick={() => setOrientation('portrait'  as Orientation)}>Portrait</ToggleBtn>
             </ToggleGroup>
 
-            <FieldLabel style={{ marginTop: 14 }}>SHEETS</FieldLabel>
-            <div style={{ marginTop: 4 }}>
-              <PageGridEditor
-                pageGrid={pageGrid}
-                setPageGrid={setPageGrid}
-                marginMm={marginMm}
-                hexSizeMm={hexSizeMm}
-                hexOrientation={hexOrientation}
-                maxW={260} maxH={160} zone={20}
-                colors={{
-                  paper: TK.paper, border: TK.line, hex: TK.line2, margin: TK.line2,
-                  labelPrimary: TK.inkMute, labelSecondary: TK.inkFaint,
-                  addZone: 'rgba(180,50,0,0.07)', addText: TK.rust,
-                  removeZone: 'rgba(200,60,60,0.07)',
-                }}
-              />
-            </div>
           </PanelSection>
 
           {/* HEX SIZE + STYLE */}
@@ -449,15 +432,16 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
 
         {/* ── Right: map or paper preview ── */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {showMap ? <MapView /> : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: TK.paper2 }}>
+          {showMap ? <MapView editable /> : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: TK.paper2, overflow: 'visible' }}>
               <PaperHexPreview
                 pageGrid={pageGrid}
                 marginMm={marginMm}
                 hexSizeMm={hexSizeMm}
                 hexOrientation={hexOrientation}
-                maxW={480} maxH={520}
+                maxW={420} maxH={460}
                 colors={{ paper: TK.paper, border: TK.line, hex: TK.line, margin: TK.line2, labelPrimary: TK.inkMute, labelSecondary: TK.inkFaint }}
+                setPageGrid={setPageGrid}
               />
             </div>
           )}

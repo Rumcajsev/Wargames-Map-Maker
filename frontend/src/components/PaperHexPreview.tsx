@@ -25,38 +25,53 @@ export const PAPER_PREVIEW_DARK: PaperPreviewColors = {
 
 // ── PaperHexPreview ───────────────────────────────────────────────────────────
 
+type Edge = 'left' | 'right' | 'top' | 'bottom'
+
 export function PaperHexPreview({
   pageGrid,
   marginMm, hexSizeMm, hexOrientation,
   hexKm = 0,
   maxW = 260, maxH = 280,
   colors = PAPER_PREVIEW_DARK,
+  setPageGrid,
 }: {
   pageGrid: PageGrid
   marginMm: number; hexSizeMm: number; hexOrientation: HexOrientation
   hexKm?: number
   maxW?: number; maxH?: number
   colors?: PaperPreviewColors
+  setPageGrid?: (g: PageGrid) => void
 }) {
+  const [hoveredEdge, setHoveredEdge] = useState<Edge | null>(null)
+  const [hoveredCell, setHoveredCell] = useState<{ col: number; row: number } | null>(null)
+  const [pickerEdge, setPickerEdge] = useState<Edge | null>(null)
+
   const [totalWMm, totalHMm] = pageGridTotalMm(pageGrid)
   const scale = Math.min(maxW / totalWMm, maxH / totalHMm)
 
-  // Pixel sizes per column and row
   const colPx = pageGrid.colWidths.map(w => Math.round(w * scale))
   const rowPx = pageGrid.rowHeights.map(h => Math.round(h * scale))
   const totalW = colPx.reduce((a, b) => a + b, 0)
   const totalH = rowPx.reduce((a, b) => a + b, 0)
-
   const marginPx = marginMm * scale
   const hexR = Math.max(3.5, Math.min(14, (hexSizeMm / Math.sqrt(3)) * scale))
 
-  // Hex count label from first cell
-  const firstCW = pageGrid.colWidths[0]
-  const firstRH = pageGrid.rowHeights[0]
+  // Cumulative column/row boundaries in SVG coords (px)
+  const xOffsets: number[] = []
+  let xAcc = 0
+  for (const w of colPx) { xOffsets.push(xAcc); xAcc += w }
+  const yOffsets: number[] = []
+  let yAcc = 0
+  for (const h of rowPx) { yOffsets.push(yAcc); yAcc += h }
+  // Boundary arrays including the far edge
+  const xBounds = [...xOffsets, totalW]
+  const yBounds = [...yOffsets, totalH]
+
+  // Hex count from first cell
   const sq3 = Math.sqrt(3)
   const R_mm = hexSizeMm / sq3
-  const iWMm = firstCW - 2 * marginMm
-  const iHMm = firstRH - 2 * marginMm
+  const iWMm = pageGrid.colWidths[0] - 2 * marginMm
+  const iHMm = pageGrid.rowHeights[0] - 2 * marginMm
   let hexCols: number, hexRows: number
   if (hexOrientation === 'flat') {
     hexCols = 2 * Math.max(0, Math.floor((iWMm / 2 - R_mm) / (1.5 * R_mm))) + 1
@@ -66,45 +81,264 @@ export function PaperHexPreview({
     hexCols = 2 * Math.max(0, Math.floor((iWMm / 2 - (sq3 / 2) * R_mm) / (sq3 * R_mm))) + 1
   }
 
-  // Label: uniform or mixed
-  const allSameSize = pageGrid.colWidths.every(w => w === firstCW) && pageGrid.rowHeights.every(h => h === firstRH)
-  const firstInfo = cellPaperInfo(firstCW, firstRH)
+  const allSameSize = pageGrid.colWidths.every(w => w === pageGrid.colWidths[0]) &&
+                      pageGrid.rowHeights.every(h => h === pageGrid.rowHeights[0])
+  const firstInfo = cellPaperInfo(pageGrid.colWidths[0], pageGrid.rowHeights[0])
   const totalPages = pageGrid.colWidths.length * pageGrid.rowHeights.length
   const sizeLabel = allSameSize && firstInfo
     ? `${firstInfo.size} · ${firstInfo.orientation}${totalPages > 1 ? ` · ${pageGrid.colWidths.length}×${pageGrid.rowHeights.length}` : ''}`
     : `${totalPages} pages`
 
-  // Cumulative x/y offsets
-  const xOffsets = colPx.reduce<number[]>((acc, _w) => [...acc, (acc[acc.length - 1] ?? 0) + (acc.length > 0 ? colPx[acc.length - 1] : 0)], [0]).slice(0, colPx.length)
-  const yOffsets = rowPx.reduce<number[]>((acc, _h) => [...acc, (acc[acc.length - 1] ?? 0) + (acc.length > 0 ? rowPx[acc.length - 1] : 0)], [0]).slice(0, rowPx.length)
+  // ── Interactive mode ──────────────────────────────────────────────────────
+
+  const PAD = 48   // space around SVG for labels + buttons
+  const ZONE = 40  // hover detection zone outside paper
+  const BTN = 26   // button diameter
+
+  const validColW = setPageGrid ? validColWidthsForRows(pageGrid.rowHeights) : []
+  const validRowH = setPageGrid ? validRowHeightsForCols(pageGrid.colWidths) : []
+
+  function edgeSizeLabel(isCol: boolean, mm: number) {
+    const info = isCol ? cellPaperInfo(mm, pageGrid.rowHeights[0]) : cellPaperInfo(pageGrid.colWidths[0], mm)
+    return info ? `${info.size} ${info.orientation === 'landscape' ? '↔' : '↕'}` : `${mm}mm`
+  }
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!setPageGrid || pickerEdge) return
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+    const svgX = e.clientX - rect.left - PAD
+    const svgY = e.clientY - rect.top - PAD
+
+    if (svgX >= 0 && svgX <= totalW && svgY >= 0 && svgY <= totalH) {
+      setHoveredEdge(null)
+      let col = colPx.length - 1
+      for (let c = 0; c < xBounds.length - 1; c++) {
+        if (svgX < xBounds[c + 1]) { col = c; break }
+      }
+      let row = rowPx.length - 1
+      for (let r = 0; r < yBounds.length - 1; r++) {
+        if (svgY < yBounds[r + 1]) { row = r; break }
+      }
+      setHoveredCell({ col, row })
+      return
+    }
+    setHoveredCell(null)
+    const inYBand = svgY >= 0 && svgY <= totalH
+    const inXBand = svgX >= 0 && svgX <= totalW
+    if (svgX >= -ZONE && svgX < 0 && inYBand) setHoveredEdge('left')
+    else if (svgX > totalW && svgX <= totalW + ZONE && inYBand) setHoveredEdge('right')
+    else if (svgY >= -ZONE && svgY < 0 && inXBand) setHoveredEdge('top')
+    else if (svgY > totalH && svgY <= totalH + ZONE && inXBand) setHoveredEdge('bottom')
+    else setHoveredEdge(null)
+  }
+
+  function handleMouseLeave() {
+    if (!pickerEdge) { setHoveredEdge(null); setHoveredCell(null) }
+  }
+
+  function handleAddClick(edge: Edge) {
+    if (!setPageGrid) return
+    const isCol = edge === 'left' || edge === 'right'
+    const opts = isCol ? validColW : validRowH
+    if (opts.length === 0) return
+    if (opts.length === 1) { applyAdd(edge, opts[0]); return }
+    setPickerEdge(edge)
+  }
+
+  function applyAdd(edge: Edge, mm: number) {
+    if (!setPageGrid) return
+    const g = pageGrid
+    if (edge === 'left') setPageGrid({ ...g, colWidths: [mm, ...g.colWidths] })
+    else if (edge === 'right') setPageGrid({ ...g, colWidths: [...g.colWidths, mm] })
+    else if (edge === 'top') setPageGrid({ ...g, rowHeights: [mm, ...g.rowHeights] })
+    else setPageGrid({ ...g, rowHeights: [...g.rowHeights, mm] })
+    setPickerEdge(null); setHoveredEdge(null)
+  }
+
+  function removeCol(col: number) {
+    if (!setPageGrid) return
+    setPageGrid({ ...pageGrid, colWidths: pageGrid.colWidths.filter((_, i) => i !== col) })
+    setHoveredCell(null)
+  }
+  function removeRow(row: number) {
+    if (!setPageGrid) return
+    setPageGrid({ ...pageGrid, rowHeights: pageGrid.rowHeights.filter((_, i) => i !== row) })
+    setHoveredCell(null)
+  }
+
+  // Button positions in wrapper-div space (SVG coords + PAD offset)
+  const btnCx = (svgX: number) => PAD + svgX - BTN / 2
+  const btnCy = (svgY: number) => PAD + svgY - BTN / 2
+  const addBtnPos: Record<Edge, { left: number; top: number }> = {
+    left:   { left: btnCx(-BTN / 2 - 10), top: btnCy(totalH / 2) },
+    right:  { left: btnCx(totalW + BTN / 2 + 10), top: btnCy(totalH / 2) },
+    top:    { left: btnCx(totalW / 2), top: btnCy(-BTN / 2 - 10) },
+    bottom: { left: btnCx(totalW / 2), top: btnCy(totalH + BTN / 2 + 10) },
+  }
+  const pickerStyle: Record<Edge, React.CSSProperties> = {
+    left:   { left: addBtnPos.left.left, top: addBtnPos.left.top + BTN + 6 },
+    right:  { left: addBtnPos.right.left + BTN + 6, top: addBtnPos.right.top },
+    top:    { left: addBtnPos.top.left - 10, top: addBtnPos.top.top - 70 },
+    bottom: { left: addBtnPos.bottom.left - 10, top: addBtnPos.bottom.top + BTN + 6 },
+  }
+
+  const MARK = 14  // corner mark length outside paper
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-      <svg width={totalW} height={totalH} style={{ overflow: 'visible' }}>
-        {pageGrid.rowHeights.map((_, row) =>
-          pageGrid.colWidths.map((_, col) => (
-            <SheetPreview
-              key={`${col}-${row}`}
-              id={`sheet-${col}-${row}`}
-              x={xOffsets[col]} y={yOffsets[row]}
-              w={colPx[col]} h={rowPx[row]}
-              margin={marginPx} hexR={hexR}
-              hexOrientation={hexOrientation}
-              colors={colors}
-            />
-          ))
+      <div
+        style={{ position: 'relative', width: totalW + PAD * 2, height: totalH + PAD * 2, flexShrink: 0 }}
+        onMouseMove={setPageGrid ? handleMouseMove : undefined}
+        onMouseLeave={setPageGrid ? handleMouseLeave : undefined}
+      >
+        {/* ── Paper SVG ── */}
+        <svg
+          width={totalW} height={totalH}
+          style={{ position: 'absolute', left: PAD, top: PAD, overflow: 'visible', display: 'block' }}
+        >
+          {/* Sheet cells */}
+          {pageGrid.rowHeights.map((_, row) =>
+            pageGrid.colWidths.map((_, col) => (
+              <SheetPreview
+                key={`${col}-${row}`}
+                id={`sheet-${col}-${row}`}
+                x={xOffsets[col]} y={yOffsets[row]}
+                w={colPx[col]} h={rowPx[row]}
+                margin={marginPx} hexR={hexR}
+                hexOrientation={hexOrientation}
+                colors={colors}
+              />
+            ))
+          )}
+
+          {/* Seam lines */}
+          {xOffsets.slice(1).map((x, i) => (
+            <line key={`sv-${i}`} x1={x} y1={0} x2={x} y2={totalH} stroke={colors.margin} strokeWidth={1} strokeDasharray="3,2" />
+          ))}
+          {yOffsets.slice(1).map((y, i) => (
+            <line key={`sh-${i}`} x1={0} y1={y} x2={totalW} y2={y} stroke={colors.margin} strokeWidth={1} strokeDasharray="3,2" />
+          ))}
+
+          {/* Corner registration marks */}
+          <g stroke={colors.border} strokeWidth={1} fill="none" opacity={0.7}>
+            <line x1={-MARK} y1={0} x2={0} y2={0} /><line x1={0} y1={-MARK} x2={0} y2={0} />
+            <line x1={totalW} y1={0} x2={totalW + MARK} y2={0} /><line x1={totalW} y1={-MARK} x2={totalW} y2={0} />
+            <line x1={-MARK} y1={totalH} x2={0} y2={totalH} /><line x1={0} y1={totalH} x2={0} y2={totalH + MARK} />
+            <line x1={totalW} y1={totalH} x2={totalW + MARK} y2={totalH} /><line x1={totalW} y1={totalH} x2={totalW} y2={totalH + MARK} />
+          </g>
+
+          {/* Seam tick marks */}
+          {xOffsets.slice(1).map((x, i) => (
+            <g key={`tx-${i}`} stroke={colors.border} strokeWidth={0.75} opacity={0.5}>
+              <line x1={x} y1={-7} x2={x} y2={0} />
+              <line x1={x} y1={totalH} x2={x} y2={totalH + 7} />
+            </g>
+          ))}
+          {yOffsets.slice(1).map((y, i) => (
+            <g key={`ty-${i}`} stroke={colors.border} strokeWidth={0.75} opacity={0.5}>
+              <line x1={-7} y1={y} x2={0} y2={y} />
+              <line x1={totalW} y1={y} x2={totalW + 7} y2={y} />
+            </g>
+          ))}
+
+          {/* Dimension labels */}
+          <text
+            x={totalW / 2} y={-PAD / 2}
+            textAnchor="middle" dominantBaseline="middle"
+            fill={colors.labelSecondary} fontSize={10}
+            style={{ userSelect: 'none', fontFamily: 'ui-monospace, monospace', letterSpacing: '0.5px' }}
+          >{Math.round(totalWMm)} mm</text>
+          <text
+            x={-PAD / 2} y={totalH / 2}
+            textAnchor="middle" dominantBaseline="middle"
+            fill={colors.labelSecondary} fontSize={10}
+            transform={`rotate(-90, ${-PAD / 2}, ${totalH / 2})`}
+            style={{ userSelect: 'none', fontFamily: 'ui-monospace, monospace', letterSpacing: '0.5px' }}
+          >{Math.round(totalHMm)} mm</text>
+        </svg>
+
+        {/* ── Interactive overlays (only when setPageGrid provided) ── */}
+        {setPageGrid && (
+          <>
+            {/* Edge + buttons */}
+            {(['left', 'right', 'top', 'bottom'] as Edge[]).map(edge => {
+              if (hoveredEdge !== edge && pickerEdge !== edge) return null
+              const isCol = edge === 'left' || edge === 'right'
+              const opts = isCol ? validColW : validRowH
+              if (opts.length === 0) return null
+              return (
+                <div
+                  key={edge}
+                  onClick={() => handleAddClick(edge)}
+                  style={{
+                    position: 'absolute', ...addBtnPos[edge],
+                    width: BTN, height: BTN, borderRadius: '50%',
+                    background: 'rgba(220,60,0,0.88)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 20, fontWeight: 300, lineHeight: 1,
+                    cursor: 'pointer', userSelect: 'none',
+                  }}
+                >+</div>
+              )
+            })}
+
+            {/* Size picker */}
+            {pickerEdge && (() => {
+              const isCol = pickerEdge === 'left' || pickerEdge === 'right'
+              const opts = isCol ? validColW : validRowH
+              return (
+                <div style={{
+                  position: 'absolute', ...pickerStyle[pickerEdge],
+                  background: 'rgba(22,18,16,0.96)',
+                  border: '1px solid rgba(220,60,0,0.5)',
+                  borderRadius: 4, padding: 5,
+                  display: 'flex', flexDirection: isCol ? 'column' : 'row', gap: 4,
+                  zIndex: 10,
+                }}>
+                  {opts.map(mm => (
+                    <button key={mm} onClick={() => applyAdd(pickerEdge, mm)} style={{
+                      padding: '4px 10px',
+                      background: 'rgba(220,60,0,0.15)', border: '1px solid rgba(220,60,0,0.4)',
+                      borderRadius: 3, color: '#ffd0b0', cursor: 'pointer',
+                      fontFamily: 'ui-monospace, monospace', fontSize: 11, whiteSpace: 'nowrap',
+                    }}>{edgeSizeLabel(isCol, mm)}</button>
+                  ))}
+                </div>
+              )
+            })()}
+
+            {/* × remove column */}
+            {hoveredCell && hoveredCell.col > 0 && (() => {
+              const col = hoveredCell.col
+              const cx = PAD + (xBounds[col] + xBounds[col + 1]) / 2 - BTN / 2
+              return (
+                <div onClick={() => removeCol(col)} style={{
+                  position: 'absolute', left: cx, top: PAD + 12,
+                  width: BTN, height: BTN, borderRadius: '50%',
+                  background: 'rgba(200,50,50,0.88)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, cursor: 'pointer', userSelect: 'none',
+                }}>×</div>
+              )
+            })()}
+
+            {/* × remove row */}
+            {hoveredCell && hoveredCell.row > 0 && (() => {
+              const row = hoveredCell.row
+              const cy = PAD + (yBounds[row] + yBounds[row + 1]) / 2 - BTN / 2
+              return (
+                <div onClick={() => removeRow(row)} style={{
+                  position: 'absolute', left: PAD + 12, top: cy,
+                  width: BTN, height: BTN, borderRadius: '50%',
+                  background: 'rgba(200,50,50,0.88)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, cursor: 'pointer', userSelect: 'none',
+                }}>×</div>
+              )
+            })()}
+          </>
         )}
-        {/* Vertical seams */}
-        {colPx.slice(0, -1).map((_, col) => {
-          const x = xOffsets[col + 1]
-          return <line key={`sv-${col}`} x1={x} y1={0} x2={x} y2={totalH} stroke={colors.margin} strokeWidth={1} strokeDasharray="3,2" />
-        })}
-        {/* Horizontal seams */}
-        {rowPx.slice(0, -1).map((_, row) => {
-          const y = yOffsets[row + 1]
-          return <line key={`sh-${row}`} x1={0} y1={y} x2={totalW} y2={y} stroke={colors.margin} strokeWidth={1} strokeDasharray="3,2" />
-        })}
-      </svg>
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
         <div style={{ color: colors.labelPrimary, fontSize: 11 }}>{sizeLabel}</div>
