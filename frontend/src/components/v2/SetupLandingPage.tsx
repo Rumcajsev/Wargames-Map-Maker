@@ -12,8 +12,8 @@ export function SetupLandingPage({
   onResume: () => void
   onLoadFile: () => void
 }) {
-  const { hexes, paperSize, orientation } = useMapStore()
-  const hasSavedMap = hexes.length > 0
+  const { generatedHexes, generatedMetadata, paperSize, orientation } = useMapStore()
+  const hasSavedMap = generatedHexes.length > 0
   const [showHowItWorks, setShowHowItWorks] = useState(false)
 
   return (
@@ -178,7 +178,9 @@ export function SetupLandingPage({
                   </span>
                 </div>
                 <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkMute }}>
-                  {paperSize} · {orientation} · {hexes.length} hex
+                  {generatedMetadata
+                    ? `${paperSize} · ${orientation} · ${generatedMetadata.hex_count} hexes · ${generatedMetadata.hex_size_km.toFixed(1)} km`
+                    : `${paperSize} · ${orientation} · ${generatedHexes.length} hexes`}
                 </div>
               </div>
               <BookmarkIcon />
