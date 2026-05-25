@@ -56,9 +56,12 @@ type CtxItem = { label: string; action: () => void; danger?: boolean; color?: st
 export type TerrainViewCanvasHandle = {
   exportBlob: () => Promise<{ blob: Blob; paperMm: [number, number] } | null>
   getPaperRect: () => { pw: number; ph: number; px: number; py: number } | null
+  peekStart: () => void
+  peekEnd: () => void
+  zoomToPhysical: () => void
 }
 
-export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function TerrainViewCanvas(_, ref) {
+export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundColor?: string }>(function TerrainViewCanvas({ surroundColor = '#1a1a2a' }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const osmOverlayCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -1329,8 +1332,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     // DPR base transform
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-    // Dark surround (outside paper)
-    ctx.fillStyle = '#1a1a2a'
+    // Surround (outside paper)
+    ctx.fillStyle = surroundColor
     ctx.fillRect(0, 0, cssW, cssH)
 
     // Pan/zoom transform centred on canvas
@@ -1361,7 +1364,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
     const buildExtraTextures = (): Map<string, HTMLImageElement | null> => {
       const map = new Map<string, HTMLImageElement | null>()
       if (beachTextureRef.current) map.set('beach', beachTextureRef.current)
-      if (mountainsTextureRef.current) map.set('mountains', mountainsTextureRef.current)
       for (const ct of customTerrainsRef.current) {
         if (!ct.textureId) continue
         const tex =
@@ -2576,6 +2578,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         y: cy * (1 - scale) + oldPan.y * scale,
       }
       if (rafRef.current === null) rafRef.current = requestAnimationFrame(() => { rafRef.current = null; draw() })
+      if (mapOverlayRef.current) snapOverlay()
       // Rebuild all offscreen layers at settled zoom for crisp quality
       if (terrainZoomSettleRef.current !== null) clearTimeout(terrainZoomSettleRef.current)
       terrainZoomSettleRef.current = setTimeout(() => {
@@ -2595,7 +2598,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       el.removeEventListener('wheel', onWheel)
       if (terrainZoomSettleRef.current !== null) clearTimeout(terrainZoomSettleRef.current)
     }
-  }, [draw])
+  }, [draw, snapOverlay])
 
   // Drag pan (left-click drag or middle-mouse — left is suppressed in paint mode)
   useEffect(() => {
@@ -2621,6 +2624,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
         y: panOriginRef.current.y + e.clientY - panStartRef.current.y,
       }
       if (rafRef.current === null) rafRef.current = requestAnimationFrame(() => { rafRef.current = null; draw() })
+      if (mapOverlayRef.current) snapOverlay()
     }
     const onUp = () => {
       isPanningRef.current = false
@@ -2634,7 +2638,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [draw])
+  }, [draw, snapOverlay])
 
   // Global Escape key: deactivate the current tool
   const setActiveToolRef = useRef(setActiveTool)
@@ -4984,6 +4988,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
       if (!meta || w === 0) return null
       return computePaper(w, h, meta)
     },
+    peekStart: () => { snapOverlay(); setMapOverlay(true) },
+    peekEnd: () => setMapOverlay(false),
+    zoomToPhysical,
   }))
 
   useEffect(() => {
@@ -5034,43 +5041,6 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle>(function Te
           overflow: 'hidden',
         }}
       />
-      {/* 1:1 physical-size zoom */}
-      {generatedMetadata && (
-        <button
-          title="Zoom to 1:1 physical size (hex matches real mm on screen)"
-          onClick={zoomToPhysical}
-          style={{
-            position: 'absolute', bottom: 14, right: 104, zIndex: 20,
-            background: 'rgba(14,15,24,0.88)',
-            border: '1px solid rgba(80,90,140,0.5)',
-            borderRadius: 6, padding: '5px 11px', cursor: 'pointer',
-            color: '#8a8fb0', fontSize: 12,
-            fontFamily: 'ui-monospace, monospace', userSelect: 'none',
-            letterSpacing: '0.03em',
-          }}
-        >
-          1:1
-        </button>
-      )}
-      {/* Peek button — hold to reveal reference (OSM map or historical image) */}
-      <button
-        title={dataSource === 'map_image' ? 'Hold to preview historical map at full opacity (or hold Space)' : 'Hold to preview real-world map (or hold Space)'}
-        onMouseDown={() => { if (dataSource === 'osm') snapOverlay(); setMapOverlay(true) }}
-        onMouseUp={() => setMapOverlay(false)}
-        onMouseLeave={() => setMapOverlay(false)}
-        style={{
-          position: 'absolute', bottom: 14, right: 14, zIndex: 20,
-          background: mapOverlay ? 'rgba(50,90,170,0.95)' : 'rgba(14,15,24,0.88)',
-          border: `1px solid ${mapOverlay ? 'rgba(100,150,255,0.7)' : 'rgba(80,90,140,0.5)'}`,
-          borderRadius: 6, padding: '5px 11px', cursor: 'pointer',
-          color: mapOverlay ? '#cde' : '#8a8fb0', fontSize: 12,
-          fontFamily: 'ui-monospace, monospace', userSelect: 'none',
-          transition: 'background 0.1s, color 0.1s, border-color 0.1s',
-          letterSpacing: '0.03em',
-        }}
-      >
-        {dataSource === 'map_image' ? 'img peek' : 'map peek'}
-      </button>
       {editingLabel && (() => {
         const overlay = labelOverlays.find(o => o.id === editingLabel.overlayId)
         const commit = () => {

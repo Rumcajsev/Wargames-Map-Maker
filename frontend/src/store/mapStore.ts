@@ -194,7 +194,6 @@ export const TERRAIN_COLORS: Record<string, string> = {
   sea: '#3a6898',
   river: '#7ab0c8',
   beach: '#dfd0a0',
-  mountains: '#8a7a6a',
 }
 
 export interface CustomTerrain {
@@ -254,10 +253,10 @@ export function mapResolutionMpx(lat: number, zoom: number): number {
   return (78271.516 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom)
 }
 
-export const TERRAIN_PRIORITY = ['clear', 'light_woods', 'woods', 'rough', 'marsh', 'sea', 'beach', 'mountains'] as const
+export const TERRAIN_PRIORITY = ['clear', 'light_woods', 'woods', 'rough', 'marsh', 'sea', 'beach'] as const
 
 /** Terrains that are manual-paint only — excluded from auto-classification sliders. */
-export const MANUAL_ONLY_TERRAINS = new Set(['beach', 'mountains'])
+export const MANUAL_ONLY_TERRAINS = new Set(['beach'])
 
 export const DEFAULT_THRESHOLDS: Record<string, number> = {
   sea: 0.4,

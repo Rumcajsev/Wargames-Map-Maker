@@ -8,5 +8,6 @@
       "port": 5173,
       "cwd": "frontend"
     }
-  ]
+  ],
+  "autoVerify": false
 }

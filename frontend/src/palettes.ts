@@ -2,21 +2,22 @@
 // (Ardennes '44, Holland '44 reference maps)
 
 export const PALETTE_TERRAIN = [
-  // Water / deep
   '#1e3d5a', '#2a5080', '#3a6898', '#4a78a8',
-  // Water / medium
   '#5888b0', '#6aa8c0', '#7ab0c8', '#90c0d8',
-  // Marsh / wetland
   '#5a8878', '#6b9e8a', '#7ab0a0',
-  // Clear / open ground
   '#c8bc9a', '#ddd4b8', '#ede8d5', '#f0e8d0',
-  // Light woods
   '#8aaa6a', '#a0bc70', '#b8cc88',
-  // Dense woods / forest
   '#3d6040', '#4d7a50', '#5a8a5a',
-  // Rough / rocky
   '#887060', '#9e8c6a', '#b0a080',
 ] as const
+
+export const PALETTE_TERRAIN_GROUPS = [
+  { label: 'Blues',  colors: ['#1e3d5a', '#2a5080', '#3a6898', '#4a78a8', '#5888b0', '#6aa8c0', '#7ab0c8', '#90c0d8'] },
+  { label: 'Teals',  colors: ['#5a8878', '#6b9e8a', '#7ab0a0'] },
+  { label: 'Tans',   colors: ['#c8bc9a', '#ddd4b8', '#ede8d5', '#f0e8d0'] },
+  { label: 'Greens', colors: ['#8aaa6a', '#a0bc70', '#b8cc88', '#3d6040', '#4d7a50', '#5a8a5a'] },
+  { label: 'Browns', colors: ['#887060', '#9e8c6a', '#b0a080'] },
+] as const satisfies { label: string; colors: string[] }[]
 
 export const PALETTE_ROAD_SURFACE = [
   // Pale / white surfaces

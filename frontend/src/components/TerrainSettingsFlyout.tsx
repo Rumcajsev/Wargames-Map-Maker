@@ -4,7 +4,7 @@ import { ColorSwatch } from './ColorSwatch'
 import { PALETTE_TERRAIN } from '../palettes'
 import { FlyoutContainer, FlyoutHeader, ToggleButtonGroup, EnabledSection } from './ui'
 
-const TEXTURED_TERRAINS = new Set(['clear', 'woods', 'light_woods', 'beach', 'mountains'])
+const TEXTURED_TERRAINS = new Set(['clear', 'woods', 'light_woods', 'beach'])
 
 interface Props {
   terrain?: string  // undefined = defaults mode

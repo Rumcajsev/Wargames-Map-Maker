@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useMapStore } from './store/mapStore'
-import { SetupPanel } from './components/SetupPanel'
+import { SetupLanding } from './components/SetupLanding'
+import { AreaSelectPanel } from './components/AreaSelectPanel'
 import { MapView } from './components/MapView'
 import { TopBar } from './components/TopBar'
 import { PresetsPanel } from './components/PresetsPanel'
@@ -19,6 +20,12 @@ function App() {
   const { step, activePanel, undo, redo, generateStatus, generateProgress } = useMapStore()
   const canvasHandleRef = useRef<TerrainViewCanvasHandle>(null)
   const [presetsOpen, setPresetsOpen] = useState(false)
+  const [setupPhase, setSetupPhase] = useState<'landing' | 'area-select'>('landing')
+
+  // Reset to landing whenever we return to setup step
+  useEffect(() => {
+    if (step === 'setup') setSetupPhase('landing')
+  }, [step])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,11 +64,19 @@ function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       {presetsOpen && <PresetsPanel onClose={() => setPresetsOpen(false)} />}
+
       {step === 'setup' ? (
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <SetupPanel onOpenPresets={() => setPresetsOpen(true)} />
-          <MapView />
-        </div>
+        setupPhase === 'landing' ? (
+          <SetupLanding
+            onOpenPresets={() => setPresetsOpen(true)}
+            onOsmContinue={() => setSetupPhase('area-select')}
+          />
+        ) : (
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <AreaSelectPanel onBack={() => setSetupPhase('landing')} />
+            <MapView />
+          </div>
+        )
       ) : step === 'image-align' ? (
         <ImageAlignView />
       ) : (
@@ -72,7 +87,6 @@ function App() {
               <div style={{ height: '100%', width: `${generateProgress.progress}%`, background: '#4a9a6a', transition: 'width 0.25s ease' }} />
             </div>
           )}
-
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             {activePanel === 'display' ? <DisplaySidebar /> : activePanel === 'roads' ? <RoadsSidebar /> : activePanel === 'rivers' ? <RiversSidebar /> : activePanel === 'settlements' ? <SettlementsSidebar /> : activePanel === 'highlights' ? <HighlightsSidebar /> : activePanel === 'areas' ? <AreasSidebar /> : activePanel === 'elevation' ? <ElevationSidebar /> : <TerrainSidebar />}
             <TerrainViewCanvas ref={canvasHandleRef} />

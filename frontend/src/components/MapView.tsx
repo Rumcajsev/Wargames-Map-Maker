@@ -151,7 +151,7 @@ export function MapView() {
 
   const [frameDims, setFrameDims] = useState({ w: 0, h: 0 })
 
-  const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth } = useMapStore()
+  const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, marginMm, hexEdgeMode, center, setMapState, setFramePixelWidth, flyTarget, clearFlyTarget } = useMapStore()
   const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
   const [cwMm, chMm] = combinedDimsMm(paperSize, orientation, mapMode, diptychJoin)
 
@@ -216,6 +216,13 @@ export function MapView() {
     const newZoom = mapRef.current.getZoom() + Math.log2((newFw * prevCw) / (oldFw * cwMm))
     mapRef.current.setZoom(newZoom)
   }, [cwMm, chMm])
+
+  // Fly to target when set from outside (search / quick jumps)
+  useEffect(() => {
+    if (!flyTarget || !mapRef.current) return
+    mapRef.current.flyTo({ center: flyTarget.center, zoom: flyTarget.zoom, duration: 1200 })
+    clearFlyTarget()
+  }, [flyTarget?.id])
 
   // Init MapLibre once
   useEffect(() => {

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useMapStore, paperDimsMm, combinedDimsMm, mapResolutionMpx } from '../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation, HexEdgeMode, MapMode, DiptychJoin } from '../store/mapStore'
 
+type StartMode = 'osm' | 'blank' | 'reference'
+
 const PAPER_SIZES: PaperSize[] = ['A4', 'A3', 'A2', 'A1']
 
 export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
@@ -17,6 +19,7 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
     startImageImport,
   } = useMapStore()
 
+  const [startMode, setStartMode] = useState<StartMode>(blankMap ? 'blank' : 'osm')
   const [elapsed, setElapsed] = useState(0)
   const stepStartRef = useRef<number | null>(null)
   const prevStepRef = useRef<string | null>(null)
@@ -44,9 +47,7 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
   const res = mapResolutionMpx(center[1], zoom)
   const widthM = framePixelWidth * res
   const scaleMpMm = framePixelWidth > 0 ? widthM / cwMm : 0
-  const hexSizeKm = scaleMpMm > 0 ? (hexSizeMm * scaleMpMm / 1000).toFixed(2) : '—'
 
-  // Hex count per sheet (single-sheet dims), same logic as backend + preview
   const sq3 = Math.sqrt(3)
   const R_mm = hexSizeMm / sq3
   const iWMm = pwMm - 2 * marginMm
@@ -65,137 +66,154 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
   }
 
   const bearingDisplay = Math.round(((bearing % 360) + 360) % 360)
+  const hexSizeKmNum = scaleMpMm > 0 ? hexSizeMm * scaleMpMm / 1000 : 0
+  const hexSizeKmStr = hexSizeKmNum > 0 ? hexSizeKmNum.toFixed(2) : '—'
+  const terrainWKm = hexSizeKmNum > 0 ? (cols * hexSizeKmNum).toFixed(0) : '—'
+  const terrainHKm = hexSizeKmNum > 0 ? (rows * hexSizeKmNum).toFixed(0) : '—'
+
+  const isLoading = generateProgress !== null || generateStatus === 'loading'
+  const isDisabled = isLoading || framePixelWidth === 0
+
+  function handleStart() {
+    if (startMode === 'reference') {
+      startImageImport()
+    } else {
+      setBlankMap(startMode === 'blank')
+      generateMap()
+    }
+  }
+
+  const ctaLabel = isLoading
+    ? 'Generating…'
+    : startMode === 'reference'
+      ? 'Import Image'
+      : startMode === 'blank'
+        ? 'Generate Blank'
+        : 'Generate'
 
   return (
     <div style={{
-      width: 240,
+      width: 252,
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
-      gap: 18,
-      padding: '20px 16px',
       background: '#12131a',
       color: '#d0d0d8',
       fontFamily: 'ui-monospace, monospace',
       fontSize: 12,
       overflowY: 'auto',
     }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: 1 }}>
-        IG2 HEX MAP
+      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #1e1f2e' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: 1.5 }}>IG2 HEX MAP</div>
       </div>
 
-      <Field label="Paper">
-        <ToggleGroup
-          options={PAPER_SIZES}
-          value={paperSize}
-          onChange={(v) => setPaperSize(v as PaperSize)}
-        />
-      </Field>
+      <Section label="Start">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <StartCard active={startMode === 'osm'} onClick={() => setStartMode('osm')} icon={<OsmIcon />} label="OSM Data" desc="Real terrain from OpenStreetMap" />
+          <StartCard active={startMode === 'blank'} onClick={() => setStartMode('blank')} icon={<BlankIcon />} label="Blank" desc="Empty grid, start from scratch" />
+          <StartCard active={startMode === 'reference'} onClick={() => setStartMode('reference')} icon={<ReferenceIcon />} label="Reference" desc="Import a historical map image" />
+        </div>
+      </Section>
 
-      <Field label="Orientation">
-        <ToggleGroup
-          options={['portrait', 'landscape'] as Orientation[]}
-          labels={['Portrait', 'Landscape']}
-          value={orientation}
-          onChange={(v) => setOrientation(v as Orientation)}
-        />
-      </Field>
+      <Section label="Paper">
+        <div style={{ display: 'flex', gap: 4 }}>
+          {PAPER_SIZES.map(s => (
+            <Pill key={s} active={paperSize === s} onClick={() => setPaperSize(s)}>{s}</Pill>
+          ))}
+        </div>
+      </Section>
 
-      <Field label="Mode">
-        <ToggleGroup
-          options={['single', 'diptych'] as MapMode[]}
-          labels={['Single', 'Diptych']}
-          value={mapMode}
-          onChange={(v) => setMapMode(v as MapMode)}
-        />
-      </Field>
+      <Section label="Orientation">
+        <div style={{ display: 'flex', gap: 6 }}>
+          <IconBtn active={orientation === 'portrait'} onClick={() => setOrientation('portrait')} label="Portrait">
+            <PortraitIcon />
+          </IconBtn>
+          <IconBtn active={orientation === 'landscape'} onClick={() => setOrientation('landscape')} label="Landscape">
+            <LandscapeIcon />
+          </IconBtn>
+        </div>
+      </Section>
+
+      <Section label="Mode">
+        <div style={{ display: 'flex', gap: 6 }}>
+          <IconBtn active={mapMode === 'single'} onClick={() => setMapMode('single' as MapMode)} label="Single">
+            <SingleIcon />
+          </IconBtn>
+          <IconBtn active={mapMode === 'diptych'} onClick={() => setMapMode('diptych' as MapMode)} label="Diptych">
+            <DiptychIcon />
+          </IconBtn>
+        </div>
+      </Section>
 
       {mapMode === 'diptych' && (
-        <Field label="Seam along" hint="Which edge the two sheets share. Long edge joins sheets side-by-side; short edge stacks them.">
-          <ToggleGroup
-            options={['long', 'short'] as DiptychJoin[]}
-            labels={['Long edge', 'Short edge']}
-            value={diptychJoin}
-            onChange={(v) => setDiptychJoin(v as DiptychJoin)}
-          />
-        </Field>
+        <Section label="Seam along">
+          <div style={{ display: 'flex', gap: 6 }}>
+            <IconBtn active={diptychJoin === 'long'} onClick={() => setDiptychJoin('long' as DiptychJoin)} label="Long edge">
+              <SeamLongIcon />
+            </IconBtn>
+            <IconBtn active={diptychJoin === 'short'} onClick={() => setDiptychJoin('short' as DiptychJoin)} label="Short edge">
+              <SeamShortIcon />
+            </IconBtn>
+          </div>
+        </Section>
       )}
 
-      <Field label={`Hex size — ${hexSizeMm} mm`}>
+      <Section label={`Hex size — ${hexSizeMm} mm`}>
         <input
-          type="range"
-          min={5}
-          max={50}
-          step={1}
-          value={hexSizeMm}
-          onChange={(e) => setHexSizeMm(Number(e.target.value))}
+          type="range" min={5} max={50} step={1} value={hexSizeMm}
+          onChange={e => setHexSizeMm(Number(e.target.value))}
           style={{ width: '100%', accentColor: '#5a9e6f' }}
         />
-      </Field>
+      </Section>
 
-      <Field label="Hex top">
-        <ToggleGroup
-          options={['flat', 'pointy'] as HexOrientation[]}
-          labels={['Flat', 'Pointy']}
-          value={hexOrientation}
-          onChange={(v) => setHexOrientation(v as HexOrientation)}
-        />
-      </Field>
-
-      <Field label={`Print margin — ${marginMm} mm`}>
-        <input
-          type="range"
-          min={0}
-          max={25}
-          step={1}
-          value={marginMm}
-          onChange={(e) => setMarginMm(Number(e.target.value))}
-          style={{ width: '100%', accentColor: '#5a9e6f' }}
-        />
-      </Field>
-
-      <Field label="Edge hexes" hint="Full only: grid ends at complete hexes. Partial: adds cut-off hexes along the border.">
-        <ToggleGroup
-          options={['whole', 'half'] as HexEdgeMode[]}
-          labels={['Full only', 'Partial']}
-          value={hexEdgeMode}
-          onChange={(v) => setHexEdgeMode(v as HexEdgeMode)}
-        />
-      </Field>
-
-      <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ color: '#7a9e8a', fontSize: 13 }}>
-          {cols} × {rows} hexes{mapMode === 'diptych' ? ' / sheet' : ''}
+      <Section label="Hex top">
+        <div style={{ display: 'flex', gap: 6 }}>
+          <IconBtn active={hexOrientation === 'flat'} onClick={() => setHexOrientation('flat' as HexOrientation)} label="Flat">
+            <FlatHexIcon />
+          </IconBtn>
+          <IconBtn active={hexOrientation === 'pointy'} onClick={() => setHexOrientation('pointy' as HexOrientation)} label="Pointy">
+            <PointyHexIcon />
+          </IconBtn>
         </div>
-        <div style={{ color: '#7a9e8a', fontSize: 13 }}>
-          {hexSizeKm} km / hex
+      </Section>
+
+      <Section label={`Print margin — ${marginMm} mm`}>
+        <input
+          type="range" min={0} max={25} step={1} value={marginMm}
+          onChange={e => setMarginMm(Number(e.target.value))}
+          style={{ width: '100%', accentColor: '#5a9e6f' }}
+        />
+      </Section>
+
+      <Section label="Edge hexes">
+        <div style={{ display: 'flex', gap: 4 }}>
+          <Pill active={hexEdgeMode === 'whole'} onClick={() => setHexEdgeMode('whole' as HexEdgeMode)}>Full only</Pill>
+          <Pill active={hexEdgeMode === 'half'} onClick={() => setHexEdgeMode('half' as HexEdgeMode)}>Partial</Pill>
+        </div>
+      </Section>
+
+      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ color: '#7a9e8a', fontSize: 13, fontWeight: 600 }}>
+          {cols} × {rows}{mapMode === 'diptych' ? ' / sheet' : ''} hexes
+        </div>
+        <div style={{ color: '#5a7a68', fontSize: 12 }}>
+          {hexSizeKmStr} km / hex
+        </div>
+        <div style={{ color: '#5a7a68', fontSize: 12 }}>
+          ~{terrainWKm} × {terrainHKm} km terrain
         </div>
         {mapMode === 'diptych' && (
-          <div style={{ color: '#7a7a90', fontSize: 11 }}>
+          <div style={{ color: '#404a44', fontSize: 11 }}>
             combined {Math.round(cwMm)} × {Math.round(chMm)} mm
           </div>
         )}
         {bearingDisplay !== 0 && (
-          <div style={{ color: '#7a7a90', fontSize: 11 }}>
-            {bearingDisplay}° bearing
-          </div>
+          <div style={{ color: '#404a44', fontSize: 11 }}>{bearingDisplay}° bearing</div>
         )}
-        <div style={{ color: '#4a4a5a', fontSize: 11, marginTop: 4 }}>
-          Rotate map: right-click + drag
-        </div>
+        <div style={{ color: '#303840', fontSize: 10, marginTop: 2 }}>Right-click drag to rotate</div>
       </div>
 
-      <div style={{ borderTop: '1px solid #2a2a3a', paddingTop: 14 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 10 }}>
-          <input
-            type="checkbox"
-            checked={blankMap}
-            onChange={(e) => setBlankMap(e.target.checked)}
-            style={{ accentColor: '#3a7a4a', width: 14, height: 14, cursor: 'pointer' }}
-          />
-          <span style={{ color: '#b0b0c8', fontSize: 12 }}>Blank map</span>
-          <span style={{ color: '#5a5a7a', fontSize: 11 }}>— all clear, no OSM</span>
-        </label>
+      <div style={{ padding: '10px 16px 20px', borderTop: '1px solid #1e1f2e', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {onOpenPresets && (
           <button
             onClick={onOpenPresets}
@@ -209,7 +227,6 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontSize: 12,
-              marginBottom: 6,
             }}
             onMouseEnter={e => { e.currentTarget.style.color = '#a0a0c0'; e.currentTarget.style.borderColor = '#4a4a7a' }}
             onMouseLeave={e => { e.currentTarget.style.color = '#6a6a8a'; e.currentTarget.style.borderColor = '#2a2a4a' }}
@@ -218,40 +235,16 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
           </button>
         )}
         <button
-          onClick={startImageImport}
-          disabled={generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0}
+          onClick={handleStart}
+          disabled={isDisabled}
           style={{
             width: '100%',
-            padding: '10px 0',
-            marginBottom: 8,
-            background: 'none',
-            color: framePixelWidth === 0 ? '#3a3a5a' : '#7a9e8a',
-            border: '1px solid #2a4a3a',
-            borderRadius: 4,
-            cursor: (generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0) ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.5,
-            opacity: framePixelWidth === 0 ? 0.5 : 1,
-          }}
-          onMouseEnter={e => { if (framePixelWidth > 0) { e.currentTarget.style.borderColor = '#4a7a5a'; e.currentTarget.style.color = '#a0c8b0' } }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a4a3a'; e.currentTarget.style.color = framePixelWidth === 0 ? '#3a3a5a' : '#7a9e8a' }}
-        >
-          Import historical map
-        </button>
-
-        <button
-          onClick={generateMap}
-          disabled={generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0}
-          style={{
-            width: '100%',
-            padding: '10px 0',
-            background: generateStatus === 'loading' ? '#2a5a3a' : '#3a7a4a',
-            color: generateStatus === 'loading' ? '#7aaa8a' : '#d0ecd8',
+            padding: '11px 0',
+            background: isLoading ? '#2a5a3a' : '#3a7a4a',
+            color: isLoading ? '#7aaa8a' : '#d0ecd8',
             border: '1px solid #4a8a5a',
             borderRadius: 4,
-            cursor: (generateProgress !== null || generateStatus === 'loading' || framePixelWidth === 0) ? 'not-allowed' : 'pointer',
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit',
             fontSize: 13,
             fontWeight: 700,
@@ -259,38 +252,29 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
             opacity: framePixelWidth === 0 ? 0.5 : 1,
           }}
         >
-          {generateStatus === 'loading' ? 'Generating…' : 'Generate'}
+          {ctaLabel}
         </button>
 
         {generateProgress !== null && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{
-              width: '100%',
-              height: 6,
-              background: '#1e1f2a',
-              borderRadius: 3,
-              overflow: 'hidden',
-              marginBottom: 6,
-            }}>
+          <div>
+            <div style={{ width: '100%', height: 4, background: '#1a1f22', borderRadius: 2, overflow: 'hidden', marginBottom: 5 }}>
               <div style={{
                 height: '100%',
                 width: `${generateProgress.progress}%`,
                 background: '#3a7a4a',
-                borderRadius: 3,
+                borderRadius: 2,
                 transition: 'width 0.3s ease',
               }} />
             </div>
             <div style={{ color: '#7aaa8a', fontSize: 11, display: 'flex', justifyContent: 'space-between' }}>
               <span>{generateProgress.message}</span>
-              {elapsed > 0 && (
-                <span style={{ color: '#4a6a5a' }}>{elapsed}s</span>
-              )}
+              {elapsed > 0 && <span style={{ color: '#4a6a5a' }}>{elapsed}s</span>}
             </div>
           </div>
         )}
 
         {generateError && (
-          <div style={{ color: '#e06060', fontSize: 11, marginTop: 8, wordBreak: 'break-word' }}>
+          <div style={{ color: '#e06060', fontSize: 11, wordBreak: 'break-word' }}>
             {generateError}
           </div>
         )}
@@ -299,53 +283,199 @@ export function SetupPanel({ onOpenPresets }: { onOpenPresets?: () => void }) {
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div style={{ color: '#5a5a7a', marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid #1a1b28' }}>
+      <div style={{ color: '#4a4a6a', marginBottom: 8, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.8 }}>
         {label}
       </div>
       {children}
-      {hint && (
-        <div style={{ color: '#3a3a52', fontSize: 10, marginTop: 5, lineHeight: 1.4 }}>
-          {hint}
-        </div>
-      )}
     </div>
   )
 }
 
-function ToggleGroup<T extends string>({
-  options,
-  labels,
-  value,
-  onChange,
-}: {
-  options: T[]
-  labels?: string[]
-  value: T
-  onChange: (v: T) => void
+function StartCard({ active, onClick, icon, label, desc }: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  desc: string
 }) {
   return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      {options.map((opt, i) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          style={{
-            padding: '4px 10px',
-            background: value === opt ? '#3a6e4a' : '#1e1f2a',
-            color: value === opt ? '#d0ecd8' : '#5a5a7a',
-            border: `1px solid ${value === opt ? '#4a7e5a' : '#2a2a3a'}`,
-            borderRadius: 3,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontSize: 12,
-          }}
-        >
-          {labels ? labels[i] : opt}
-        </button>
-      ))}
-    </div>
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        padding: '9px 12px',
+        background: active ? '#1a3628' : '#181922',
+        border: `1px solid ${active ? '#3a7a4a' : '#252535'}`,
+        borderRadius: 6,
+        cursor: 'pointer',
+        color: active ? '#8ecfa0' : '#484868',
+        fontFamily: 'inherit',
+        textAlign: 'left',
+      }}
+    >
+      {icon}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: active ? '#8ecfa0' : '#6a6a8a' }}>{label}</span>
+        <span style={{ fontSize: 10, color: active ? '#5a8a6a' : '#383848', lineHeight: 1.3 }}>{desc}</span>
+      </div>
+    </button>
+  )
+}
+
+function IconBtn({ active, onClick, label, children }: {
+  active: boolean
+  onClick: () => void
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 5,
+        padding: '8px 6px',
+        background: active ? '#1a3628' : '#181922',
+        border: `1px solid ${active ? '#3a7a4a' : '#252535'}`,
+        borderRadius: 5,
+        cursor: 'pointer',
+        color: active ? '#8ecfa0' : '#484868',
+        fontFamily: 'inherit',
+        fontSize: 10,
+        letterSpacing: 0.3,
+      }}
+    >
+      {children}
+      <span>{label}</span>
+    </button>
+  )
+}
+
+function Pill({ active, onClick, children }: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        background: active ? '#3a6e4a' : '#181922',
+        color: active ? '#d0ecd8' : '#484868',
+        border: `1px solid ${active ? '#4a7e5a' : '#252535'}`,
+        borderRadius: 3,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        fontSize: 12,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function OsmIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <ellipse cx="12" cy="12" rx="4" ry="9" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+    </svg>
+  )
+}
+
+function BlankIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <rect x="5" y="2" width="14" height="20" rx="2" />
+    </svg>
+  )
+}
+
+function ReferenceIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="10" r="2" />
+      <path d="M3 17l5-4 4 4 3-3 6 6" />
+    </svg>
+  )
+}
+
+function PortraitIcon() {
+  return (
+    <svg width="16" height="22" viewBox="0 0 16 22">
+      <rect x="1.5" y="1.5" width="13" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function LandscapeIcon() {
+  return (
+    <svg width="22" height="16" viewBox="0 0 22 16">
+      <rect x="1.5" y="1.5" width="19" height="13" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function SingleIcon() {
+  return (
+    <svg width="13" height="20" viewBox="0 0 13 20">
+      <rect x="1.5" y="1.5" width="10" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function DiptychIcon() {
+  return (
+    <svg width="22" height="20" viewBox="0 0 22 20">
+      <rect x="1" y="1.5" width="9" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="12" y="1.5" width="9" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function SeamLongIcon() {
+  return (
+    <svg width="22" height="18" viewBox="0 0 22 18">
+      <rect x="1" y="1" width="9" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="12" y="1" width="9" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function SeamShortIcon() {
+  return (
+    <svg width="18" height="22" viewBox="0 0 18 22">
+      <rect x="1" y="1" width="16" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="1" y="12" width="16" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function FlatHexIcon() {
+  return (
+    <svg width="22" height="20" viewBox="0 0 22 20">
+      <polygon points="19,10 15,17 7,17 3,10 7,3 15,3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PointyHexIcon() {
+  return (
+    <svg width="20" height="22" viewBox="0 0 20 22">
+      <polygon points="10,2 17.8,6.5 17.8,15.5 10,20 2.2,15.5 2.2,6.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
   )
 }

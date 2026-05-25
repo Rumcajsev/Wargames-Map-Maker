@@ -27,8 +27,11 @@ export type SetupSlice = {
   setHexOrientation: (v: HexOrientation) => void
   setMarginMm: (v: number) => void
   setHexEdgeMode: (v: HexEdgeMode) => void
+  flyTarget: { center: [number, number]; zoom: number; id: number } | null
   setMapState: (bearing: number, center: [number, number], zoom: number) => void
   setFramePixelWidth: (w: number) => void
+  flyTo: (center: [number, number], zoom: number) => void
+  clearFlyTarget: () => void
   generateGrid: () => Promise<void>
 }
 
@@ -52,6 +55,7 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   metadata: null,
   status: 'idle',
   error: null,
+  flyTarget: null,
 
   setPaperSize: (v) => set({ paperSize: v }),
   setOrientation: (v) => set({ orientation: v }),
@@ -63,6 +67,8 @@ export const createSetupSlice = (set: Set, get: () => MapStore): SetupSlice => (
   setHexEdgeMode: (v) => set({ hexEdgeMode: v }),
   setMapState: (bearing, center, zoom) => set({ bearing, center, zoom }),
   setFramePixelWidth: (w) => set({ framePixelWidth: w }),
+  flyTo: (center, zoom) => set({ flyTarget: { center, zoom, id: Date.now() } }),
+  clearFlyTarget: () => set({ flyTarget: null }),
 
   generateGrid: async () => {
     const { paperSize, orientation, mapMode, diptychJoin, hexSizeMm, hexOrientation, bearing, center, zoom, framePixelWidth } = get()
