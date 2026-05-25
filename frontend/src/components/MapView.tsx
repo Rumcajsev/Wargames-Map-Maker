@@ -135,7 +135,7 @@ function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation
         <rect
           x={mp} y={mp} width={iW} height={iH}
           fill="none"
-          stroke="rgba(220, 100, 0, 0.45)"
+          stroke="rgba(20, 15, 10, 0.35)"
           strokeWidth={1}
           strokeDasharray="5,4"
         />
@@ -278,6 +278,13 @@ export function MapView({ editable = false }: { editable?: boolean }) {
     (acc, h) => [...acc, acc[acc.length - 1] + fh * h / chMm], [fy]
   )
 
+  // Paper-chrome registration mark geometry
+  const CH = 24        // arm length beyond frame corners
+  const SEAM_TICK = 7  // tick mark length at seam edges
+  const CHROME_COLOR = 'rgba(20, 15, 10, 0.8)'
+  const colSeamSvgXs = colBounds.slice(1, -1).map(b => b - fx + CH)
+  const rowSeamSvgYs = rowBounds.slice(1, -1).map(b => b - fy + CH)
+
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     if (!editable || fw === 0) return
     const rect = containerRef.current!.getBoundingClientRect()
@@ -345,19 +352,45 @@ export function MapView({ editable = false }: { editable?: boolean }) {
 
   // ── Overlay element positions ───────────────────────────────────────────────
 
-  const BTN = 28
+  const EDGE_GAP = 28  // distance from frame edge to button centre
   const addBtnCenter: Record<Edge, { x: number; y: number }> = {
-    left:   { x: fx - BTN / 2 - 10, y: fy + fh / 2 },
-    right:  { x: fx + fw + BTN / 2 + 10, y: fy + fh / 2 },
-    top:    { x: fx + fw / 2, y: fy - BTN / 2 - 10 },
-    bottom: { x: fx + fw / 2, y: fy + fh + BTN / 2 + 10 },
+    left:   { x: fx - EDGE_GAP,      y: fy + fh / 2 },
+    right:  { x: fx + fw + EDGE_GAP, y: fy + fh / 2 },
+    top:    { x: fx + fw / 2,        y: fy - EDGE_GAP },
+    bottom: { x: fx + fw / 2,        y: fy + fh + EDGE_GAP },
   }
 
   const pickerPos: Record<Edge, React.CSSProperties> = {
-    left:   { right: containerDims.w - fx + 4, top: fy + fh / 2 - 40 },
-    right:  { left: fx + fw + BTN + 18, top: fy + fh / 2 - 40 },
-    top:    { left: fx + fw / 2 - 50, bottom: containerDims.h - fy + 4 },
-    bottom: { left: fx + fw / 2 - 50, top: fy + fh + BTN + 18 },
+    left:   { right: containerDims.w - fx + 8,        top: fy + fh / 2 - 40 },
+    right:  { left: fx + fw + EDGE_GAP * 2 + 4,       top: fy + fh / 2 - 40 },
+    top:    { left: fx + fw / 2 - 50, bottom: containerDims.h - fy + 8 },
+    bottom: { left: fx + fw / 2 - 50, top: fy + fh + EDGE_GAP * 2 + 4 },
+  }
+
+  const pillBase: React.CSSProperties = {
+    position: 'absolute',
+    transform: 'translate(-50%, -50%)',
+    background: 'rgba(14, 13, 11, 0.88)',
+    border: '1px solid rgba(100, 95, 88, 0.5)',
+    borderRadius: 3,
+    color: '#888078',
+    fontFamily: 'ui-monospace, monospace',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    padding: '4px 9px',
+    cursor: 'pointer',
+    userSelect: 'none',
+    pointerEvents: 'auto',
+    whiteSpace: 'nowrap' as const,
+  }
+
+  const pillHoverOn  = (e: React.MouseEvent<HTMLElement>) => {
+    e.currentTarget.style.color = '#ddd8d0'
+    e.currentTarget.style.borderColor = 'rgba(180, 172, 160, 0.7)'
+  }
+  const pillHoverOff = (e: React.MouseEvent<HTMLElement>) => {
+    e.currentTarget.style.color = '#888078'
+    e.currentTarget.style.borderColor = 'rgba(100, 95, 88, 0.5)'
   }
 
   return (
@@ -375,7 +408,6 @@ export function MapView({ editable = false }: { editable?: boolean }) {
           left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
-          border: '2px solid rgba(220, 60, 0, 0.9)',
           boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.30)',
           pointerEvents: 'none',
           zIndex: 2,
@@ -396,9 +428,9 @@ export function MapView({ editable = false }: { editable?: boolean }) {
         ).seams.map((xMm, i) => (
           <div key={`sv-${i}`} style={{
             position: 'absolute',
-            left: `${xMm / cwMm * 100}%`,
-            top: 0, width: 0, height: '100%',
-            borderLeft: '2px solid rgba(220, 60, 0, 0.9)',
+            left: `calc(${xMm / cwMm * 100}% - 1.5px)`,
+            top: 0, width: 3, height: '100%',
+            background: 'rgba(20, 15, 10, 0.8)',
             pointerEvents: 'none',
           }} />
         ))}
@@ -407,13 +439,65 @@ export function MapView({ editable = false }: { editable?: boolean }) {
         ).seams.map((yMm, j) => (
           <div key={`sh-${j}`} style={{
             position: 'absolute',
-            left: 0, top: `${yMm / chMm * 100}%`,
-            width: '100%', height: 0,
-            borderTop: '2px solid rgba(220, 60, 0, 0.9)',
+            left: 0, top: `calc(${yMm / chMm * 100}% - 1.5px)`,
+            width: '100%', height: 3,
+            background: 'rgba(20, 15, 10, 0.8)',
             pointerEvents: 'none',
           }} />
         ))}
       </div>
+
+      {/* Paper-chrome: corner registration marks, dimension labels, seam ticks */}
+      {fw > 0 && (() => {
+        const x0 = CH, y0 = CH, x1 = CH + fw, y1 = CH + fh
+        return (
+          <svg
+            width={fw + CH * 2} height={fh + CH * 2}
+            style={{
+              position: 'absolute',
+              left: fx - CH, top: fy - CH,
+              pointerEvents: 'none', zIndex: 3, overflow: 'visible',
+            }}
+          >
+            {/* Frame border */}
+            <rect x={x0} y={y0} width={fw} height={fh} fill="none" stroke={CHROME_COLOR} strokeWidth={3} />
+            {/* Corner L-marks — same stroke, extend outward */}
+            <path d={`M ${x0},0 L ${x0},${y0} L 0,${y0}`}             fill="none" stroke={CHROME_COLOR} strokeWidth={3} />
+            <path d={`M ${x1},0 L ${x1},${y0} L ${x1+CH},${y0}`}      fill="none" stroke={CHROME_COLOR} strokeWidth={3} />
+            <path d={`M 0,${y1} L ${x0},${y1} L ${x0},${y1+CH}`}      fill="none" stroke={CHROME_COLOR} strokeWidth={3} />
+            <path d={`M ${x1+CH},${y1} L ${x1},${y1} L ${x1},${y1+CH}`} fill="none" stroke={CHROME_COLOR} strokeWidth={3} />
+            {/* Width label */}
+            <text
+              x={(x0 + x1) / 2} y={y0 / 2}
+              textAnchor="middle" dominantBaseline="central"
+              fontSize={10} fontFamily="ui-monospace,monospace"
+              fill={CHROME_COLOR} letterSpacing={0.5}
+            >{cwMm.toFixed(0)} mm</text>
+            {/* Height label */}
+            <text
+              x={x0 / 2} y={(y0 + y1) / 2}
+              textAnchor="middle" dominantBaseline="central"
+              fontSize={10} fontFamily="ui-monospace,monospace"
+              fill={CHROME_COLOR} letterSpacing={0.5}
+              transform={`rotate(-90,${x0 / 2},${(y0 + y1) / 2})`}
+            >{chMm.toFixed(0)} mm</text>
+            {/* Column seam ticks */}
+            {colSeamSvgXs.map((sx, i) => (
+              <g key={i}>
+                <line x1={sx} y1={y0 - SEAM_TICK} x2={sx} y2={y0} stroke={CHROME_COLOR} strokeWidth={3} />
+                <line x1={sx} y1={y1} x2={sx} y2={y1 + SEAM_TICK} stroke={CHROME_COLOR} strokeWidth={3} />
+              </g>
+            ))}
+            {/* Row seam ticks */}
+            {rowSeamSvgYs.map((sy, i) => (
+              <g key={i}>
+                <line x1={x0 - SEAM_TICK} y1={sy} x2={x0} y2={sy} stroke={CHROME_COLOR} strokeWidth={3} />
+                <line x1={x1} y1={sy} x2={x1 + SEAM_TICK} y2={sy} stroke={CHROME_COLOR} strokeWidth={3} />
+              </g>
+            ))}
+          </svg>
+        )
+      })()}
 
       {/* ── Page-grid edit overlays ── */}
       {editable && fw > 0 && (
@@ -430,18 +514,12 @@ export function MapView({ editable = false }: { editable?: boolean }) {
               <div
                 key={edge}
                 onClick={() => handleAddClick(edge)}
-                style={{
-                  position: 'absolute',
-                  left: x - BTN / 2, top: y - BTN / 2,
-                  width: BTN, height: BTN,
-                  borderRadius: '50%',
-                  background: 'rgba(220,60,0,0.88)',
-                  color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 20, fontWeight: 300, lineHeight: 1,
-                  cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto',
-                }}
-              >+</div>
+                onMouseEnter={pillHoverOn}
+                onMouseLeave={pillHoverOff}
+                style={{ ...pillBase, left: x, top: y }}
+              >
+                + {isCol ? 'COL' : 'ROW'}
+              </div>
             )
           })}
 
@@ -453,25 +531,27 @@ export function MapView({ editable = false }: { editable?: boolean }) {
               <div style={{
                 position: 'absolute',
                 ...pickerPos[pickerEdge],
-                background: 'rgba(22,18,16,0.96)',
-                border: '1px solid rgba(220,60,0,0.5)',
-                borderRadius: 4,
-                padding: 5,
+                background: 'rgba(14, 13, 11, 0.94)',
+                border: '1px solid rgba(100, 95, 88, 0.5)',
+                borderRadius: 3,
+                padding: 4,
                 display: 'flex',
                 flexDirection: isCol ? 'column' : 'row',
-                gap: 4,
+                gap: 3,
                 pointerEvents: 'auto',
               }}>
                 {opts.map(mm => (
                   <button
                     key={mm}
                     onClick={() => applyAdd(pickerEdge, mm)}
+                    onMouseEnter={pillHoverOn}
+                    onMouseLeave={pillHoverOff}
                     style={{
                       padding: '4px 10px',
-                      background: 'rgba(220,60,0,0.15)',
-                      border: '1px solid rgba(220,60,0,0.4)',
+                      background: 'none',
+                      border: '1px solid rgba(100, 95, 88, 0.4)',
                       borderRadius: 3,
-                      color: '#ffd0b0',
+                      color: '#888078',
                       cursor: 'pointer',
                       fontFamily: 'ui-monospace, monospace',
                       fontSize: 11, whiteSpace: 'nowrap',
@@ -489,17 +569,10 @@ export function MapView({ editable = false }: { editable?: boolean }) {
             return (
               <div
                 onClick={() => removeCol(col)}
-                style={{
-                  position: 'absolute',
-                  left: cx - BTN / 2, top: fy + 14,
-                  width: BTN, height: BTN,
-                  borderRadius: '50%',
-                  background: 'rgba(200,50,50,0.88)',
-                  color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto',
-                }}
-              >×</div>
+                onMouseEnter={pillHoverOn}
+                onMouseLeave={pillHoverOff}
+                style={{ ...pillBase, left: cx, top: fy + fh / 2 }}
+              >× REM COL</div>
             )
           })()}
 
@@ -510,17 +583,10 @@ export function MapView({ editable = false }: { editable?: boolean }) {
             return (
               <div
                 onClick={() => removeRow(row)}
-                style={{
-                  position: 'absolute',
-                  left: fx + 14, top: cy - BTN / 2,
-                  width: BTN, height: BTN,
-                  borderRadius: '50%',
-                  background: 'rgba(200,50,50,0.88)',
-                  color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto',
-                }}
-              >×</div>
+                onMouseEnter={pillHoverOn}
+                onMouseLeave={pillHoverOff}
+                style={{ ...pillBase, left: fx + fw / 2, top: cy }}
+              >× REM ROW</div>
             )
           })()}
         </div>

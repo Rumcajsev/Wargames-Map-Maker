@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation } from '../../store/mapStore'
-import { PaperHexPreview } from '../PaperHexPreview'
 import { MapView } from '../MapView'
 
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
@@ -280,10 +279,10 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
 
 function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => void; onGenerate: () => void; showMap?: boolean }) {
   const {
-    paperSize, orientation, pageGrid,
+    paperSize, orientation,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
     zoom, framePixelWidth,
-    setPaperSize, setOrientation, setPageGrid,
+    setPaperSize, setOrientation,
     setHexSizeMm, setHexOrientation, setMarginMm, setHexEdgeMode,
     flyTo,
   } = useMapStore()
@@ -432,19 +431,7 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
 
         {/* ── Right: map or paper preview ── */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {showMap ? <MapView editable /> : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: TK.paper2, overflow: 'visible' }}>
-              <PaperHexPreview
-                pageGrid={pageGrid}
-                marginMm={marginMm}
-                hexSizeMm={hexSizeMm}
-                hexOrientation={hexOrientation}
-                maxW={420} maxH={460}
-                colors={{ paper: TK.paper, border: TK.line, hex: TK.line, margin: TK.line2, labelPrimary: TK.inkMute, labelSecondary: TK.inkFaint }}
-                setPageGrid={setPageGrid}
-              />
-            </div>
-          )}
+          <MapView editable />
         </div>
       </div>
 
