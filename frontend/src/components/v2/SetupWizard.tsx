@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation, MapMode } from '../../store/mapStore'
-import { paperDimsMm } from '../../store/mapStore'
+import { PaperHexPreview } from '../PaperHexPreview'
 import { MapView } from '../MapView'
 
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
@@ -448,7 +448,21 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
 
         {/* ── Right: map or paper preview ── */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {showMap ? <MapView /> : <PaperPreview paperSize={paperSize} orientation={orientation} hexSizeMm={hexSizeMm} hexOrientation={hexOrientation} marginMm={marginMm} />}
+          {showMap ? <MapView /> : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: TK.paper2 }}>
+              <PaperHexPreview
+                paperSize={paperSize}
+                orientation={orientation}
+                mapMode={mapMode}
+                diptychJoin={'long'}
+                marginMm={marginMm}
+                hexSizeMm={hexSizeMm}
+                hexOrientation={hexOrientation}
+                maxW={480} maxH={520}
+                colors={{ paper: TK.paper, border: TK.line, hex: TK.line, margin: TK.line2, labelPrimary: TK.inkMute, labelSecondary: TK.inkFaint }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -464,91 +478,6 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
         <NavButton onClick={onGenerate} disabled={isDisabled}>
           {showMap ? 'GENERATE →' : 'START EDITING →'}
         </NavButton>
-      </div>
-    </div>
-  )
-}
-
-// ── Paper preview (blank mode) ───────────────────────────────────────────────
-
-function PaperPreview({ paperSize, orientation, hexSizeMm, hexOrientation, marginMm }: {
-  paperSize: PaperSize; orientation: Orientation
-  hexSizeMm: number; hexOrientation: HexOrientation; marginMm: number
-}) {
-  const [pwMm, phMm] = paperDimsMm(paperSize, orientation)
-  const maxW = 480, maxH = 520
-  const scale = Math.min(maxW / pwMm, maxH / phMm)
-  const W = Math.round(pwMm * scale)
-  const H = Math.round(phMm * scale)
-  const marginPx = marginMm * scale
-  const sq3 = Math.sqrt(3)
-
-  const hexR = Math.max(4, Math.min(18, (hexSizeMm / sq3) * scale))
-  const iW = W - 2 * marginPx
-  const iH = H - 2 * marginPx
-
-  const hexes: { cx: number; cy: number }[] = []
-  if (hexOrientation === 'flat') {
-    const colSpacing = 1.5 * hexR
-    const rowSpacing = sq3 * hexR
-    for (let q = -1; q * colSpacing < iW + hexR * 2; q++) {
-      const cx = marginPx + hexR + q * colSpacing
-      const offset = q % 2 !== 0 ? rowSpacing / 2 : 0
-      for (let r = -1; r * rowSpacing < iH + rowSpacing; r++) {
-        hexes.push({ cx, cy: marginPx + hexR * (sq3 / 2) + r * rowSpacing - offset })
-      }
-    }
-  } else {
-    const rowSpacing = 1.5 * hexR
-    const colSpacing = sq3 * hexR
-    for (let r = -1; r * rowSpacing < iH + hexR * 2; r++) {
-      const cy = marginPx + hexR + r * rowSpacing
-      const offset = r % 2 !== 0 ? colSpacing / 2 : 0
-      for (let q = -1; q * colSpacing < iW + colSpacing; q++) {
-        hexes.push({ cx: marginPx + hexR * (sq3 / 2) + q * colSpacing - offset, cy })
-      }
-    }
-  }
-
-  const angles = hexOrientation === 'flat' ? [0,60,120,180,240,300] : [30,90,150,210,270,330]
-  const pts = (cx: number, cy: number) =>
-    angles.map(a => {
-      const rad = a * Math.PI / 180
-      return `${cx + hexR * Math.cos(rad)},${cy + hexR * Math.sin(rad)}`
-    }).join(' ')
-
-  const cols = hexOrientation === 'flat'
-    ? Math.max(0, Math.floor((iW / 2 - hexR) / (1.5 * hexR))) * 2 + 1
-    : Math.max(0, Math.floor((iW / 2 - (sq3 / 2) * hexR) / (sq3 * hexR))) * 2 + 1
-  const rows = hexOrientation === 'flat'
-    ? Math.max(0, Math.floor((iH / 2 - (sq3 / 2) * hexR) / (sq3 * hexR))) * 2 + 1
-    : Math.max(0, Math.floor((iH / 2 - hexR) / (1.5 * hexR))) * 2 + 1
-
-  return (
-    <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      background: TK.paper2, gap: 20,
-    }}>
-      <svg width={W} height={H} style={{ display: 'block' }}>
-        <rect width={W} height={H} fill={TK.paper} stroke={TK.line} strokeWidth={1} />
-        <defs>
-          <clipPath id="paper-clip">
-            <rect x={marginPx} y={marginPx} width={Math.max(0, iW)} height={Math.max(0, iH)} />
-          </clipPath>
-        </defs>
-        <g clipPath="url(#paper-clip)">
-          {hexes.map((h, i) => (
-            <polygon key={i} points={pts(h.cx, h.cy)} fill="none" stroke={TK.line} strokeWidth={0.8} />
-          ))}
-        </g>
-        {marginMm > 0 && (
-          <rect x={marginPx} y={marginPx} width={Math.max(0, iW)} height={Math.max(0, iH)}
-            fill="none" stroke={TK.line2} strokeWidth={0.75} strokeDasharray="3,2" />
-        )}
-      </svg>
-      <div style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkMute, letterSpacing: 0.5 }}>
-        {paperSize} · {orientation} · {cols} × {rows} hexes
       </div>
     </div>
   )
