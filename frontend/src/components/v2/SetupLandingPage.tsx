@@ -95,6 +95,50 @@ export function SetupLandingPage({
           grids, or traced references. Exports a print-ready PDF.
         </p>
 
+        {/* Resume — standalone, only when there's saved work */}
+        {hasSavedMap && (
+          <>
+            <button
+              onClick={onResume}
+              style={{
+                width: 420,
+                background: TK.ink,
+                border: `1px solid ${TK.line}`,
+                padding: '20px 22px',
+                cursor: 'pointer',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                textAlign: 'left',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = TK.ink2 }}
+              onMouseLeave={e => { e.currentTarget.style.background = TK.ink }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: '#fff' }}>
+                    Resume
+                  </span>
+                  <span style={{ fontFamily: TK.serif, fontStyle: 'italic', fontSize: 13, color: TK.inkFaint }}>
+                    last session
+                  </span>
+                </div>
+                <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkFaint }}>
+                  {generatedMetadata
+                    ? `${paperSize} · ${orientation} · ${generatedMetadata.hex_count} hexes · ${generatedMetadata.hex_size_km.toFixed(1)} km each`
+                    : `${paperSize} · ${orientation} · ${generatedHexes.length} hexes`}
+                </div>
+              </div>
+              <ArrowRight />
+            </button>
+
+            {/* Separator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 420, margin: '16px 0' }}>
+              <div style={{ flex: 1, height: 1, background: TK.line }} />
+              <span style={{ fontFamily: TK.sans, fontSize: 10, color: TK.inkFaint, letterSpacing: 1, textTransform: 'uppercase' }}>or</span>
+              <div style={{ flex: 1, height: 1, background: TK.line }} />
+            </div>
+          </>
+        )}
+
         {/* Action card group */}
         <div style={{
           display: 'flex', flexDirection: 'column',
@@ -105,25 +149,25 @@ export function SetupLandingPage({
           <button
             onClick={onNewMap}
             style={{
-              background: TK.ink,
+              background: hasSavedMap ? TK.surface : TK.ink,
               border: 'none',
               padding: '20px 22px',
               cursor: 'pointer',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               textAlign: 'left',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = TK.ink2 }}
-            onMouseLeave={e => { e.currentTarget.style.background = TK.ink }}
+            onMouseEnter={e => { e.currentTarget.style.background = hasSavedMap ? TK.paper2 : TK.ink2 }}
+            onMouseLeave={e => { e.currentTarget.style.background = hasSavedMap ? TK.surface : TK.ink }}
           >
             <div>
-              <div style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: '#fff', marginBottom: 4 }}>
+              <div style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: hasSavedMap ? TK.ink : '#fff', marginBottom: 4 }}>
                 New Map
               </div>
-              <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkFaint }}>
+              <div style={{ fontFamily: TK.sans, fontSize: 11, color: hasSavedMap ? TK.inkMute : TK.inkFaint }}>
                 Choose source · set paper · paint
               </div>
             </div>
-            <ArrowRight />
+            {hasSavedMap ? <ArrowRightDark /> : <ArrowRight />}
           </button>
 
           {/* LOAD FROM FILE */}
@@ -151,41 +195,6 @@ export function SetupLandingPage({
             </div>
             <FolderIcon />
           </button>
-
-          {/* RESUME — only if there's a saved map */}
-          {hasSavedMap && (
-            <button
-              onClick={onResume}
-              style={{
-                background: TK.surface,
-                border: 'none',
-                borderTop: `1px solid ${TK.line}`,
-                padding: '18px 22px',
-                cursor: 'pointer',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                textAlign: 'left',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = TK.paper2 }}
-              onMouseLeave={e => { e.currentTarget.style.background = TK.surface }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: TK.ink }}>
-                    Resume
-                  </span>
-                  <span style={{ fontFamily: TK.serif, fontStyle: 'italic', fontSize: 13, color: TK.rust }}>
-                    Untitled
-                  </span>
-                </div>
-                <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkMute }}>
-                  {generatedMetadata
-                    ? `${paperSize} · ${orientation} · ${generatedMetadata.hex_count} hexes · ${generatedMetadata.hex_size_km.toFixed(1)} km`
-                    : `${paperSize} · ${orientation} · ${generatedHexes.length} hexes`}
-                </div>
-              </div>
-              <BookmarkIcon />
-            </button>
-          )}
         </div>
 
         {/* How it works link */}
@@ -280,6 +289,14 @@ function ArrowRight() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M3 8h10M9 4l4 4-4 4" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ArrowRightDark() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M3 8h10M9 4l4 4-4 4" stroke={TK.inkFaint} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
