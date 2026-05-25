@@ -86,8 +86,8 @@ export type UiSlice = {
   resetDisabledHexes: () => void
   autoDisableOceanHexes: () => void
   setAutoDisabledOceanHexKeys: (keys: string[]) => void
-  mapStyle: 'standard' | 'historical_simple' | 'basic'
-  setMapStyle: (v: 'standard' | 'historical_simple' | 'basic') => void
+  mapStyle: 'standard' | 'historical_simple'
+  setMapStyle: (v: 'standard' | 'historical_simple') => void
   styleSnapshots: Record<string, Record<string, unknown>>
   hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
   setHachureParam: (key: 'spacing' | 'length' | 'wobble' | 'jitter' | 'hillWidth' | 'mtnWidth' | 'smoothing', value: number) => void
@@ -98,11 +98,6 @@ export type UiSlice = {
 
 // Applied when first visiting a style — only the keys that meaningfully differ per style.
 const STYLE_INITIAL_DEFAULTS: Record<string, Record<string, unknown>> = {
-  basic: {
-    roadWiggleAmp: 0,
-    roadWiggleFreq: 2.5,
-    railWiggleAmp: 0,
-  },
   standard: {
     roadWiggleAmp: 0.20,
     roadWiggleFreq: 0.9,
@@ -758,6 +753,7 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
   }
   if (fromVersion < 43) {
     if (!s.mapStyle) s.mapStyle = 'standard'
+    if ((s.mapStyle as string) === 'basic') s.mapStyle = 'standard'
     const hexes = s.generatedHexes as Array<Record<string, unknown>> | undefined
     if (hexes) {
       for (const h of hexes) {

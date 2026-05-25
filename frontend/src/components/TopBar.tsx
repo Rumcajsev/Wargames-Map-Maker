@@ -122,7 +122,7 @@ export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Prom
         borderLeft: '1px solid #1e1f2e',
         height: '100%',
       }}>
-        {(['standard', 'historical_simple', 'basic'] as const).map(s => (
+        {(['standard', 'historical_simple'] as const).map(s => (
           <button
             key={s}
             onClick={() => setMapStyle(s)}
@@ -137,7 +137,7 @@ export function TopBar({ onExportPDF, onOpenPresets }: { onExportPDF: () => Prom
               fontSize: 11,
             }}
           >
-            {s === 'standard' ? 'Standard' : s === 'historical_simple' ? 'Historical' : 'Basic'}
+            {s === 'standard' ? 'Standard' : 'Historical'}
           </button>
         ))}
       </div>

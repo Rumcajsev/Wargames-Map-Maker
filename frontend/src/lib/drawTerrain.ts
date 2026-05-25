@@ -55,7 +55,7 @@ export type DrawTerrainParams = {
   edgeBlobParams: EdgeBlobParams
   edgeBlobOverrides: Record<string, BlobOverride>
   hexVertMap: Map<string, [number, number][]>
-  mapStyle: 'standard' | 'historical_simple' | 'basic'
+  mapStyle: 'standard' | 'historical_simple'
   /** terrain name → texture image, for beach / mountains / custom terrains */
   extraTextures: Map<string, HTMLImageElement | null>
   hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
@@ -172,35 +172,20 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   } = params
 
   // ── 1. Base fills ───────────────────────────────────────────────────────────
-  if (params.mapStyle === 'basic') {
-    // Flat per-hex color fill — no blobs, no textures
-    for (const { hex, verts } of projected) {
-      if (edgeMode === 'whole' && hex.partial) continue
-      if (!hex.partial && !inMargin(verts)) continue
-      tCtx.beginPath()
-      tCtx.moveTo(verts[0][0], verts[0][1])
-      for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-      tCtx.closePath()
-      const t = (hex.isLake ?? false) ? 'lake' : hex.terrain
-      tCtx.fillStyle = terrainColors[t] ?? terrainColors['clear'] ?? '#ede8d5'
-      tCtx.fill()
-    }
-  } else {
-    const clearFillColor = terrainColors['clear'] ?? '#ede8d5'
-    for (const { hex, verts } of projected) {
-      if (edgeMode === 'whole' && hex.partial) continue
-      if (!hex.partial && !inMargin(verts)) continue
-      tCtx.beginPath()
-      tCtx.moveTo(verts[0][0], verts[0][1])
-      for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-      tCtx.closePath()
-      tCtx.fillStyle = clearFillColor
-      tCtx.fill()
-    }
+  const clearFillColor = terrainColors['clear'] ?? '#ede8d5'
+  for (const { hex, verts } of projected) {
+    if (edgeMode === 'whole' && hex.partial) continue
+    if (!hex.partial && !inMargin(verts)) continue
+    tCtx.beginPath()
+    tCtx.moveTo(verts[0][0], verts[0][1])
+    for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+    tCtx.closePath()
+    tCtx.fillStyle = clearFillColor
+    tCtx.fill()
   }
 
   // ── 2. Clear texture overlay ────────────────────────────────────────────────
-  if (params.mapStyle !== 'basic' && clearTexture && clearTexture.complete) {
+  if (clearTexture && clearTexture.complete) {
     const clearPattern = tCtx.createPattern(clearTexture, 'repeat')
     if (clearPattern) {
       const clearTexSize = R * (terrainTextureScales['clear'] ?? 3)
@@ -270,14 +255,14 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   }
 
   // ── 3c. Elevation blobs (hills / mountains) ──────────────────────────────────
-  if (params.mapStyle !== 'basic') {
+  {
     const { elevationBlobs, hillsColor, mountainsColor, reliefShadingOpacity } = params
     drawElevationBlobsWithShading(tCtx, elevationBlobs.hills, hillsColor, reliefShadingOpacity)
     drawElevationBlobsWithShading(tCtx, elevationBlobs.mountains, mountainsColor, reliefShadingOpacity)
   }
 
   // ── 4. Blob mode ────────────────────────────────────────────────────────────
-  if (params.mapStyle !== 'basic') {
+  {
     const BLOB_Z: Record<string, number> = { rough: 1, marsh: 2, light_woods: 4, woods: 5, sea: 10 }
 
     // Build defaultBlobMap excluding lakes
@@ -433,7 +418,7 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
 
   // ── 5b. Edge blobs ───────────────────────────────────────────────────────────
   const { edgeBlobPainted, edgeBlobParams, edgeBlobOverrides, hexVertMap } = params
-  if (params.mapStyle !== 'basic' && Object.keys(edgeBlobPainted).length > 0) {
+  if (Object.keys(edgeBlobPainted).length > 0) {
     // Build terrain → hex-key set for the connection extension check
     const terrainToHexes = new Map<string, Set<string>>()
     for (const { hex } of projected) {

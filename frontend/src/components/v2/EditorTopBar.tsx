@@ -19,6 +19,7 @@ export function EditorTopBar({ onExportPDF }: { onExportPDF: () => Promise<void>
     undoStack, redoStack, undo, redo,
     activePanel, setActivePanel,
     resetToSetup, saveProject, restoreProject,
+    mapStyle, setMapStyle,
   } = useMapStore()
 
   const [exporting, setExporting] = useState(false)
@@ -114,8 +115,32 @@ export function EditorTopBar({ onExportPDF }: { onExportPDF: () => Promise<void>
         })}
       </div>
 
-      {/* Right: save/load + undo/redo + SAVED + PRINT */}
+      {/* Right: style switcher + save/load + undo/redo + PRINT */}
       <div style={{ display: 'flex', alignItems: 'stretch', borderLeft: `1px solid ${TK.line}`, flexShrink: 0 }}>
+        {/* Map style switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 10px' }}>
+          {(['standard', 'historical_simple'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setMapStyle(s)}
+              style={{
+                padding: '3px 9px',
+                background: mapStyle === s ? TK.ink : 'transparent',
+                color: mapStyle === s ? TK.paper : TK.inkMute,
+                border: `1px solid ${mapStyle === s ? TK.ink : TK.line}`,
+                cursor: 'pointer',
+                fontFamily: TK.mono,
+                fontSize: 9.5,
+                letterSpacing: 0.3,
+              }}
+            >
+              {s === 'standard' ? 'Standard' : 'Historical'}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ width: 1, background: TK.line, margin: '8px 4px', flexShrink: 0 }} />
+
         {/* Save / Load */}
         <button onClick={saveProject} style={ghostBtn}>Save</button>
         <button onClick={() => fileInputRef.current?.click()} style={ghostBtn}>Load</button>
