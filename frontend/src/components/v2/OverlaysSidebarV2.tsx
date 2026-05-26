@@ -6,7 +6,7 @@ import {
 import { TK } from '../../theme'
 import {
   SidebarShell, SidebarHeader, SidebarSection, SidebarDetailHeader,
-  DetailSection, DetailViewShell, ToggleRow, DashedAddBtn,
+  DetailViewShell, ToggleRow, DashedAddBtn,
   MiniSlider, SegmentedControl, tintBg,
 } from './sidebar'
 
@@ -346,7 +346,8 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
 
       {/* Fill (areas only) */}
       {isArea && (
-        <DetailSection label="Fill">
+        <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+          <SubLabel label="Fill" />
           <MiniSlider
             label="Opacity"
             display={h.fillOpacity === 0 ? 'off' : `${Math.round(h.fillOpacity * 100)}%`}
@@ -368,11 +369,12 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
               )}
             </>
           )}
-        </DetailSection>
+        </div>
       )}
 
       {/* Stroke */}
-      <DetailSection label="Stroke">
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <SubLabel label="Stroke" />
         <MiniSlider label="Opacity" display={h.strokeOpacity === 0 ? 'off' : `${Math.round(h.strokeOpacity * 100)}%`} value={Math.round(h.strokeOpacity * 100)} min={0} max={100} step={10} onChange={v => upd({ strokeOpacity: v / 100, strokeEnabled: v > 0 })} />
         <MiniSlider label="Width"   display={String(h.strokeWidth)} value={h.strokeWidth} min={1} max={20} step={0.5} onChange={v => upd({ strokeWidth: v })} />
         <SubLabel label="Pattern" />
@@ -384,10 +386,11 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
         {linePattern !== 'none' && (
           <MiniSlider label="Spacing" display={`×${(h.patternSpacing ?? 1).toFixed(1)}`} value={h.patternSpacing ?? 1} min={0.3} max={3} step={0.1} onChange={v => upd({ patternSpacing: v })} />
         )}
-      </DetailSection>
+      </div>
 
       {/* Shape */}
-      <DetailSection label="Shape">
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <SubLabel label="Shape" />
         {isArea && (
           <ToggleRow
             label="Join neighbors"
@@ -399,10 +402,10 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
         {(!isArea || h.joinNeighbors) && (
           <MiniSlider label="Smoothing" display={smoothLabel} value={s} min={0} max={8} step={0.5} onChange={v => upd({ smoothing: v })} />
         )}
-      </DetailSection>
+      </div>
 
       {/* Data */}
-      <DetailSection label="Data">
+      <div style={{ borderTop: `1px solid ${TK.line2}`, padding: '8px 14px' }}>
         <ClearBtn
           label={isArea ? 'Clear all marked hexes' : 'Clear path'}
           onClick={() => {
@@ -411,7 +414,7 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
             else clearHighlightLine(id)
           }}
         />
-      </DetailSection>
+      </div>
 
     </DetailViewShell>
   )
@@ -432,7 +435,8 @@ function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
     }>
 
       {/* Shape */}
-      <DetailSection label="Shape">
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <SubLabel label="Shape" />
         <div style={{ display: 'flex', gap: 4, padding: '4px 14px' }}>
           {(['circle', 'square', 'triangle', 'diamond', 'star'] as const).map(shape => (
             <button key={shape} onClick={() => upd({ shape })} title={shape.charAt(0).toUpperCase() + shape.slice(1)}
@@ -442,25 +446,26 @@ function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
             </button>
           ))}
         </div>
-      </DetailSection>
+      </div>
 
-      {/* Colours — fill + stroke in one section */}
-      <DetailSection label="Colours">
+      {/* Colours — fill + stroke */}
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
         <SubLabel label="Fill" />
         <CompactColorPalette value={o.fillColor} onChange={v => upd({ fillColor: v })} />
         <SubLabel label="Stroke" />
         <CompactColorPalette value={o.strokeColor} onChange={v => upd({ strokeColor: v })} />
-      </DetailSection>
+      </div>
 
       {/* Size */}
-      <DetailSection label="Size">
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <SubLabel label="Size" />
         <MiniSlider label="Size"         display={`${Math.round(o.size * 100)}%`} value={Math.round(o.size * 100)} min={10} max={70} step={5} onChange={v => upd({ size: v / 100 })} />
         <MiniSlider label="Stroke width" display={String(o.strokeWidth)}          value={o.strokeWidth}           min={0}  max={8}  step={0.5} onChange={v => upd({ strokeWidth: v })} />
-      </DetailSection>
+      </div>
 
-      <DetailSection label="Data">
+      <div style={{ borderTop: `1px solid ${TK.line2}`, padding: '8px 14px' }}>
         <ClearBtn label="Clear all icons" onClick={() => clearIconOverlay(id)} />
-      </DetailSection>
+      </div>
 
     </DetailViewShell>
   )
@@ -480,13 +485,12 @@ function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
       <SidebarDetailHeader title={o.name} onBack={onBack} onTitleChange={name => upd({ name })} />
     }>
 
-      {/* Colours — text / bg / stroke in one section */}
-      <DetailSection label="Colours">
+      {/* Colours — text / bg / stroke */}
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
         <SubLabel label="Text" />
         <CompactColorPalette value={o.textColor} onChange={v => upd({ textColor: v })} />
 
         <SubLabel label="Background" />
-        {/* Transparent toggle sits inline above the palette */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px 2px' }}>
           <button
             onClick={() => upd({ bgColor: 'transparent' })}
@@ -507,18 +511,19 @@ function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
 
         <SubLabel label="Stroke" />
         <CompactColorPalette value={o.strokeColor} onChange={v => upd({ strokeColor: v })} />
-      </DetailSection>
+      </div>
 
       {/* Style */}
-      <DetailSection label="Style">
+      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <SubLabel label="Style" />
         <MiniSlider label="Text size"    display={`${o.textSize}px`}                  value={o.textSize}             min={1}  max={16}  step={0.5} onChange={v => upd({ textSize: v })} />
         <MiniSlider label="Stroke width" display={String(o.strokeWidth)}              value={o.strokeWidth}          min={0}  max={8}   step={0.5} onChange={v => upd({ strokeWidth: v })} />
         <MiniSlider label="Opacity"      display={`${Math.round(o.opacity * 100)}%`}  value={Math.round(o.opacity * 100)} min={0} max={100} step={5} onChange={v => upd({ opacity: v / 100 })} />
-      </DetailSection>
+      </div>
 
-      <DetailSection label="Data">
+      <div style={{ borderTop: `1px solid ${TK.line2}`, padding: '8px 14px' }}>
         <ClearBtn label="Clear all labels" onClick={() => clearLabelOverlay(id)} />
-      </DetailSection>
+      </div>
 
     </DetailViewShell>
   )
