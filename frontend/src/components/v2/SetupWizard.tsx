@@ -673,30 +673,35 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   const layerStartsRef      = useRef<Record<string, number>>({})
   const layersFetchedRef    = useRef(false)
 
-  // Fire Nominatim once we know the map scale (after terrain metadata arrives)
+  // Fire Nominatim once we know the map scale (after terrain metadata arrives).
+  // Reset nominatimResult first so stale data from the previous generation never
+  // leaks into the title logic for the new one.
   useEffect(() => {
+    setNominatimResult(null)
     if (!generatedMetadata) return
+    const controller = new AbortController()
     const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
     const zoom    = nominatimZoomForWidth(widthKm)
     fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json&zoom=${zoom}&accept-language=en`,
-      { headers: { 'User-Agent': 'IG2-map-generator' } },
+      { signal: controller.signal, headers: { 'User-Agent': 'IG2-map-generator' } },
     )
       .then(r => r.json())
       .then(d => setNominatimResult(d as NominatimResult))
       .catch(() => {})
+    return () => controller.abort()
   }, [generatedMetadata])
 
-  // Generate title once settlements are done; also re-run if Nominatim arrives later
+  // Generate title once settlements are done; also re-run if Nominatim arrives later.
   useEffect(() => {
     if (!generatedMetadata) return
     if (settlementsStatus !== 'done' && settlementsStatus !== 'error') return
     const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
-    // For small maps settlements are enough; for large maps wait for Nominatim if not yet arrived
+    // For small maps settlements are enough; for large maps wait for fresh Nominatim data
     if (widthKm >= 100 && !nominatimResult) return
     const title = generateMapTitle(settlements, generatedMetadata, nominatimResult ?? undefined)
     if (title) setMapTitle(title)
-  }, [settlementsStatus, generatedMetadata, nominatimResult])
+  }, [settlementsStatus, generatedMetadata, nominatimResult, settlements])
 
   // Single 1-second ticker for all elapsed timers
   useEffect(() => {
