@@ -1,11 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useMapStore } from './store/mapStore'
-import { SetupLanding } from './components/SetupLanding'
-import { AreaSelectPanel } from './components/AreaSelectPanel'
-import { MapView } from './components/MapView'
 import { PresetsPanel } from './components/PresetsPanel'
 import { TerrainSidebar } from './components/TerrainSidebar'
-import { RoadsSidebar } from './components/RoadsSidebar'
 import { RiversSidebar } from './components/RiversSidebar'
 import { DisplaySidebar } from './components/DisplaySidebar'
 import { SettlementsSidebar } from './components/SettlementsSidebar'
@@ -18,6 +14,7 @@ import { TK } from './theme'
 import { EditorTopBar } from './components/v2/EditorTopBar'
 import { TerrainSidebarV2 } from './components/v2/TerrainSidebarV2'
 import { RoadsSidebarV2 } from './components/v2/RoadsSidebarV2'
+import { OverlaysSidebarV2 } from './components/v2/OverlaysSidebarV2'
 import { BottomDock } from './components/v2/BottomDock'
 import { SetupLandingPage } from './components/v2/SetupLandingPage'
 import { SetupWizard } from './components/v2/SetupWizard'
@@ -26,21 +23,11 @@ export function AppV2() {
   const { step, activePanel, undo, redo, generateStatus, generateProgress } = useMapStore()
   const canvasHandleRef = useRef<TerrainViewCanvasHandle>(null)
   const [presetsOpen, setPresetsOpen] = useState(false)
-  const [setupPhase, setSetupPhase] = useState<'landing' | 'source-picker' | 'area-select'>('landing')
-  // Always show the onboarding landing on fresh session load
-  const [showLanding, setShowLanding] = useState(true)
-  const [showWizard, setShowWizard] = useState(false)
+  const [screen, setScreen] = useState<'landing' | 'wizard' | 'editor'>('landing')
 
-  useEffect(() => {
-    if (step === 'setup') setSetupPhase('landing')
-  }, [step])
-
-  // When step resets to 'setup' (e.g. resetToSetup from the editor), ensure
-  // showWizard is true so the editor doesn't re-appear mid-generation when
-  // the grid SSE event changes step → 'terrain' while showWizard is still false.
-  useEffect(() => {
-    if (step === 'setup' && !showLanding) setShowWizard(true)
-  }, [step, showLanding])
+  // If the store resets step to 'setup' while in the editor (e.g. mid-generation SSE flow),
+  // treat it as wizard so the editor doesn't render against an empty store.
+  const activeScreen = screen === 'editor' && step === 'setup' ? 'wizard' : screen
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -53,45 +40,51 @@ export function AppV2() {
   }, [undo, redo])
 
   const handleExportPDF = useCallback(async () => {
-    const result = await canvasHandleRef.current?.exportBlob()
-    if (!result) return
-    const { blob, paperMm } = result
-    const reader = new FileReader()
-    reader.onload = async () => {
-      const b64 = (reader.result as string).split(',')[1]
-      const res = await fetch('/api/export/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_b64: b64, paper_mm: paperMm }),
-      })
-      if (!res.ok) return
-      const pdfBlob = await res.blob()
-      const url = URL.createObjectURL(pdfBlob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'map.pdf'
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-    reader.readAsDataURL(blob)
+    const sheets = await canvasHandleRef.current?.exportSheets()
+    if (!sheets) return
+
+    const toB64 = (blob: Blob): Promise<string> => new Promise((res, rej) => {
+      const r = new FileReader()
+      r.onload = () => res((r.result as string).split(',')[1])
+      r.onerror = rej
+      r.readAsDataURL(blob)
+    })
+
+    const sheetPayloads = await Promise.all(sheets.map(async s => ({
+      image_b64: await toB64(s.blob),
+      paper_mm: s.paperMm,
+    })))
+
+    const res = await fetch('/api/export/sheets-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheets: sheetPayloads }),
+    })
+    if (!res.ok) return
+    const pdfBlob = await res.blob()
+    const url = URL.createObjectURL(pdfBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'map.pdf'
+    a.click()
+    URL.revokeObjectURL(url)
   }, [])
 
-  // Landing is always shown first on session start, regardless of persisted step
-  if (showLanding) {
+  if (activeScreen === 'landing') {
     return (
       <SetupLandingPage
-        onNewMap={() => { setShowLanding(false); setShowWizard(true) }}
-        onResume={() => setShowLanding(false)}
-        onLoadFile={() => { /* TODO: file load */ setShowLanding(false) }}
+        onNewMap={() => setScreen('wizard')}
+        onResume={() => setScreen('editor')}
+        onLoadFile={() => { /* TODO: file load */ setScreen('editor') }}
       />
     )
   }
 
-  if (showWizard || step === 'setup') {
+  if (activeScreen === 'wizard') {
     return (
       <SetupWizard
-        onCancel={() => { setShowWizard(false); setShowLanding(true) }}
-        onDone={() => setShowWizard(false)}
+        onCancel={() => setScreen('landing')}
+        onDone={() => setScreen('editor')}
       />
     )
   }
@@ -103,7 +96,7 @@ export function AppV2() {
     : activePanel === 'roads'       ? <RoadsSidebarV2 />
     : activePanel === 'rivers'      ? <RiversSidebar />
     : activePanel === 'settlements' ? <SettlementsSidebar />
-    : activePanel === 'highlights'  ? <HighlightsSidebar />
+    : activePanel === 'highlights'  ? <OverlaysSidebarV2 />
     : activePanel === 'areas'       ? <AreasSidebar />
     : activePanel === 'elevation'   ? <ElevationSidebar />
     : <TerrainSidebar />
@@ -112,7 +105,7 @@ export function AppV2() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: TK.paper, fontFamily: TK.sans, color: TK.ink }}>
       {presetsOpen && <PresetsPanel onClose={() => setPresetsOpen(false)} />}
 
-      <EditorTopBar onExportPDF={handleExportPDF} />
+      <EditorTopBar onExportPDF={handleExportPDF} onGoHome={() => setScreen('landing')} />
 
       {/* Progress bar */}
       {generateStatus === 'loading' && generateProgress && (
