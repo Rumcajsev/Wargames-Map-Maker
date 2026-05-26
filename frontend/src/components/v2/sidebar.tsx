@@ -340,12 +340,13 @@ export function SectionDivider() {
 // ── SidebarDetailHeader ───────────────────────────────────────────────────────
 
 export function SidebarDetailHeader({
-  title, onBack, status, onReset,
+  title, onBack, status, onReset, onTitleChange,
 }: {
   title: string
   onBack: () => void
   status?: 'default' | 'modified'
   onReset?: () => void
+  onTitleChange?: (v: string) => void
 }) {
   return (
     <div style={{
@@ -370,13 +371,25 @@ export function SidebarDetailHeader({
         <span style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' }}>Back</span>
       </button>
       <div style={{ width: 1, height: 12, background: TK.line }} />
-      <span style={{
-        fontFamily: TK.serif, fontSize: 18, fontWeight: 400, color: TK.ink,
-        textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        flex: 1,
-      }}>
-        {title}
-      </span>
+      {onTitleChange ? (
+        <input
+          value={title}
+          onChange={e => onTitleChange(e.target.value)}
+          style={{
+            fontFamily: TK.serif, fontSize: 18, fontWeight: 400, color: TK.ink,
+            background: 'transparent', border: 'none', outline: 'none',
+            flex: 1, minWidth: 0, padding: 0,
+          }}
+        />
+      ) : (
+        <span style={{
+          fontFamily: TK.serif, fontSize: 18, fontWeight: 400, color: TK.ink,
+          textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          flex: 1,
+        }}>
+          {title}
+        </span>
+      )}
       {status && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{
