@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { TK } from '../../theme'
 
+type Theme = typeof TK
+
 const STEPS = [
   {
     num: '01',
@@ -24,19 +26,22 @@ const STEPS = [
   },
 ]
 
-export function HowItWorksModal({ onClose }: { onClose: () => void }) {
+export function HowItWorksModal({ onClose, t = TK }: { onClose: () => void; t?: Theme }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const isDark = t !== TK
+  const backdropColor = isDark ? 'rgba(0,0,0,0.85)' : 'rgba(42,37,32,0.72)'
+
   return (
     <div
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(42,37,32,0.72)',
+        background: backdropColor,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 1000,
         padding: 32,
@@ -45,8 +50,8 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: TK.paper,
-          border: `1px solid ${TK.line}`,
+          background: t.paper,
+          border: `1px solid ${t.line}`,
           width: '100%',
           maxWidth: 1100,
           position: 'relative',
@@ -60,14 +65,14 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
             position: 'absolute', top: 18, right: 18,
             background: 'none', border: 'none', cursor: 'pointer',
             padding: 6,
-            color: TK.inkFaint,
-            fontFamily: TK.mono,
+            color: t.inkFaint,
+            fontFamily: t.mono,
             fontSize: 18,
             lineHeight: 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = TK.ink }}
-          onMouseLeave={e => { e.currentTarget.style.color = TK.inkFaint }}
+          onMouseEnter={e => { e.currentTarget.style.color = t.ink }}
+          onMouseLeave={e => { e.currentTarget.style.color = t.inkFaint }}
         >
           ✕
         </button>
@@ -75,19 +80,19 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div style={{ marginBottom: 44 }}>
           <h2 style={{
-            fontFamily: TK.serif,
+            fontFamily: t.serif,
             fontWeight: 400,
             fontSize: 32,
-            color: TK.ink,
+            color: t.ink,
             margin: '0 0 8px 0',
             letterSpacing: -0.3,
           }}>
             How it works
           </h2>
           <p style={{
-            fontFamily: TK.sans,
+            fontFamily: t.sans,
             fontSize: 12,
-            color: TK.inkMute,
+            color: t.inkMute,
             margin: 0,
             lineHeight: 1.5,
           }}>
@@ -102,7 +107,7 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
           gap: 24,
         }}>
           {STEPS.map(step => (
-            <StepCard key={step.num} {...step} />
+            <StepCard key={step.num} {...step} t={t} />
           ))}
         </div>
       </div>
@@ -110,24 +115,24 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function StepCard({ num, title, body }: { num: string; title: string; body: string }) {
+function StepCard({ num, title, body, t }: { num: string; title: string; body: string; t: Theme }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Image placeholder */}
       <div style={{
         width: '100%',
         aspectRatio: '4 / 3',
-        background: TK.paper2,
-        border: `1px solid ${TK.line}`,
+        background: t.paper2,
+        border: `1px solid ${t.line}`,
         marginBottom: 20,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
         <span style={{
-          fontFamily: TK.mono,
+          fontFamily: t.mono,
           fontSize: 10,
-          color: TK.inkFaint,
+          color: t.inkFaint,
           letterSpacing: 1,
           textTransform: 'uppercase',
         }}>
@@ -137,9 +142,9 @@ function StepCard({ num, title, body }: { num: string; title: string; body: stri
 
       {/* Step number */}
       <span style={{
-        fontFamily: TK.mono,
+        fontFamily: t.mono,
         fontSize: 10,
-        color: TK.rust,
+        color: t.rust,
         letterSpacing: 1.5,
         marginBottom: 8,
       }}>
@@ -148,10 +153,10 @@ function StepCard({ num, title, body }: { num: string; title: string; body: stri
 
       {/* Title */}
       <h3 style={{
-        fontFamily: TK.serif,
+        fontFamily: t.serif,
         fontWeight: 400,
         fontSize: 17,
-        color: TK.ink,
+        color: t.ink,
         margin: '0 0 10px 0',
         lineHeight: 1.25,
         letterSpacing: -0.1,
@@ -161,9 +166,9 @@ function StepCard({ num, title, body }: { num: string; title: string; body: stri
 
       {/* Body */}
       <p style={{
-        fontFamily: TK.sans,
+        fontFamily: t.sans,
         fontSize: 12,
-        color: TK.inkMute,
+        color: t.inkMute,
         margin: 0,
         lineHeight: 1.65,
       }}>

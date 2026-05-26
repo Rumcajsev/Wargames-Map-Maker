@@ -128,8 +128,8 @@ export function DisplaySidebar() {
       {/* ── Hex borders ── */}
       <div style={sectionStyle}>
         <div style={labelStyle}>Hex Borders</div>
-        <div style={{ display: 'flex', gap: 4, marginBottom: hexBorderMode !== 'none' ? 8 : 0 }}>
-          {(['full', 'stubs', 'none'] as const).map(mode => (
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          {(['full', 'stubs', 'dashed'] as const).map(mode => (
             <button
               key={mode}
               onClick={() => setHexBorderMode(mode)}
@@ -154,7 +154,7 @@ export function DisplaySidebar() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <div style={{ fontSize: 10, color: '#5a5a7a', width: 44, flexShrink: 0 }}>Opacity</div>
               <input
-                type="range" min={0.05} max={1.0} step={0.05}
+                type="range" min={0} max={1.0} step={0.05}
                 value={hexBorderOpacity}
                 onChange={e => setHexBorderOpacity(Number(e.target.value))}
                 style={{ flex: 1 }}

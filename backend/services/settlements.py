@@ -1,6 +1,24 @@
 """Fetch OSM place nodes (settlements) via Overpass API."""
 from services.overpass import post_overpass as _post_overpass
 
+_SETTLEMENT_SCALE_TIERS: list[tuple[float, set[str]]] = [
+    (200,  {"city", "town", "village", "hamlet"}),
+    (500,  {"city", "town"}),
+    (float("inf"), {"city"}),
+]
+
+
+def _scale_filter_settlement(types: list[str], width_m: float) -> list[str]:
+    """Return filtered place types for the given map width."""
+    width_km = width_m / 1000
+    for max_km, allowed in _SETTLEMENT_SCALE_TIERS:
+        if width_km < max_km:
+            filtered = [t for t in types if t in allowed]
+            break
+    else:
+        filtered = [t for t in types if t in _SETTLEMENT_SCALE_TIERS[-1][1]]
+    return filtered if filtered else ["city"]
+
 
 def _parse_population(raw) -> int | None:
     """Return integer population or None if unparseable / missing."""
@@ -19,6 +37,7 @@ async def fetch_settlements(
     max_lon: float,
     limit: int = 50,
     types: list[str] | None = None,
+    width_m: float = 0,
 ) -> list[dict]:
     """Fetch OSM place nodes within the given bounding box.
 
@@ -28,6 +47,9 @@ async def fetch_settlements(
     """
     if types is None:
         types = ["city", "town", "village"]
+
+    if width_m > 0:
+        types = _scale_filter_settlement(types, width_m)
 
     type_re = "|".join(types)
 

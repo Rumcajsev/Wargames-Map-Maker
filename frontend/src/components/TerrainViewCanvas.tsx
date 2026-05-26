@@ -26,6 +26,8 @@ import { drawAllBuildings as _drawAllBuildings, type BuildingCmd } from '../lib/
 import { drawAllBuildingsV2 as _drawAllBuildingsV2 } from '../lib/drawBuildingsV2'
 import { drawHexBorders as _drawHexBorders, drawMapBoundary as _drawMapBoundary, drawHexGridMask as _drawHexGridMask, drawExcludedHexOverlay as _drawExcludedHexOverlay } from '../lib/drawHexBorders'
 import { drawTerrain as _drawTerrain } from '../lib/drawTerrain'
+import { computeHillshade } from '../lib/drawHillshade'
+import { computeContours } from '../lib/drawContours'
 import { drawHexNumbers as _drawHexNumbers, buildHexNumberMap } from '../lib/drawHexNumbers'
 import { getToolCursor } from '../lib/cursors'
 import { detectBridges } from '../lib/detectBridges'
@@ -55,6 +57,7 @@ type CtxItem = { label: string; action: () => void; danger?: boolean; color?: st
 
 export type TerrainViewCanvasHandle = {
   exportBlob: () => Promise<{ blob: Blob; paperMm: [number, number] } | null>
+  exportSheets: () => Promise<{ blob: Blob; paperMm: [number, number] }[] | null>
   getPaperRect: () => { pw: number; ph: number; px: number; py: number } | null
   peekStart: () => void
   peekEnd: () => void
@@ -72,6 +75,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   const beachTextureRef = useRef<HTMLImageElement | null>(null)
   const mountainsTextureRef = useRef<HTMLImageElement | null>(null)
   const patternCacheRef = useRef<WeakMap<HTMLImageElement, CanvasPattern>>(new WeakMap())
+  const historicalIconSetsRef = useRef<Record<string, HTMLImageElement[]>>({})
   const terrainLayerRef = useRef<OffscreenCanvas | null>(null)
   const terrainDirtyRef = useRef(true)
   const terrainLayerPapWRef = useRef(0)
@@ -197,6 +201,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
     realisticCoastline, coastlineDebugRaw,
     beachStrip, beachColor, beachWidth,
     hillsColor, mountainsColor, reliefShadingOpacity,
+    heightmapUrl, heightmapMeta,
+    hillshadeAzimuth, hillshadeAltitude, hillshadeIntensity,
+    setHillshadeAzimuth, setHillshadeAltitude, setHillshadeIntensity,
+    contoursEnabled, contourInterval, contourBaseElevation, contourSmoothPasses, contourLineWidth,
     coastlineDPEpsilon, coastlineChaikinPasses,
     terrainRenderMode,
     settlements, settlementTierStyles, settlementPlaceTier, addSettlement, placeSettlementAtHex,
@@ -218,7 +226,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
     hexOrientation,
     hexNumbersEnabled, hexNumberStartCorner, hexNumberEdge, hexNumberColor, hexNumberFontScale,
     mapStyle,
-    hachureParams,
+    historicalIconParams,
     mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid,
     excludedHexKeys, toggleExcludedHex, resetExcludedHexes,
     disabledHexKeys, toggleDisabledHex, autoDisableOceanHexes,
@@ -743,6 +751,27 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   mountainsColorRef.current = mountainsColor
   const reliefShadingOpacityRef = useRef(reliefShadingOpacity)
   reliefShadingOpacityRef.current = reliefShadingOpacity
+  const hillshadeAzimuthRef = useRef(hillshadeAzimuth)
+  hillshadeAzimuthRef.current = hillshadeAzimuth
+  const hillshadeAltitudeRef = useRef(hillshadeAltitude)
+  hillshadeAltitudeRef.current = hillshadeAltitude
+  const hillshadeIntensityRef = useRef(hillshadeIntensity)
+  hillshadeIntensityRef.current = hillshadeIntensity
+  const heightmapMetaRef = useRef(heightmapMeta)
+  heightmapMetaRef.current = heightmapMeta
+  const hillshadeCanvasRef = useRef<OffscreenCanvas | null>(null)
+  const heightmapImgDataRef = useRef<ImageData | null>(null)
+  const contourCanvasRef = useRef<OffscreenCanvas | null>(null)
+  const contoursEnabledRef = useRef(contoursEnabled)
+  contoursEnabledRef.current = contoursEnabled
+  const contourIntervalRef = useRef(contourInterval)
+  contourIntervalRef.current = contourInterval
+  const contourBaseElevationRef = useRef(contourBaseElevation)
+  contourBaseElevationRef.current = contourBaseElevation
+  const contourSmoothPassesRef = useRef(contourSmoothPasses)
+  contourSmoothPassesRef.current = contourSmoothPasses
+  const contourLineWidthRef = useRef(contourLineWidth)
+  contourLineWidthRef.current = contourLineWidth
   const coastlineDPEpsilonRef = useRef(coastlineDPEpsilon)
   coastlineDPEpsilonRef.current = coastlineDPEpsilon
   const coastlineChaikinPassesRef = useRef(coastlineChaikinPasses)
@@ -950,8 +979,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   mapBgColorRef.current = mapBgColor
   const mapStyleRef = useRef(mapStyle)
   mapStyleRef.current = mapStyle
-  const hachureParamsRef = useRef(hachureParams)
-  hachureParamsRef.current = hachureParams
+  const historicalIconParamsRef = useRef(historicalIconParams)
+  historicalIconParamsRef.current = historicalIconParams
   const mapBorderEnabledRef = useRef(mapBorderEnabled)
   mapBorderEnabledRef.current = mapBorderEnabled
   const mapBorderColorRef = useRef(mapBorderColor)
@@ -1441,8 +1470,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
       },
       hexVertMap: hexVertMapRef.current,
       mapStyle: mapStyleRef.current,
-      hachureParams: hachureParamsRef.current,
       extraTextures: buildExtraTextures(),
+      historicalIconSets: historicalIconSetsRef.current,
+      historicalIconParams: historicalIconParamsRef.current,
+      hillshadeCanvas: hillshadeCanvasRef.current,
+      contourCanvas: contourCanvasRef.current,
     }
 
     // Build offscreen terrain layer when dirty (skipped for export — always renders inline).
@@ -1957,7 +1989,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
           ctx.beginPath()
           ctx.rect(px, py, pw, ph)
           ctx.clip()
-          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project, mapStyle: mapStyleRef.current })
+          _drawRoadsAndRails(ctx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
           ctx.restore()
         } else {
           const papW = Math.ceil(pw), papH = Math.ceil(ph)
@@ -1972,7 +2004,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
             oCtx.beginPath()
             oCtx.rect(px, py, pw, ph)
             oCtx.clip()
-            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project, mapStyle: mapStyleRef.current })
+            _drawRoadsAndRails(oCtx, { roadChains, junctions, railChains: liveRailData.chains, tierStyles, railStyle: railStyleRef.current, project })
             oCtx.restore()
             roadsLayerRef.current = offscreen
             roadsDirtyRef.current = false
@@ -2452,7 +2484,91 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   //   forestTextureVersion, frameDims, draw])
 
   // Mark terrain layer dirty when terrain-affecting data changes
-  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, defaultElevationBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, hillsColor, mountainsColor, reliefShadingOpacity, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, hachureParams])
+  useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, defaultElevationBlobs, terrainColors, terrainTextureScales, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, hillsColor, mountainsColor, reliefShadingOpacity, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, historicalIconParams])
+
+  // Decode heightmap PNG → ImageData when URL changes, then recompute derived canvases
+  useEffect(() => {
+    if (!heightmapUrl) {
+      heightmapImgDataRef.current = null
+      hillshadeCanvasRef.current = null
+      contourCanvasRef.current = null
+      terrainDirtyRef.current = true
+      draw()
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      const tmp = new OffscreenCanvas(img.naturalWidth, img.naturalHeight)
+      const ctx = tmp.getContext('2d')!
+      ctx.drawImage(img, 0, 0)
+      heightmapImgDataRef.current = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight)
+      const meta = heightmapMetaRef.current
+      if (meta) {
+        hillshadeCanvasRef.current = computeHillshade(heightmapImgDataRef.current, meta, {
+          azimuth: hillshadeAzimuthRef.current,
+          altitude: hillshadeAltitudeRef.current,
+          intensity: hillshadeIntensityRef.current,
+        })
+        if (contoursEnabledRef.current) {
+          const { pw, ph } = computePaper(frameDimsRef.current.w, frameDimsRef.current.h, metaRef.current!)
+          contourCanvasRef.current = computeContours(heightmapImgDataRef.current, meta, {
+            interval: contourIntervalRef.current,
+            baseElevation: contourBaseElevationRef.current,
+            indexEvery: 5,
+            smoothPasses: contourSmoothPassesRef.current,
+            color: '#6b5a3a',
+            width: contourLineWidthRef.current,
+            indexWidth: contourLineWidthRef.current * 2,
+            opacity: 0.7,
+          }, pw, ph)
+        }
+      }
+      terrainDirtyRef.current = true
+      draw()
+    }
+    img.src = heightmapUrl
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heightmapUrl])
+
+  // Recompute hillshade when params change
+  useEffect(() => {
+    const imgData = heightmapImgDataRef.current
+    const meta = heightmapMetaRef.current
+    if (!imgData || !meta) return
+    hillshadeCanvasRef.current = computeHillshade(imgData, meta, {
+      azimuth: hillshadeAzimuth,
+      altitude: hillshadeAltitude,
+      intensity: hillshadeIntensity,
+    })
+    terrainDirtyRef.current = true
+    draw()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hillshadeAzimuth, hillshadeAltitude, hillshadeIntensity])
+
+  // Recompute contours when params change
+  useEffect(() => {
+    const imgData = heightmapImgDataRef.current
+    const meta = heightmapMetaRef.current
+    if (!imgData || !meta || !metaRef.current) return
+    if (!contoursEnabled) {
+      contourCanvasRef.current = null
+    } else {
+      const { pw, ph } = computePaper(frameDimsRef.current.w, frameDimsRef.current.h, metaRef.current)
+      contourCanvasRef.current = computeContours(imgData, meta, {
+        interval: contourInterval,
+        baseElevation: contourBaseElevation,
+        indexEvery: 5,
+        smoothPasses: contourSmoothPasses,
+        color: '#6b5a3a',
+        width: contourLineWidth,
+        indexWidth: contourLineWidth * 2,
+        opacity: 0.7,
+      }, pw, ph)
+    }
+    terrainDirtyRef.current = true
+    draw()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contoursEnabled, contourInterval, contourBaseElevation, contourSmoothPasses, contourLineWidth])
 
   // Mark other layer caches dirty when their relevant data changes
   useEffect(() => { hexBorderDirtyRef.current = true }, [hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, generatedHexes, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys])
@@ -2514,6 +2630,40 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
     img.src = new URL('../../textures/mountains.png', import.meta.url).href
     img.onload = () => { mountainsTextureRef.current = img; terrainDirtyRef.current = true; draw() }
     img.onerror = () => { /* mountains.png not yet present — silently skip */ }
+  }, [draw])
+
+  // Load historical icon images — one batch per terrain. Each terrain's images must all
+  // load before they're written to the ref, so a partial set never reaches the renderer.
+  useEffect(() => {
+    const ICON_PATHS: Record<string, string[]> = {
+      woods:       ['tree1.png', 'tree2.png', 'tree3.png'],
+      light_woods: ['tree1.png', 'tree2.png', 'tree3.png'],
+    }
+    for (const [terrain, files] of Object.entries(ICON_PATHS)) {
+      const loaded: HTMLImageElement[] = []
+      let remaining = files.length
+      for (const file of files) {
+        const img = new Image()
+        img.src = new URL(`../../textures/historical/${file}`, import.meta.url).href
+        img.onload = () => {
+          loaded.push(img)
+          remaining--
+          if (remaining === 0) {
+            historicalIconSetsRef.current = { ...historicalIconSetsRef.current, [terrain]: loaded }
+            terrainDirtyRef.current = true
+            draw()
+          }
+        }
+        img.onerror = () => {
+          remaining--
+          if (remaining === 0 && loaded.length > 0) {
+            historicalIconSetsRef.current = { ...historicalIconSetsRef.current, [terrain]: loaded }
+            terrainDirtyRef.current = true
+            draw()
+          }
+        }
+      }
+    }
   }, [draw])
 
   // Invalidate highlights offscreen layer whenever highlight data changes
@@ -4976,6 +5126,74 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
         if (!blob) { resolve(null); return }
         resolve({ blob, paperMm: meta.paper_mm as [number, number] })
       }, 'image/png')
+    }),
+
+    exportSheets: () => new Promise<{ blob: Blob; paperMm: [number, number] }[] | null>(resolve => {
+      const meta = metaRef.current
+      if (!meta) { resolve(null); return }
+      const grid = pageGridRef.current
+      const { colWidths, rowHeights } = grid
+
+      // Single-sheet: fall back to standard export
+      if (colWidths.length === 1 && rowHeights.length === 1) {
+        const PX_PER_MM = 300 / 25.4
+        const pw = Math.round(meta.paper_mm[0] * PX_PER_MM)
+        const ph = Math.round(meta.paper_mm[1] * PX_PER_MM)
+        const offscreen = document.createElement('canvas')
+        offscreen.width = pw
+        offscreen.height = ph
+        draw({ canvas: offscreen, pw, ph })
+        offscreen.toBlob(blob => {
+          if (!blob) { resolve(null); return }
+          resolve([{ blob, paperMm: meta.paper_mm as [number, number] }])
+        }, 'image/png')
+        return
+      }
+
+      const PX_PER_MM = 300 / 25.4
+      const totalWMm = meta.paper_mm[0]
+      const totalHMm = meta.paper_mm[1]
+      const fullW = Math.round(totalWMm * PX_PER_MM)
+      const fullH = Math.round(totalHMm * PX_PER_MM)
+
+      // Render the full combined canvas once at print resolution
+      const full = document.createElement('canvas')
+      full.width = fullW
+      full.height = fullH
+      draw({ canvas: full, pw: fullW, ph: fullH })
+
+      const results: { blob: Blob; paperMm: [number, number] }[] = []
+      let pending = colWidths.length * rowHeights.length
+
+      let yOffMm = 0
+      for (let row = 0; row < rowHeights.length; row++) {
+        const cellHMm = rowHeights[row]
+        let xOffMm = 0
+        for (let col = 0; col < colWidths.length; col++) {
+          const cellWMm = colWidths[col]
+          const cellIdx = row * colWidths.length + col
+
+          // Pixel bounds for this cell within the full render
+          const srcX = Math.round(xOffMm * PX_PER_MM)
+          const srcY = Math.round(yOffMm * PX_PER_MM)
+          const srcW = Math.round(cellWMm * PX_PER_MM)
+          const srcH = Math.round(cellHMm * PX_PER_MM)
+
+          const sheet = document.createElement('canvas')
+          sheet.width = srcW
+          sheet.height = srcH
+          const sCtx = sheet.getContext('2d')!
+          sCtx.drawImage(full, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
+
+          sheet.toBlob(blob => {
+            if (blob) results[cellIdx] = { blob, paperMm: [cellWMm, cellHMm] }
+            if (--pending === 0) resolve(results.filter(Boolean).length === colWidths.length * rowHeights.length ? results : null)
+          }, 'image/png')
+
+          xOffMm += cellWMm
+        }
+        yOffMm += cellHMm
+      }
     }),
     getPaperRect: () => {
       const meta = metaRef.current

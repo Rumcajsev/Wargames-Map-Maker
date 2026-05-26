@@ -15,7 +15,6 @@ export function RoadsSettingsFlyout(props: Props) {
   const { type, anchorY, onClose } = props
 
   const {
-    mapStyle,
     roadTierStyles, setRoadTierStyle,
     railStyle, setRailStyle,
     roadWiggleAmp, roadWiggleFreq, roadPathSmoothing, roadSmoothing,
@@ -23,8 +22,6 @@ export function RoadsSettingsFlyout(props: Props) {
     railWiggleAmp, railWiggleFreq, railPathSmoothing, railSmoothing,
     railGeomOverride, setRailGeomOverride, clearRailGeomOverride,
   } = useMapStore()
-
-  const isHistorical = mapStyle === 'historical_simple'
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -64,7 +61,7 @@ export function RoadsSettingsFlyout(props: Props) {
     }
   }
 
-  const flyoutHeight = type === 'rail' ? 520 : (isHistorical ? 420 : 580)
+  const flyoutHeight = type === 'rail' ? 520 : 580
   const top = Math.min(anchorY, window.innerHeight - flyoutHeight - 8)
 
   const row = (label: string, value: React.ReactNode) => (
@@ -133,10 +130,10 @@ export function RoadsSettingsFlyout(props: Props) {
                 style={{ width: '100%', marginBottom: 8 }}
               />
             </div>
-            {!isHistorical && colorRow('Surface', s.inner, PALETTE_ROAD_SURFACE, v => setRoadTierStyle(tier, { inner: v }))}
-            {!isHistorical && dashRow('Fill stroke', s.fillDash, v => setRoadTierStyle(tier, { fillDash: v }))}
-            {colorRow(isHistorical ? 'Color' : 'Casing', s.outer, PALETTE_ROAD_CASING, v => setRoadTierStyle(tier, { outer: v }))}
-            {dashRow(isHistorical ? 'Line' : 'Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
+            {colorRow('Surface', s.inner, PALETTE_ROAD_SURFACE, v => setRoadTierStyle(tier, { inner: v }))}
+            {dashRow('Fill stroke', s.fillDash, v => setRoadTierStyle(tier, { fillDash: v }))}
+            {colorRow('Casing', s.outer, PALETTE_ROAD_CASING, v => setRoadTierStyle(tier, { outer: v }))}
+            {dashRow('Casing stroke', s.caseDash, v => setRoadTierStyle(tier, { caseDash: v }))}
           </div>
         )
       })()}

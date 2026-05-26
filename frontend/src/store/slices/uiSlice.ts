@@ -8,7 +8,7 @@ export type UiSlice = {
   urbanHexes: Array<{ q: number; r: number }>
   urbanStyle: UrbanStyle
   urbanPaintMode: 'paint' | 'erase' | null
-  hexBorderMode: 'full' | 'stubs' | 'none'
+  hexBorderMode: 'full' | 'stubs' | 'dashed' | 'none'
   hexBorderOpacity: number
   hexBorderColor: string
   hexBorderDifference: boolean
@@ -48,7 +48,7 @@ export type UiSlice = {
   toggleUrbanHex: (q: number, r: number) => void
   setUrbanStyle: (style: Partial<UrbanStyle>) => void
   setUrbanPaintMode: (mode: 'paint' | 'erase' | null) => void
-  setHexBorderMode: (v: 'full' | 'stubs' | 'none') => void
+  setHexBorderMode: (v: 'full' | 'stubs' | 'dashed' | 'none') => void
   setHexBorderOpacity: (v: number) => void
   setHexBorderColor: (v: string) => void
   setHexBorderDifference: (v: boolean) => void

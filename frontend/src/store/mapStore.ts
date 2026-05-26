@@ -735,6 +735,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     contourInterval: s.contourInterval,
     contourBaseElevation: s.contourBaseElevation,
     contourSmoothPasses: s.contourSmoothPasses,
+    contourLineWidth: s.contourLineWidth,
     activePanel: s.activePanel,
     hexBorderMode: s.hexBorderMode,
     terrainDisplacement: s.terrainDisplacement,

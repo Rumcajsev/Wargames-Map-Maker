@@ -6,8 +6,7 @@ import { buildTerrainBlobsV2, bleedPolygon } from './terrainBlobs'
 import { clipPolygonToConvex, pointInPolygon } from './geometry'
 import { makePermutation } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams, parseEdgeBlobKey, sharedEdgeVertices } from './edgeBlobs'
-import { drawHistoricalVegetation } from './drawHistoricalVegetation'
-import { drawHachures } from './drawHachures'
+import { drawHistoricalIcons, type HistoricalIconTerrainParams } from './drawHistoricalIcons'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -58,11 +57,14 @@ export type DrawTerrainParams = {
   mapStyle: 'standard' | 'historical_simple'
   /** terrain name → texture image, for beach / mountains / custom terrains */
   extraTextures: Map<string, HTMLImageElement | null>
-  hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
   elevationBlobs: { hills: [number, number][][]; mountains: [number, number][][] }
   hillsColor: string
   mountainsColor: string
   reliefShadingOpacity: number
+  historicalIconSets: Record<string, HTMLImageElement[]>
+  historicalIconParams: Record<string, HistoricalIconTerrainParams>
+  hillshadeCanvas: OffscreenCanvas | null
+  contourCanvas: OffscreenCanvas | null
 }
 
 export type { EdgeBlobParams, EdgeBlobChain }
@@ -286,9 +288,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       .sort((a, b) => (BLOB_Z[a] ?? 5) - (BLOB_Z[b] ?? 5))
 
     for (const terrain of allTerrains) {
-      const isVegetation = terrain === 'woods' || terrain === 'light_woods'
-      if (isVegetation && params.mapStyle === 'historical_simple') continue
-
       const defaultPolys = defaultBlobMap.get(terrain) ?? []
 
       // a. Fill default polys
@@ -446,8 +445,6 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const hexTerrainSet = terrainToHexes.get(chain.terrain)
       const polys = buildEdgeBlobPolys(chain, hexVertMap, chainParams, R, hexTerrainSet)
       if (polys.length === 0) continue
-      const isEdgeVegetation = chain.terrain === 'woods' || chain.terrain === 'light_woods'
-      if (isEdgeVegetation && params.mapStyle === 'historical_simple') continue
       const color = override?.color ?? terrainColors[chain.terrain] ?? '#cccccc'
       tCtx.fillStyle = color
       tCtx.beginPath()
@@ -472,17 +469,17 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
     }
   }
 
-  // ── 5c. Historical vegetation icons ─────────────────────────────────────────
-  if (params.mapStyle === 'historical_simple') {
-    drawHistoricalVegetation(tCtx, { blobs: defaultTerrainBlobs, R })
-  }
-
-  // ── 5d. Historical hachures (elevation) ──────────────────────────────────
-  if (params.mapStyle === 'historical_simple') {
-    drawHachures(tCtx, { projected, R, hachureParams: params.hachureParams })
-  }
-
   if (landClipActive) tCtx.restore()
+
+  // ── 5c. Historical icon stamps ───────────────────────────────────────────────
+  if (params.mapStyle === 'historical_simple') {
+    drawHistoricalIcons(tCtx, {
+      blobs: defaultTerrainBlobs,
+      R,
+      iconSets: params.historicalIconSets,
+      iconParams: params.historicalIconParams,
+    })
+  }
 
   // ── 6. Coastline ────────────────────────────────────────────────────────────
   if (realisticCoastline && coastlineBoundaryRings.length > 0) {
@@ -607,5 +604,20 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       tCtx.closePath()
       tCtx.stroke()
     }
+  }
+
+  // ── Hillshade overlay ─────────────────────────────────────────────────────
+  if (params.hillshadeCanvas) {
+    tCtx.save()
+    tCtx.globalCompositeOperation = 'overlay'
+    tCtx.drawImage(params.hillshadeCanvas, params.px, params.py, params.pw, params.ph)
+    tCtx.restore()
+  }
+
+  // ── Contour lines ─────────────────────────────────────────────────────────
+  if (params.contourCanvas) {
+    tCtx.save()
+    tCtx.drawImage(params.contourCanvas, params.px, params.py, params.pw, params.ph)
+    tCtx.restore()
   }
 }

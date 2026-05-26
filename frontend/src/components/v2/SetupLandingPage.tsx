@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { TK } from '../../theme'
+import { TK, TK_DARK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import { HowItWorksModal } from './HowItWorksModal'
+
+type Theme = typeof TK
 
 export function SetupLandingPage({
   onNewMap,
@@ -15,6 +17,8 @@ export function SetupLandingPage({
   const { generatedHexes, generatedMetadata, paperSize, orientation } = useMapStore()
   const hasSavedMap = generatedHexes.length > 0
   const [showHowItWorks, setShowHowItWorks] = useState(false)
+  const [isDark, setIsDark] = useState(false)
+  const t = isDark ? TK_DARK : TK
 
   return (
     <div style={{
@@ -22,9 +26,10 @@ export function SetupLandingPage({
       height: '100vh',
       width: '100vw',
       overflow: 'hidden',
-      background: TK.paper,
-      fontFamily: TK.sans,
-      color: TK.ink,
+      background: t.paper,
+      fontFamily: t.sans,
+      color: t.ink,
+      transition: 'background 0.25s, color 0.25s',
     }}>
       {/* Ghost map background */}
       <div style={{
@@ -42,14 +47,14 @@ export function SetupLandingPage({
             height: '100%',
             objectFit: 'cover',
             objectPosition: 'left center',
-            opacity: 0.25,
-            mixBlendMode: 'multiply',
+            opacity: isDark ? 0.18 : 0.25,
+            mixBlendMode: isDark ? 'screen' : 'multiply',
           }}
         />
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: `linear-gradient(to right, ${TK.paper} 0%, ${TK.paper}cc 20%, ${TK.paper}44 55%, transparent 100%)`,
+          background: `linear-gradient(to right, ${t.paper} 0%, ${t.paper}cc 20%, ${t.paper}44 55%, transparent 100%)`,
         }} />
       </div>
 
@@ -58,10 +63,13 @@ export function SetupLandingPage({
         position: 'absolute', top: 0, left: 0, right: 0,
         padding: '20px 28px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        zIndex: 1,
+        zIndex: 10,
       }}>
         <HachureLogo />
-        <span style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkFaint, letterSpacing: 1.5 }}>V0.1</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <DarkModeToggle isDark={isDark} onToggle={() => setIsDark(d => !d)} t={t} />
+          <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkFaint, letterSpacing: 1.5 }}>V0.1</span>
+        </div>
       </div>
 
       {/* Main content */}
@@ -72,10 +80,10 @@ export function SetupLandingPage({
         paddingLeft: 80,
       }}>
         <h1 style={{
-          fontFamily: TK.serif,
+          fontFamily: t.serif,
           fontSize: 72,
           fontWeight: 400,
-          color: TK.ink,
+          color: t.ink,
           lineHeight: 1.02,
           margin: '0 0 18px 0',
           letterSpacing: -0.5,
@@ -84,9 +92,9 @@ export function SetupLandingPage({
         </h1>
 
         <p style={{
-          fontFamily: TK.sans,
+          fontFamily: t.sans,
           fontSize: 13,
-          color: TK.inkMute,
+          color: t.inkMute,
           maxWidth: 370,
           lineHeight: 1.65,
           margin: '0 0 36px 0',
@@ -102,39 +110,39 @@ export function SetupLandingPage({
               onClick={onResume}
               style={{
                 width: 420,
-                background: TK.ink,
-                border: `1px solid ${TK.line}`,
+                background: t.ink,
+                border: `1px solid ${t.line}`,
                 padding: '20px 22px',
                 cursor: 'pointer',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 textAlign: 'left',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = TK.ink2 }}
-              onMouseLeave={e => { e.currentTarget.style.background = TK.ink }}
+              onMouseEnter={e => { e.currentTarget.style.background = t.ink2 }}
+              onMouseLeave={e => { e.currentTarget.style.background = t.ink }}
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: '#fff' }}>
+                  <span style={{ fontFamily: t.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: t.paper }}>
                     Resume
                   </span>
-                  <span style={{ fontFamily: TK.serif, fontStyle: 'italic', fontSize: 13, color: TK.inkFaint }}>
+                  <span style={{ fontFamily: t.serif, fontStyle: 'italic', fontSize: 13, color: t.inkFaint }}>
                     last session
                   </span>
                 </div>
-                <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkFaint }}>
+                <div style={{ fontFamily: t.sans, fontSize: 11, color: t.inkFaint }}>
                   {generatedMetadata
                     ? `${paperSize} · ${orientation} · ${generatedMetadata.hex_count} hexes · ${generatedMetadata.hex_size_km.toFixed(1)} km each`
                     : `${paperSize} · ${orientation} · ${generatedHexes.length} hexes`}
                 </div>
               </div>
-              <ArrowRight />
+              <ArrowIcon color={`${t.paper}80`} />
             </button>
 
             {/* Separator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 420, margin: '16px 0' }}>
-              <div style={{ flex: 1, height: 1, background: TK.line }} />
-              <span style={{ fontFamily: TK.sans, fontSize: 10, color: TK.inkFaint, letterSpacing: 1, textTransform: 'uppercase' }}>or</span>
-              <div style={{ flex: 1, height: 1, background: TK.line }} />
+              <div style={{ flex: 1, height: 1, background: t.line }} />
+              <span style={{ fontFamily: t.sans, fontSize: 10, color: t.inkFaint, letterSpacing: 1, textTransform: 'uppercase' }}>or</span>
+              <div style={{ flex: 1, height: 1, background: t.line }} />
             </div>
           </>
         )}
@@ -143,57 +151,57 @@ export function SetupLandingPage({
         <div style={{
           display: 'flex', flexDirection: 'column',
           width: 420,
-          border: `1px solid ${TK.line}`,
+          border: `1px solid ${t.line}`,
         }}>
           {/* NEW MAP */}
           <button
             onClick={onNewMap}
             style={{
-              background: hasSavedMap ? TK.surface : TK.ink,
+              background: hasSavedMap ? t.surface : t.ink,
               border: 'none',
               padding: '20px 22px',
               cursor: 'pointer',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               textAlign: 'left',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = hasSavedMap ? TK.paper2 : TK.ink2 }}
-            onMouseLeave={e => { e.currentTarget.style.background = hasSavedMap ? TK.surface : TK.ink }}
+            onMouseEnter={e => { e.currentTarget.style.background = hasSavedMap ? t.paper2 : t.ink2 }}
+            onMouseLeave={e => { e.currentTarget.style.background = hasSavedMap ? t.surface : t.ink }}
           >
             <div>
-              <div style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: hasSavedMap ? TK.ink : '#fff', marginBottom: 4 }}>
+              <div style={{ fontFamily: t.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: hasSavedMap ? t.ink : t.paper, marginBottom: 4 }}>
                 New Map
               </div>
-              <div style={{ fontFamily: TK.sans, fontSize: 11, color: hasSavedMap ? TK.inkMute : TK.inkFaint }}>
+              <div style={{ fontFamily: t.sans, fontSize: 11, color: hasSavedMap ? t.inkMute : t.inkFaint }}>
                 Choose source · set paper · paint
               </div>
             </div>
-            {hasSavedMap ? <ArrowRightDark /> : <ArrowRight />}
+            <ArrowIcon color={hasSavedMap ? t.inkFaint : `${t.paper}80`} />
           </button>
 
           {/* LOAD FROM FILE */}
           <button
             onClick={onLoadFile}
             style={{
-              background: TK.surface,
+              background: t.surface,
               border: 'none',
-              borderTop: `1px solid ${TK.line}`,
+              borderTop: `1px solid ${t.line}`,
               padding: '18px 22px',
               cursor: 'pointer',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               textAlign: 'left',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = TK.paper2 }}
-            onMouseLeave={e => { e.currentTarget.style.background = TK.surface }}
+            onMouseEnter={e => { e.currentTarget.style.background = t.paper2 }}
+            onMouseLeave={e => { e.currentTarget.style.background = t.surface }}
           >
             <div>
-              <div style={{ fontFamily: TK.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: TK.ink, marginBottom: 4 }}>
+              <div style={{ fontFamily: t.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: t.ink, marginBottom: 4 }}>
                 Load from Saved File
               </div>
-              <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkMute }}>
+              <div style={{ fontFamily: t.sans, fontSize: 11, color: t.inkMute }}>
                 .tabula or .json format
               </div>
             </div>
-            <FolderIcon />
+            <FolderIcon color={t.inkFaint} />
           </button>
         </div>
 
@@ -206,39 +214,39 @@ export function SetupLandingPage({
             border: 'none',
             padding: 0,
             cursor: 'pointer',
-            fontFamily: TK.sans,
+            fontFamily: t.sans,
             fontSize: 11,
-            color: TK.inkMute,
+            color: t.inkMute,
             display: 'flex',
             alignItems: 'center',
             gap: 5,
             letterSpacing: 0.2,
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = TK.ink }}
-          onMouseLeave={e => { e.currentTarget.style.color = TK.inkMute }}
+          onMouseEnter={e => { e.currentTarget.style.color = t.ink }}
+          onMouseLeave={e => { e.currentTarget.style.color = t.inkMute }}
         >
           How does it work?
           <span style={{ fontSize: 12 }}>→</span>
         </button>
       </div>
 
-      {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} />}
+      {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} t={t} />}
 
       {/* Footer */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: '13px 28px',
         display: 'flex', alignItems: 'center',
-        borderTop: `1px solid ${TK.line2}`,
+        borderTop: `1px solid ${t.line2}`,
         zIndex: 1,
       }}>
-        <span style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkFaint, letterSpacing: 0.5 }}>
+        <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkFaint, letterSpacing: 0.5 }}>
           Hachure · v0.1
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
-          <FooterStat label="PAPER" value="A1–A6" />
-          <FooterStat label="SOURCES" value="OSM · Blank · Ref" />
-          <FooterStat label="OUTPUT" value="PDF · print scale" />
+          <FooterStat label="PAPER" value="A1–A6" t={t} />
+          <FooterStat label="SOURCES" value="OSM · Blank · Ref" t={t} />
+          <FooterStat label="OUTPUT" value="PDF · print scale" t={t} />
         </div>
       </div>
     </div>
@@ -249,70 +257,75 @@ export function SetupLandingPage({
 
 function HachureLogo() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <HexIcon />
-      <span style={{ fontFamily: TK.sans, fontWeight: 500, fontSize: 13, letterSpacing: 1.5, textTransform: 'uppercase', color: TK.ink }}>
-        Hachure
-      </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <img src="/icon.png" alt="" style={{ height: 40, display: 'block' }} />
+      <span style={{ fontFamily: TK.serif, fontSize: 22, fontWeight: 400, color: TK.ink }}>Hachure</span>
     </div>
   )
 }
 
-function HexIcon() {
+function DarkModeToggle({ isDark, onToggle, t }: { isDark: boolean; onToggle: () => void; t: Theme }) {
   return (
-    <svg width="18" height="20" viewBox="0 0 18 20" fill="none">
-      <polygon
-        points="9,1.5 16.8,5.75 16.8,14.25 9,18.5 1.2,14.25 1.2,5.75"
-        stroke={TK.ink}
-        strokeWidth="1.2"
-        fill="none"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <button
+      onClick={onToggle}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      style={{
+        background: 'none',
+        border: `1px solid ${t.line}`,
+        borderRadius: 4,
+        padding: '4px 8px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        fontFamily: t.mono,
+        fontSize: 9,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        color: t.inkMute,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = t.inkFaint }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = t.line }}
+    >
+      {isDark ? (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="6" cy="6" r="2.5" stroke={t.inkMute} strokeWidth="1.2" />
+          <path d="M6 1v1M6 10v1M1 6h1M10 6h1M2.5 2.5l.7.7M8.8 8.8l.7.7M8.8 2.5l-.7.7M3.2 8.8l-.7.7" stroke={t.inkMute} strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M10 6.5A4.5 4.5 0 0 1 5.5 2a4.5 4.5 0 1 0 4.5 4.5z" stroke={t.inkMute} strokeWidth="1.2" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
   )
 }
 
-function FooterStat({ label, value }: { label: string; value: string }) {
+function FooterStat({ label, value, t }: { label: string; value: string; t: Theme }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={{ fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint, letterSpacing: 1, textTransform: 'uppercase' }}>
+      <span style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint, letterSpacing: 1, textTransform: 'uppercase' }}>
         {label}
       </span>
-      <span style={{ fontFamily: TK.sans, fontSize: 11, color: TK.inkMute }}>
+      <span style={{ fontFamily: t.sans, fontSize: 11, color: t.inkMute }}>
         {value}
       </span>
     </div>
   )
 }
 
-function ArrowRight() {
+function ArrowIcon({ color }: { color: string }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M3 8h10M9 4l4 4-4 4" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 8h10M9 4l4 4-4 4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
-function ArrowRightDark() {
+function FolderIcon({ color }: { color: string }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M3 8h10M9 4l4 4-4 4" stroke={TK.inkFaint} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function FolderIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M2 4.5C2 3.67 2.67 3 3.5 3h3l1.5 2h5C13.33 5 14 5.67 14 6.5v6c0 .83-.67 1.5-1.5 1.5h-9C2.67 14 2 13.33 2 12.5v-8z" stroke={TK.inkFaint} strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function BookmarkIcon() {
-  return (
-    <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-      <path d="M2 2h10v13l-5-3-5 3V2z" stroke={TK.inkFaint} strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M2 4.5C2 3.67 2.67 3 3.5 3h3l1.5 2h5C13.33 5 14 5.67 14 6.5v6c0 .83-.67 1.5-1.5 1.5h-9C2.67 14 2 13.33 2 12.5v-8z" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   )
 }

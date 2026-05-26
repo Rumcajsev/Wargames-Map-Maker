@@ -49,6 +49,22 @@ export function drawHexBorders(
         bCtx.lineTo(x1, y1)
         bCtx.stroke()
       }
+    } else if (borderMode === 'dashed') {
+      // 3 explicit segments per edge at 1/7–2/7, 3/7–4/7, 5/7–6/7.
+      // Gaps at both vertex ends; no setLineDash offset arithmetic.
+      bCtx.strokeStyle = strokeColor
+      bCtx.lineWidth = borderLW
+      const segs: [number, number][] = [[1 / 7, 2 / 7], [3 / 7, 4 / 7], [5 / 7, 6 / 7]]
+      for (let i = 0; i < verts.length; i++) {
+        const [x0, y0] = verts[i]
+        const [x1, y1] = verts[(i + 1) % verts.length]
+        for (const [t0, t1] of segs) {
+          bCtx.beginPath()
+          bCtx.moveTo(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0)
+          bCtx.lineTo(x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1)
+          bCtx.stroke()
+        }
+      }
     }
   }
   bCtx.restore()

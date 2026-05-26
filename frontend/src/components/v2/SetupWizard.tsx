@@ -924,13 +924,8 @@ function HexDotBar({ progress }: { progress: number }) {
 function HachureLogo() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <svg width="16" height="18" viewBox="0 0 18 20" fill="none">
-        <polygon points="9,1.5 16.8,5.75 16.8,14.25 9,18.5 1.2,14.25 1.2,5.75"
-          stroke={TK.ink} strokeWidth="1.2" fill="none" strokeLinejoin="round" />
-      </svg>
-      <span style={{ fontFamily: TK.sans, fontWeight: 500, fontSize: 13, letterSpacing: 1.5, textTransform: 'uppercase', color: TK.ink }}>
-        Hachure
-      </span>
+      <img src="/icon.png" alt="" style={{ height: 28, display: 'block' }} />
+      <span style={{ fontFamily: TK.serif, fontSize: 17, fontWeight: 400, color: TK.ink }}>Hachure</span>
     </div>
   )
 }

@@ -13,12 +13,12 @@ const TABS = [
   { id: 'display',     label: 'Display'     },
 ] as const
 
-export function EditorTopBar({ onExportPDF }: { onExportPDF: () => Promise<void> }) {
+export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Promise<void>; onGoHome: () => void }) {
   const {
     paperSize, generatedHexes, generatedMetadata,
     undoStack, redoStack, undo, redo,
     activePanel, setActivePanel,
-    resetToSetup, saveProject, restoreProject,
+    saveProject, restoreProject,
     mapStyle, setMapStyle,
   } = useMapStore()
 
@@ -68,15 +68,14 @@ export function EditorTopBar({ onExportPDF }: { onExportPDF: () => Promise<void>
       {/* Left: wordmark + metadata */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderRight: `1px solid ${TK.line}`, flexShrink: 0 }}>
         <button
-          onClick={resetToSetup}
-          title="Back to setup"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+          onClick={onGoHome}
+          title="Back to home"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
-          <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-            <polygon points="7,1 13,4.5 13,11.5 7,15 1,11.5 1,4.5" fill="none" stroke={TK.rust} strokeWidth="1.2" />
-            <polygon points="7,4 10.5,6 10.5,10 7,12 3.5,10 3.5,6" fill={TK.rust} opacity="0.15" stroke="none" />
-          </svg>
-          <span style={{ fontFamily: TK.mono, fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: TK.ink }}>Hachure</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <img src="/icon.png" alt="" style={{ height: 28, display: 'block' }} />
+            <span style={{ fontFamily: TK.serif, fontSize: 17, fontWeight: 400, color: TK.ink }}>Hachure</span>
+          </div>
         </button>
         {meta && (
           <>

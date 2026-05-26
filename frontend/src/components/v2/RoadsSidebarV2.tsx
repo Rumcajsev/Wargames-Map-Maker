@@ -422,7 +422,6 @@ function RoadStyleView({ tier, onBack }: { tier: 0 | 1 | 2; onBack: () => void }
     roadTierGeometry, setRoadTierGeometry, clearRoadTierGeometry,
   } = useMapStore()
 
-  const isHistorical = mapStyle === 'historical_simple'
   const s = roadTierStyles[tier]
   const def = DEFAULT_ROAD_TIER_STYLES[tier]
 
@@ -458,19 +457,15 @@ function RoadStyleView({ tier, onBack }: { tier: 0 | 1 | 2; onBack: () => void }
         preview={<HexPreview mode="road" tier={tier} />}
       >
         <MiniSlider label="Thickness" display={s.outerW.toFixed(1)} value={s.outerW * 10} min={5} max={100} step={5} accentColor={ROAD_TIERS[tier].color} onChange={v => setRoadTierStyle(tier, { outerW: v / 10 })} />
-        {!isHistorical && (
-          <>
-            <SubLabel label="Surface" />
-            <BigColorSwatch value={s.inner} onChange={v => setRoadTierStyle(tier, { inner: v })} groups={ROAD_SURFACE_GROUPS} />
-            <SubLabel label="Fill stroke" />
-            <div style={{ padding: '4px 14px' }}>
-              <SegmentedControl options={DASH_OPTIONS} value={s.fillDash} onChange={v => setRoadTierStyle(tier, { fillDash: v })} />
-            </div>
-          </>
-        )}
-        <SubLabel label={isHistorical ? 'Color' : 'Casing'} />
+        <SubLabel label="Surface" />
+        <BigColorSwatch value={s.inner} onChange={v => setRoadTierStyle(tier, { inner: v })} groups={ROAD_SURFACE_GROUPS} />
+        <SubLabel label="Fill stroke" />
+        <div style={{ padding: '4px 14px' }}>
+          <SegmentedControl options={DASH_OPTIONS} value={s.fillDash} onChange={v => setRoadTierStyle(tier, { fillDash: v })} />
+        </div>
+        <SubLabel label="Casing" />
         <BigColorSwatch value={s.outer} onChange={v => setRoadTierStyle(tier, { outer: v })} groups={ROAD_CASING_GROUPS} />
-        <SubLabel label={isHistorical ? 'Line stroke' : 'Casing stroke'} />
+        <SubLabel label="Casing stroke" />
         <div style={{ padding: '4px 14px' }}>
           <SegmentedControl options={DASH_OPTIONS} value={s.caseDash} onChange={v => setRoadTierStyle(tier, { caseDash: v })} />
         </div>

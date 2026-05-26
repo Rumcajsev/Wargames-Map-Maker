@@ -7,6 +7,31 @@ from services.overpass import post_overpass
 
 log = logging.getLogger(__name__)
 
+_RIVER_SCALE_TIERS: list[tuple[float, set[str]]] = [
+    (200,  {"river", "canal", "stream", "drain"}),
+    (500,  {"river", "canal"}),
+    (float("inf"), {"river"}),
+]
+
+
+def _scale_filter_river(types: list[str], width_m: float) -> tuple[list[str], int, float]:
+    """Return (filtered_types, overpass_timeout_s, http_timeout_s) for the given map width."""
+    width_km = width_m / 1000
+    for max_km, allowed in _RIVER_SCALE_TIERS:
+        if width_km < max_km:
+            filtered = [t for t in types if t in allowed]
+            break
+    else:
+        filtered = [t for t in types if t in _RIVER_SCALE_TIERS[-1][1]]
+    if not filtered:
+        filtered = ["river"]
+    if width_km < 200:
+        return filtered, 45, 55.0
+    elif width_km < 500:
+        return filtered, 75, 90.0
+    else:
+        return filtered, 120, 140.0
+
 
 # ---------------------------------------------------------------------------
 # Way / chain helpers
@@ -325,10 +350,7 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
     if not types:
         return []
 
-    allowed = {"river", "canal"}
-    active_types = [t for t in types if t in allowed]
-    if not active_types:
-        return []
+    active_types, opa_timeout, http_timeout = _scale_filter_river(types, config.width_m)
 
     name_filter = "[name]" if hex_size_km > 20 else ""
     type_pattern = "|".join(active_types)
@@ -336,7 +358,7 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
 
     # Fetch both relations (named river systems) and individual ways
     query = (
-        f'[out:json][timeout:45][maxsize:52428800];\n'
+        f'[out:json][timeout:{opa_timeout}][maxsize:52428800];\n'
         f'(\n'
         f'  relation["waterway"~"^({type_pattern})$"]{name_filter}({bbox});\n'
         f'  way["waterway"~"^({type_pattern})$"]{name_filter}({bbox});\n'
@@ -344,7 +366,7 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
         f'out tags geom;\n'
     )
 
-    data = await post_overpass(query, timeout=55.0)
+    data = await post_overpass(query, timeout=http_timeout)
     elements = data.get("elements", [])
     log.info("fetch_rivers: %d OSM elements returned", len(elements))
 
@@ -454,6 +476,7 @@ async def fetch_rivers(config: RiversConfig) -> list[dict]:
 
     log.info("fetch_rivers: %d rivers after merging", len(merged))
     merged.sort(key=lambda r: r.get("_total_length") or _polyline_length(r["coords"]), reverse=True)
+    merged = merged[:config.limit]
 
     # Strip internal bookkeeping fields before returning
     for r in merged:

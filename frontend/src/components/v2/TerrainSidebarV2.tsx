@@ -7,6 +7,7 @@ import { BLOB_PRESETS, BLOB_PRESET_ORDER, type BlobPresetId, type BlobPresetValu
 import { PALETTE_TERRAIN_GROUPS } from '../../palettes'
 import { AddTerrainFlyout } from '../AddTerrainFlyout'
 import { TK } from '../../theme'
+import { HISTORICAL_ICON_TERRAIN_DEFAULTS } from '../../lib/drawHistoricalIcons'
 import {
   SidebarShell, SidebarHeader, SidebarSection, SidebarDetailHeader, DetailSection, DetailViewShell,
   BrushRow, ElevBrushRow, ToggleRow, FlyoutBtn, DashedAddBtn, SectionDivider, MiniSlider, BigColorSwatch, tintBg,
@@ -23,12 +24,9 @@ const ELEV_BRUSHES: { brush: 'flat' | 'hills' | 'mountains'; tier: 0 | 1 | 2; co
   { brush: 'mountains', tier: 2, color: '#7a6a5a', key: 'E' },
 ]
 
-const HACHURE_DEFAULTS = { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 }
-type HachureKey = keyof typeof HACHURE_DEFAULTS
-
 const terrainLabel = (t: string) => t.replace(/_/g, ' ')
 
-type ViewId = 'list' | 'terrain-settings' | 'brush' | 'classification' | 'edge-blob' | 'coastline' | 'elevation'
+type ViewId = 'list' | 'terrain-settings' | 'brush' | 'classification' | 'edge-blob' | 'coastline' | 'elevation' | 'historical-icons'
 
 // ── BlobPresetChips ───────────────────────────────────────────────────────────
 
@@ -487,9 +485,13 @@ function ElevationView({ onBack }: { onBack: () => void }) {
     elevationStatus, elevationError, elevationProgress,
     showElevationDebug, setShowElevationDebug,
     classificationParams, setClassificationParam,
+    heightmapUrl,
+    hillshadeAzimuth, hillshadeAltitude, hillshadeIntensity,
+    setHillshadeAzimuth, setHillshadeAltitude, setHillshadeIntensity,
+    contoursEnabled, contourInterval, contourBaseElevation, contourSmoothPasses, contourLineWidth,
+    setContoursEnabled, setContourInterval, setContourBaseElevation, setContourSmoothPasses, setContourLineWidth,
     fetchElevation,
-    dataSource, mapStyle,
-    hachureParams, setHachureParam,
+    dataSource,
   } = useMapStore()
 
   const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
@@ -574,34 +576,25 @@ function ElevationView({ onBack }: { onBack: () => void }) {
         </DetailSection>
       )}
 
-      {mapStyle === 'historical_simple' && hasData && (
-        <DetailSection label="Hatching">
-          {(
-            [
-              { key: 'smoothing'  as HachureKey, label: 'Smoothing',     min: 0,   max: 6,   step: 1    },
-              { key: 'spacing'    as HachureKey, label: 'Spacing',       min: 0.5, max: 12,  step: 0.5  },
-              { key: 'length'     as HachureKey, label: 'Stroke length', min: 6,   max: 48,  step: 1    },
-              { key: 'wobble'     as HachureKey, label: 'Wobble',        min: 0,   max: 8,   step: 0.25 },
-              { key: 'jitter'     as HachureKey, label: 'Angle jitter',  min: 0,   max: 0.6, step: 0.05 },
-              { key: 'hillWidth'  as HachureKey, label: 'Hill width',    min: 0.2, max: 3.0, step: 0.1  },
-              { key: 'mtnWidth'   as HachureKey, label: 'Mtn width',     min: 0.2, max: 3.0, step: 0.1  },
-            ]
-          ).map(({ key, label, min, max, step }) => (
-            <MiniSlider key={key} label={label} display={hachureParams[key]} value={hachureParams[key]} min={min} max={max} step={step} onChange={v => setHachureParam(key, v)} />
-          ))}
-          <div style={{ padding: '4px 14px 0' }}>
-            <button
-              onClick={() => {
-                for (const [k, v] of Object.entries(HACHURE_DEFAULTS)) setHachureParam(k as HachureKey, v)
-              }}
-              style={{
-                fontFamily: TK.mono, fontSize: 9.5, color: TK.inkMute, letterSpacing: 0.5,
-                background: 'none', border: `1px solid ${TK.line}`, cursor: 'pointer', padding: '3px 10px',
-              }}
-            >
-              Reset defaults
-            </button>
-          </div>
+      {heightmapUrl && (
+        <DetailSection label="Hillshade">
+          <MiniSlider label="Sun azimuth" display={`${hillshadeAzimuth}°`} value={hillshadeAzimuth} min={0} max={360} step={5} onChange={setHillshadeAzimuth} />
+          <MiniSlider label="Sun altitude" display={`${hillshadeAltitude}°`} value={hillshadeAltitude} min={5} max={85} step={5} onChange={setHillshadeAltitude} />
+          <MiniSlider label="Intensity" display={hillshadeIntensity.toFixed(2)} value={hillshadeIntensity} min={0} max={1} step={0.05} onChange={setHillshadeIntensity} />
+        </DetailSection>
+      )}
+
+      {heightmapUrl && (
+        <DetailSection label="Contours">
+          <ToggleRow label="Enabled" value={contoursEnabled} onChange={setContoursEnabled} />
+          {contoursEnabled && (
+            <>
+              <MiniSlider label="Base elevation" display={`${contourBaseElevation}m`} value={contourBaseElevation} min={0} max={2000} step={50} onChange={setContourBaseElevation} />
+              <MiniSlider label="Interval" display={`${contourInterval}m`} value={contourInterval} min={10} max={500} step={10} onChange={setContourInterval} />
+              <MiniSlider label="Line width" display={String(contourLineWidth)} value={contourLineWidth} min={0.5} max={4} step={0.25} onChange={setContourLineWidth} />
+              <ToggleRow label="Smooth" value={contourSmoothPasses > 0} onChange={v => setContourSmoothPasses(v ? 1 : 0)} />
+            </>
+          )}
         </DetailSection>
       )}
 
@@ -629,6 +622,51 @@ function ElevationView({ onBack }: { onBack: () => void }) {
           </div>
         </DetailSection>
       )}
+    </DetailViewShell>
+  )
+}
+
+// ── HistoricalIconsView ───────────────────────────────────────────────────────
+
+const HISTORICAL_ICON_TERRAINS: { terrain: string; label: string }[] = [
+  { terrain: 'woods',       label: 'Woods' },
+  { terrain: 'light_woods', label: 'Light woods' },
+]
+
+function HistoricalIconsView({ onBack }: { onBack: () => void }) {
+  const { historicalIconParams, setHistoricalIconParam } = useMapStore()
+
+  return (
+    <DetailViewShell header={<SidebarDetailHeader title="Historical icons" onBack={onBack} />}>
+      {HISTORICAL_ICON_TERRAINS.map(({ terrain, label }) => {
+        const defaults = HISTORICAL_ICON_TERRAIN_DEFAULTS[terrain] ?? { spacing: 0.85, scale: 0.40, rotRange: 0.4 }
+        const p = { ...defaults, ...historicalIconParams[terrain] }
+        return (
+          <DetailSection key={terrain} label={label}>
+            <MiniSlider
+              label="Spacing"
+              display={p.spacing.toFixed(2)}
+              value={p.spacing}
+              min={0.3} max={2.0} step={0.05}
+              onChange={v => setHistoricalIconParam(terrain, 'spacing', v)}
+            />
+            <MiniSlider
+              label="Scale"
+              display={p.scale.toFixed(2)}
+              value={p.scale}
+              min={0.1} max={1.5} step={0.05}
+              onChange={v => setHistoricalIconParam(terrain, 'scale', v)}
+            />
+            <MiniSlider
+              label="Rotation range"
+              display={`${(p.rotRange * 180 / Math.PI).toFixed(0)}°`}
+              value={p.rotRange}
+              min={0} max={Math.PI * 2} step={0.05}
+              onChange={v => setHistoricalIconParam(terrain, 'rotRange', v)}
+            />
+          </DetailSection>
+        )
+      })}
     </DetailViewShell>
   )
 }
@@ -727,6 +765,7 @@ export function TerrainSidebarV2() {
     realisticCoastline, setRealisticCoastline,
     terrainEdgePaintEnabled, setTerrainEdgePaintEnabled,
     terrainColors, customTerrains,
+    mapStyle,
   } = useMapStore()
 
   const [viewId, setViewId] = useState<ViewId>('list')
@@ -773,7 +812,8 @@ export function TerrainSidebarV2() {
   if (viewId === 'classification') return <ClassificationView onBack={goBack} />
   if (viewId === 'coastline')      return <CoastlineView onBack={goBack} />
   if (viewId === 'edge-blob')      return <EdgeBlobView onBack={goBack} />
-  if (viewId === 'elevation')      return <ElevationView onBack={goBack} />
+  if (viewId === 'elevation')        return <ElevationView onBack={goBack} />
+  if (viewId === 'historical-icons') return <HistoricalIconsView onBack={goBack} />
 
   const filterBrush = (_t: string) => true
   const colorFor = (t: string) => terrainColors[t] ?? TERRAIN_COLORS[t] ?? '#888'
@@ -875,6 +915,22 @@ export function TerrainSidebarV2() {
             />
           ))}
         </SidebarSection>
+
+        {/* Historical icons (historical style only) */}
+        {mapStyle === 'historical_simple' && (
+          <SidebarSection
+            label="Historical icons"
+            action={
+              <button onClick={() => setViewId('historical-icons')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: TK.mono, fontSize: 9, color: TK.inkMute, letterSpacing: 0.3 }}>
+                configure ›
+              </button>
+            }
+          >
+            <div style={{ padding: '2px 14px 6px', fontFamily: TK.mono, fontSize: 10, color: TK.inkMute }}>
+              PNG icons stamped inside terrain blobs
+            </div>
+          </SidebarSection>
+        )}
 
         {/* Settings */}
         <SidebarSection label="Settings">

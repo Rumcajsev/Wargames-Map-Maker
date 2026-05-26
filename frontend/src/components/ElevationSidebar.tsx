@@ -2,10 +2,6 @@ import { useMapStore } from '../store/mapStore'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
 import { SliderRow, ResetButton, SectionLabel } from './ui'
 
-type HachureKey = 'spacing' | 'length' | 'wobble' | 'jitter' | 'hillWidth' | 'mtnWidth' | 'smoothing'
-
-const HACHURE_DEFAULTS = { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 }
-
 export function ElevationSidebar() {
   const {
     generatedHexes,
@@ -16,6 +12,15 @@ export function ElevationSidebar() {
     classificationParams,
     elevationPaintMode,
     elevationPaintBrush,
+    heightmapUrl,
+    hillshadeAzimuth,
+    hillshadeAltitude,
+    hillshadeIntensity,
+    contoursEnabled,
+    contourInterval,
+    contourBaseElevation,
+    contourSmoothPasses,
+    contourLineWidth,
     fetchElevation,
     setShowElevationDebug,
     setClassificationParam,
@@ -23,11 +28,16 @@ export function ElevationSidebar() {
     setElevationPaintBrush,
     overrideHexElevation: _override,
     clearElevationOverrides,
+    setHillshadeAzimuth,
+    setHillshadeAltitude,
+    setHillshadeIntensity,
+    setContoursEnabled,
+    setContourInterval,
+    setContourBaseElevation,
+    setContourSmoothPasses,
+    setContourLineWidth,
     setActiveTool,
     dataSource,
-    mapStyle,
-    hachureParams,
-    setHachureParam,
   } = useMapStore()
 
   const hasData = generatedHexes.some(h => h.elevation_avg_m != null)
@@ -211,33 +221,78 @@ export function ElevationSidebar() {
         </div>
       )}
 
-      {/* ── Hatching style (historical mode only) ── */}
-      {mapStyle === 'historical_simple' && hasData && (
+      {/* ── Hillshade ── */}
+      {heightmapUrl && (
         <div style={sectionStyle}>
-          <SectionLabel action={
-            <ResetButton onReset={() => {
-              for (const [k, v] of Object.entries(HACHURE_DEFAULTS)) setHachureParam(k as HachureKey, v)
-            }} />
-          }>Hatching</SectionLabel>
-          {(
-            [
-              { key: 'smoothing', label: 'Smoothing',      min: 0,   max: 6,   step: 1,    unit: '' },
-              { key: 'spacing',   label: 'Spacing',       min: 0.5, max: 12,  step: 0.5,  unit: 'px' },
-              { key: 'length',    label: 'Stroke length',  min: 6,   max: 48,  step: 1,    unit: 'px' },
-              { key: 'wobble',    label: 'Wobble',         min: 0,   max: 8,   step: 0.25, unit: 'px' },
-              { key: 'jitter',    label: 'Angle jitter',   min: 0,   max: 0.6, step: 0.05, unit: 'rad' },
-              { key: 'hillWidth', label: 'Hill width',     min: 0.2, max: 3.0, step: 0.1,  unit: 'px' },
-              { key: 'mtnWidth',  label: 'Mtn width',      min: 0.2, max: 3.0, step: 0.1,  unit: 'px' },
-            ] as { key: HachureKey; label: string; min: number; max: number; step: number; unit: string }[]
-          ).map(({ key, label, min, max, step, unit }) => (
-            <SliderRow
-              key={key}
-              label={label}
-              value={hachureParams[key]}
-              min={min} max={max} step={step} unit={unit}
-              onChange={v => setHachureParam(key, v)}
-            />
-          ))}
+          <SectionLabel label="Hillshade" />
+          <SliderRow
+            label="Sun azimuth"
+            value={hillshadeAzimuth}
+            min={0} max={360} step={5} unit="°"
+            onChange={setHillshadeAzimuth}
+          />
+          <SliderRow
+            label="Sun altitude"
+            value={hillshadeAltitude}
+            min={5} max={85} step={5} unit="°"
+            onChange={setHillshadeAltitude}
+          />
+          <SliderRow
+            label="Intensity"
+            value={hillshadeIntensity}
+            min={0} max={1} step={0.05}
+            onChange={setHillshadeIntensity}
+          />
+        </div>
+      )}
+
+      {/* ── Contours ── */}
+      {heightmapUrl && (
+        <div style={sectionStyle}>
+          <SectionLabel
+            label="Contours"
+            action={
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={contoursEnabled}
+                  onChange={e => setContoursEnabled(e.target.checked)}
+                  style={{ accentColor: '#3a6a9a' }}
+                />
+              </label>
+            }
+          />
+          {contoursEnabled && (
+            <>
+              <SliderRow
+                label="Base elevation"
+                value={contourBaseElevation}
+                min={0} max={2000} step={50} unit="m"
+                onChange={setContourBaseElevation}
+              />
+              <SliderRow
+                label="Interval"
+                value={contourInterval}
+                min={10} max={500} step={10} unit="m"
+                onChange={setContourInterval}
+              />
+              <SliderRow
+                label="Line width"
+                value={contourLineWidth}
+                min={0.5} max={4} step={0.25}
+                onChange={setContourLineWidth}
+              />
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, fontSize: 11 }}>
+                <span style={{ color: '#8a8aaa' }}>Smooth</span>
+                <input
+                  type="checkbox"
+                  checked={contourSmoothPasses > 0}
+                  onChange={e => setContourSmoothPasses(e.target.checked ? 1 : 0)}
+                  style={{ accentColor: '#3a6a9a' }}
+                />
+              </label>
+            </>
+          )}
         </div>
       )}
 

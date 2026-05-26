@@ -32,6 +32,7 @@ async def generate_settlements(config: SettlementsConfig) -> dict:
         min_lat, min_lon, max_lat, max_lon,
         limit=config.limit,
         types=config.types,
+        width_m=config.width_m,
     )
     return {"settlements": settlements}
 

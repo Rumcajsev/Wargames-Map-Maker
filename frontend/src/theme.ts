@@ -33,3 +33,39 @@ export const TK = {
   shadowFlyout: '0 12px 36px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
   shadowDock:   '0 4px 12px rgba(0,0,0,0.08)',
 } as const
+
+export const TK_DARK = {
+  // Surfaces — warm dark, like a map table at night
+  surface:   '#201c17',
+  paper:     '#1a1612',
+  paper2:    '#2a2420',
+
+  // Ink scale — inverted warmth
+  ink:       '#e8e2d5',
+  ink2:      '#c8c0b4',
+  inkMute:   '#a09890',
+  inkFaint:  '#5c544c',
+
+  // Lines
+  line:      '#38322c',
+  line2:     '#2e2822',
+
+  // Accent — slightly brighter rust to pop on dark bg
+  rust:      '#c97845',
+  rustTint:  'rgba(201,120,69,0.12)',
+
+  // Fonts (same)
+  sans:  '"Geist", system-ui, sans-serif',
+  serif: '"Instrument Serif", serif',
+  mono:  '"Geist Mono", monospace',
+
+  // Layout (same)
+  topBarHeight:  44,
+  tabBarHeight:  40,
+  sidebarWidth:  280,
+  bottomBarHeight: 48,
+
+  // Shadows — deeper on dark bg
+  shadowFlyout: '0 12px 36px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
+  shadowDock:   '0 4px 12px rgba(0,0,0,0.4)',
+} as const

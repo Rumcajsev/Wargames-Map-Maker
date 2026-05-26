@@ -85,13 +85,15 @@ interface HexPreviewProps {
   frameW: number
   frameH: number
   paperWidthMm: number
+  paperHeightMm: number
+  pageGrid: { colWidths: number[]; rowHeights: number[] }
   hexSizeMm: number
   hexOrientation: 'flat' | 'pointy'
   marginMm: number
   hexEdgeMode: HexEdgeMode
 }
 
-function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation, marginMm, hexEdgeMode }: HexPreviewProps) {
+function HexPreviewSVG({ frameW, frameH, paperWidthMm, paperHeightMm, pageGrid, hexSizeMm, hexOrientation, marginMm, hexEdgeMode }: HexPreviewProps) {
   const result = useMemo(() => {
     if (frameW === 0 || frameH === 0) return null
     const scalePxPerMm = frameW / paperWidthMm
@@ -102,8 +104,29 @@ function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation
 
   if (!result) return null
   const { hexPoints, marginPx: mp } = result
-  const iW = frameW - 2 * mp
-  const iH = frameH - 2 * mp
+
+  const scaleX = frameW / paperWidthMm
+  const scaleY = frameH / paperHeightMm
+  const multiSheet = pageGrid.colWidths.length > 1 || pageGrid.rowHeights.length > 1
+
+  // Build per-cell margin rects
+  const cellRects: { x: number; y: number; w: number; h: number }[] = []
+  let yAcc = 0
+  for (const rowH of pageGrid.rowHeights) {
+    let xAcc = 0
+    for (const colW of pageGrid.colWidths) {
+      const cx = xAcc * scaleX
+      const cy = yAcc * scaleY
+      const cw = colW * scaleX
+      const ch = rowH * scaleY
+      cellRects.push({ x: cx + mp, y: cy + mp, w: cw - mp * 2, h: ch - mp * 2 })
+      xAcc += colW
+    }
+    yAcc += rowH
+  }
+
+  // Clip hexes to the union of all per-cell content areas
+  const clipId = 'margin-clip'
 
   return (
     <svg
@@ -112,13 +135,15 @@ function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation
       style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
     >
       <defs>
-        <clipPath id="margin-clip">
-          <rect x={mp} y={mp} width={iW} height={iH} />
+        <clipPath id={clipId}>
+          {cellRects.map((r, i) => (
+            <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} />
+          ))}
         </clipPath>
       </defs>
 
-      {/* Hex grid clipped at margin boundary */}
-      <g clipPath="url(#margin-clip)" opacity={0.75}>
+      {/* Hex grid clipped at margin boundaries */}
+      <g clipPath={`url(#${clipId})`} opacity={0.75}>
         {hexPoints.map((pts, i) => (
           <polygon
             key={i}
@@ -130,16 +155,17 @@ function HexPreviewSVG({ frameW, frameH, paperWidthMm, hexSizeMm, hexOrientation
         ))}
       </g>
 
-      {/* Margin guide — dashed inset line */}
-      {mp > 0 && (
+      {/* Per-cell margin guide lines */}
+      {mp > 0 && cellRects.map((r, i) => (
         <rect
-          x={mp} y={mp} width={iW} height={iH}
-          fill="none"
-          stroke="rgba(20, 15, 10, 0.35)"
-          strokeWidth={1}
-          strokeDasharray="5,4"
+          key={i}
+          x={r.x} y={r.y} width={r.w} height={r.h}
+          fill={multiSheet ? 'none' : 'none'}
+          stroke="rgba(20, 15, 10, 0.6)"
+          strokeWidth={1.5}
+          strokeDasharray="6,4"
         />
-      )}
+      ))}
     </svg>
   )
 }
@@ -418,6 +444,8 @@ export function MapView({ editable = false }: { editable?: boolean }) {
           frameW={frameDims.w}
           frameH={frameDims.h}
           paperWidthMm={cwMm}
+          paperHeightMm={chMm}
+          pageGrid={pageGrid}
           hexSizeMm={hexSizeMm}
           hexOrientation={hexOrientation}
           marginMm={marginMm}

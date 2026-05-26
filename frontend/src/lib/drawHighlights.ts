@@ -178,38 +178,110 @@ function drawHatchFill(
   ctx.restore()
 }
 
+// ── Corner miter helper ───────────────────────────────────────────────────────
+
+// Computes the true miter inset point at a path corner plus the tangent bisector
+// direction. Only used for inset=true (sign=-1), so perp direction = (uy,-ux)*perpDist.
+function cornerMiterPoint(
+  s: PathSampler,
+  cd: number,
+  perpDist: number,
+): { pt: [number, number]; tangBis: [number, number] } {
+  const eps = 1.0
+  const base = s.pointAt(cd, 0, 1)
+  const tb = s.tangentAt(cd - eps)
+  const ta = s.tangentAt(cd + eps)
+  // Inward perp vectors (sign=-1 formula: offset = (uy,-ux)*perpDist)
+  const px_b = tb.uy * perpDist, py_b = -tb.ux * perpDist
+  const px_a = ta.uy * perpDist, py_a = -ta.ux * perpDist
+  // Bisector of the two inward perps; its length encodes the miter distance
+  const bx = px_b + px_a, by = py_b + py_a
+  const bLen = Math.hypot(bx, by)
+  let miterPt: [number, number]
+  if (bLen < 1e-6) {
+    miterPt = [base[0] + px_b, base[1] + py_b]
+  } else {
+    // dot(bisector_unit, perp_b_unit) = cos(half-angle between perps)
+    const dotBPb = (bx * px_b + by * py_b) / (bLen * perpDist)
+    const miterDist = Math.min(perpDist / Math.max(dotBPb, 0.15), perpDist * 4)
+    miterPt = [base[0] + (bx / bLen) * miterDist, base[1] + (by / bLen) * miterDist]
+  }
+  const tbx = tb.ux + ta.ux, tby = tb.uy + ta.uy
+  const tbLen = Math.hypot(tbx, tby)
+  const tangBis: [number, number] = tbLen > 1e-6 ? [tbx / tbLen, tby / tbLen] : [tb.ux, tb.uy]
+  return { pt: miterPt, tangBis }
+}
+
+function nearCorner(d: number, cornerDs: number[], zone: number, totalLen: number): boolean {
+  return cornerDs.some(cd => {
+    const raw = Math.abs(d - cd)
+    return Math.min(raw, totalLen - raw) < zone
+  })
+}
+
 // ── Pattern renderers ─────────────────────────────────────────────────────────
 
-function drawDotted(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
+function drawDotted(ctx: Ctx, s: PathSampler, sw: number, sm: number, inset = false) {
   const r = sw * 0.65, spacing = sw * 2.2 * sm
+  const perp = inset ? r : 0
+  const sign = inset ? -1 : 1
+  const cornerZone = spacing * 0.5
+  const corners = inset ? s.cornerDs.map(cd => cornerMiterPoint(s, cd, r)) : []
   ctx.fillStyle = ctx.strokeStyle as string
   let d = spacing * 0.5
   while (d < s.totalLen) {
-    const p = s.pointAt(d, 0, 1)
-    ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill()
+    if (!inset || !nearCorner(d, s.cornerDs, cornerZone, s.totalLen)) {
+      const p = s.pointAt(d, perp, sign)
+      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill()
+    }
     d += spacing
+  }
+  for (const { pt } of corners) {
+    ctx.beginPath(); ctx.arc(pt[0], pt[1], r, 0, Math.PI * 2); ctx.fill()
   }
 }
 
-function drawDashed(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
+function drawDashed(ctx: Ctx, s: PathSampler, sw: number, sm: number, inset = false) {
   const dashLen = sw * 2.5, gapLen = sw * 2.5 * sm, period = dashLen + gapLen
+  const perp = inset ? sw * 0.5 : 0
+  const sign = inset ? -1 : 1
+  const cornerZone = dashLen * 0.7
+  const corners = inset ? s.cornerDs.map(cd => cornerMiterPoint(s, cd, perp)) : []
   const prevCap = ctx.lineCap; ctx.lineCap = 'butt'
   ctx.beginPath()
   let d = 0
   while (d < s.totalLen) {
     const dEnd = Math.min(d + dashLen, s.totalLen)
-    const a = s.pointAt(d, 0, 1), b = s.pointAt(dEnd, 0, 1)
-    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+    const dMid = (d + dEnd) / 2
+    if (!inset || !nearCorner(dMid, s.cornerDs, cornerZone, s.totalLen)) {
+      const a = s.pointAt(d, perp, sign), b = s.pointAt(dEnd, perp, sign)
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+    }
     d += period
   }
-  ctx.stroke(); ctx.lineCap = prevCap
+  ctx.stroke()
+  if (corners.length > 0) {
+    const halfLen = dashLen * 0.55
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    for (const { pt, tangBis } of corners) {
+      ctx.moveTo(pt[0] - tangBis[0] * halfLen, pt[1] - tangBis[1] * halfLen)
+      ctx.lineTo(pt[0] + tangBis[0] * halfLen, pt[1] + tangBis[1] * halfLen)
+    }
+    ctx.stroke()
+  }
+  ctx.lineCap = prevCap
 }
 
-function drawDashDot(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
+function drawDashDot(ctx: Ctx, s: PathSampler, sw: number, sm: number, inset = false) {
   const dashLen = sw * 2.5
   const dotR = Math.max(0.5, sw * 0.5)
   const gap = sw * 1.0 * sm
   const period = dashLen + gap + dotR * 2 + gap
+  const perp = inset ? sw * 0.5 : 0
+  const sign = inset ? -1 : 1
+  const cornerZone = dashLen * 0.7
+  const corners = inset ? s.cornerDs.map(cd => cornerMiterPoint(s, cd, perp)) : []
 
   const prevCap = ctx.lineCap
   ctx.lineCap = 'butt'
@@ -217,8 +289,11 @@ function drawDashDot(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
   let d = 0
   while (d < s.totalLen) {
     const dashEnd = Math.min(d + dashLen, s.totalLen)
-    const a = s.pointAt(d, 0, 1), b = s.pointAt(dashEnd, 0, 1)
-    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+    const dMid = (d + dashEnd) / 2
+    if (!inset || !nearCorner(dMid, s.cornerDs, cornerZone, s.totalLen)) {
+      const a = s.pointAt(d, perp, sign), b = s.pointAt(dashEnd, perp, sign)
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1])
+    }
     d += period
   }
   ctx.stroke()
@@ -227,9 +302,23 @@ function drawDashDot(ctx: Ctx, s: PathSampler, sw: number, sm: number) {
   ctx.fillStyle = ctx.strokeStyle as string
   d = dashLen + gap + dotR
   while (d < s.totalLen) {
-    const p = s.pointAt(d, 0, 1)
-    ctx.beginPath(); ctx.arc(p[0], p[1], dotR, 0, Math.PI * 2); ctx.fill()
+    if (!inset || !nearCorner(d, s.cornerDs, cornerZone, s.totalLen)) {
+      const p = s.pointAt(d, perp, sign)
+      ctx.beginPath(); ctx.arc(p[0], p[1], dotR, 0, Math.PI * 2); ctx.fill()
+    }
     d += period
+  }
+
+  if (corners.length > 0) {
+    const halfLen = dashLen * 0.55
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    for (const { pt, tangBis } of corners) {
+      ctx.moveTo(pt[0] - tangBis[0] * halfLen, pt[1] - tangBis[1] * halfLen)
+      ctx.lineTo(pt[0] + tangBis[0] * halfLen, pt[1] + tangBis[1] * halfLen)
+    }
+    ctx.stroke()
+    ctx.lineCap = prevCap
   }
 }
 
@@ -240,13 +329,14 @@ export function drawPatternAlongPath(
   strokeWidth: number,
   closed: boolean,
   spacingMult: number,
+  inset = false,
 ) {
   const s = buildPathSampler(pts, closed)
   if (!s) return
   switch (pattern) {
-    case 'dotted':  return drawDotted(ctx, s, strokeWidth, spacingMult)
-    case 'dashed':  return drawDashed(ctx, s, strokeWidth, spacingMult)
-    case 'dashdot': return drawDashDot(ctx, s, strokeWidth, spacingMult)
+    case 'dotted':  return drawDotted(ctx, s, strokeWidth, spacingMult, inset)
+    case 'dashed':  return drawDashed(ctx, s, strokeWidth, spacingMult, inset)
+    case 'dashdot': return drawDashDot(ctx, s, strokeWidth, spacingMult, inset)
   }
 }
 
@@ -440,7 +530,7 @@ export function drawHighlights(
       hCtx.lineCap = 'round'
       hCtx.lineJoin = 'round'
       for (const poly of smoothed) {
-        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth * ls, true, hl.patternSpacing ?? 1)
+        drawPatternAlongPath(hCtx, poly, areaPattern as LinePattern, hl.strokeWidth * ls, true, hl.patternSpacing ?? 1, true)
       }
       hCtx.globalAlpha = 1
       hCtx.restore()

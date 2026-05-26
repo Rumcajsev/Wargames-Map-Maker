@@ -2,6 +2,13 @@ import type { MapStore, GeneratedHex, GenerateProgress, ClassificationParams } f
 import { DEFAULT_CLASSIFICATION_PARAMS } from '../mapStore'
 import { classifyElevation as _classify } from '../../lib/elevationClassify'
 
+export type HeightmapMeta = {
+  minElev: number
+  maxElev: number
+  widthM: number
+  heightM: number
+}
+
 export type ElevationSlice = {
   elevationStatus: 'idle' | 'loading' | 'error' | 'done'
   elevationError: string | null
@@ -10,6 +17,16 @@ export type ElevationSlice = {
   classificationParams: ClassificationParams
   elevationPaintMode: boolean
   elevationPaintBrush: 'flat' | 'hills' | 'mountains'
+  heightmapUrl: string | null
+  heightmapMeta: HeightmapMeta | null
+  hillshadeAzimuth: number
+  hillshadeAltitude: number
+  hillshadeIntensity: number
+  contoursEnabled: boolean
+  contourInterval: number
+  contourBaseElevation: number
+  contourSmoothPasses: number
+  contourLineWidth: number
   fetchElevation: () => Promise<void>
   setShowElevationDebug: (v: boolean) => void
   setClassificationParam: (key: keyof ClassificationParams, v: number) => void
@@ -18,6 +35,14 @@ export type ElevationSlice = {
   setElevationPaintBrush: (v: 'flat' | 'hills' | 'mountains') => void
   overrideHexElevation: (q: number, r: number, cls: 'flat' | 'hills' | 'mountains') => void
   clearElevationOverrides: () => void
+  setHillshadeAzimuth: (v: number) => void
+  setHillshadeAltitude: (v: number) => void
+  setHillshadeIntensity: (v: number) => void
+  setContoursEnabled: (v: boolean) => void
+  setContourInterval: (v: number) => void
+  setContourBaseElevation: (v: number) => void
+  setContourSmoothPasses: (v: number) => void
+  setContourLineWidth: (v: number) => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -30,6 +55,16 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   classificationParams: { ...DEFAULT_CLASSIFICATION_PARAMS },
   elevationPaintMode: false,
   elevationPaintBrush: 'hills',
+  heightmapUrl: null,
+  heightmapMeta: null,
+  hillshadeAzimuth: 315,
+  hillshadeAltitude: 45,
+  hillshadeIntensity: 0.6,
+  contoursEnabled: false,
+  contourInterval: 50,
+  contourBaseElevation: 0,
+  contourSmoothPasses: 1,
+  contourLineWidth: 1.5,
 
   fetchElevation: async () => {
     const { generatedHexes, generatedMetadata, hexOrientation } = get()
@@ -78,7 +113,16 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
           if (event.step === 'done') {
             const params = get().classificationParams
             const classified = _classify(event.hexes as GeneratedHex[], params)
-            set({ generatedHexes: classified, elevationStatus: 'done', elevationProgress: null })
+            const heightmapUrl = event.heightmap_b64
+              ? `data:image/png;base64,${event.heightmap_b64}`
+              : null
+            const heightmapMeta = event.heightmap_b64 ? {
+              minElev: event.heightmap_min_elev as number,
+              maxElev: event.heightmap_max_elev as number,
+              widthM: event.heightmap_width_m as number,
+              heightM: event.heightmap_height_m as number,
+            } : null
+            set({ generatedHexes: classified, elevationStatus: 'done', elevationProgress: null, heightmapUrl, heightmapMeta })
           } else if (event.step === 'error') {
             set({ elevationStatus: 'error', elevationError: event.message as string, elevationProgress: null })
           } else {
@@ -126,4 +170,13 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
     const cleared = generatedHexes.map(h => ({ ...h, elevation_manual_override: false }))
     set({ generatedHexes: _classify(cleared, classificationParams) })
   },
+
+  setHillshadeAzimuth: (v) => set({ hillshadeAzimuth: v }),
+  setHillshadeAltitude: (v) => set({ hillshadeAltitude: v }),
+  setHillshadeIntensity: (v) => set({ hillshadeIntensity: v }),
+  setContoursEnabled: (v) => set({ contoursEnabled: v }),
+  setContourInterval: (v) => set({ contourInterval: v }),
+  setContourBaseElevation: (v) => set({ contourBaseElevation: v }),
+  setContourSmoothPasses: (v) => set({ contourSmoothPasses: v }),
+  setContourLineWidth: (v) => set({ contourLineWidth: v }),
 })

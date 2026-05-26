@@ -43,6 +43,7 @@ class RiversConfig(BaseRegionConfig):
     R_m: float
     types: list[str] = ["river"]
     hex_size_km: float = 10.0
+    limit: int = 15
 
 
 class RoadsConfig(BaseRegionConfig):
