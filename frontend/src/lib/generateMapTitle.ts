@@ -93,6 +93,7 @@ export function generateMapTitle(
   settlements: Settlement[],
   metadata: GridMetadata,
   nominatim?: NominatimResult,
+  countryNominatim?: NominatimResult,
 ): string {
   const widthKm = (metadata.scale_m_per_mm * metadata.paper_mm[0]) / 1000
   const [centerLon, centerLat] = metadata.center
@@ -140,8 +141,13 @@ export function generateMapTitle(
   const nameIsUgly = UGLY_SUFFIXES.some(s => adminName.includes(s))
 
   if (!adminName || nameIsUgly) {
-    // Ugly or missing name: cardinal + country ("Southern Poland")
-    const prefix = bb ? cardinalPrefix(centerLat, centerLon, bb, adminWidthKm, widthKm) : ''
+    // Ugly or missing name: fall back to cardinal + country ("Eastern Poland").
+    // Use the country-level bbox (zoom=4 result) for the cardinal so the size guard
+    // doesn't suppress the prefix due to the regional unit being close in size to the map.
+    const countryBb = countryNominatim?.boundingbox ?? bb
+    const prefix = countryBb
+      ? cardinalPrefix(centerLat, centerLon, countryBb, Infinity, widthKm)
+      : ''
     return [prefix, country].filter(Boolean).join(' ')
   }
 

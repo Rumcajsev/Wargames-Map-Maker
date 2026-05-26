@@ -85,7 +85,12 @@ function WizardTopBar({ step, onExit }: {
       padding: '0 20px',
       borderBottom: `1px solid ${TK.line2}`,
     }}>
-      <HachureLogo />
+      <button
+        onClick={onExit}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <HachureLogo />
+      </button>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
         {step === 'source' && (
@@ -663,7 +668,8 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     generatedMetadata, settlements, mapTitle, setMapTitle,
   } = useMapStore()
 
-  const [nominatimResult, setNominatimResult] = useState<NominatimResult | null>(null)
+  const [nominatimResult, setNominatimResult]       = useState<NominatimResult | null>(null)
+  const [countryNominatim, setCountryNominatim]     = useState<NominatimResult | null>(null)
   const [phase, setPhase]         = useState<'terrain' | 'layers'>('terrain')
   // tick fires every second purely to trigger re-renders for elapsed time display
   const [tick, setTick]           = useState(0)
@@ -674,21 +680,30 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   const layersFetchedRef    = useRef(false)
 
   // Fire Nominatim once we know the map scale (after terrain metadata arrives).
-  // Reset nominatimResult first so stale data from the previous generation never
-  // leaks into the title logic for the new one.
+  // Always fetch two levels: scale-appropriate (for region name) and zoom=4
+  // (for country bbox used in cardinal direction when region name is ugly).
   useEffect(() => {
     setNominatimResult(null)
+    setCountryNominatim(null)
     if (!generatedMetadata) return
     const controller = new AbortController()
     const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
     const zoom    = nominatimZoomForWidth(widthKm)
-    fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json&zoom=${zoom}&accept-language=en`,
-      { signal: controller.signal, headers: { 'User-Agent': 'IG2-map-generator' } },
-    )
+    const base    = `https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json&accept-language=en`
+    const opts    = { signal: controller.signal, headers: { 'User-Agent': 'IG2-map-generator' } }
+
+    fetch(`${base}&zoom=${zoom}`, opts)
       .then(r => r.json())
       .then(d => setNominatimResult(d as NominatimResult))
       .catch(() => {})
+
+    if (zoom !== 4) {
+      fetch(`${base}&zoom=4`, opts)
+        .then(r => r.json())
+        .then(d => setCountryNominatim(d as NominatimResult))
+        .catch(() => {})
+    }
+
     return () => controller.abort()
   }, [generatedMetadata])
 
@@ -699,9 +714,13 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
     // For small maps settlements are enough; for large maps wait for fresh Nominatim data
     if (widthKm >= 100 && !nominatimResult) return
-    const title = generateMapTitle(settlements, generatedMetadata, nominatimResult ?? undefined)
+    const title = generateMapTitle(
+      settlements, generatedMetadata,
+      nominatimResult ?? undefined,
+      countryNominatim ?? undefined,
+    )
     if (title) setMapTitle(title)
-  }, [settlementsStatus, generatedMetadata, nominatimResult, settlements])
+  }, [settlementsStatus, generatedMetadata, nominatimResult, countryNominatim, settlements])
 
   // Single 1-second ticker for all elapsed timers
   useEffect(() => {
