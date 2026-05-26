@@ -11,13 +11,17 @@ import {
 } from './sidebar'
 
 // ── Compact colour palette ────────────────────────────────────────────────────
-// Three hue families × three shades each, laid out as tall vertical strips
-// that fill the full available width.
+// 7 hue families × 3 shades each, laid out as two rows of 4 columns.
+// Row 1: Blue Red Green Gold  |  Row 2: Purple Orange Teal + Custom
 
 const COMPACT_PALETTE = [
-  ['#1133aa', '#3355ee', '#88aaff'],   // Blue  — dark → mid → light
+  ['#1133aa', '#3355ee', '#88aaff'],   // Blue   (row 1)
   ['#aa1111', '#dd4444', '#ee8888'],   // Red
   ['#116622', '#44aa55', '#88cc77'],   // Green
+  ['#886600', '#ccaa00', '#ffee66'],   // Gold
+  ['#551199', '#8833dd', '#cc88ff'],   // Purple (row 2)
+  ['#aa4400', '#dd6622', '#ffaa55'],   // Orange
+  ['#006655', '#229977', '#66ccaa'],   // Teal
 ] as const
 
 function CompactColorPalette({ value, onChange }: { value: string; onChange: (c: string) => void }) {
@@ -26,52 +30,71 @@ function CompactColorPalette({ value, onChange }: { value: string; onChange: (c:
   const allPalette: string[] = (COMPACT_PALETTE as readonly (readonly string[])[]).flat()
   const isCustom = value !== 'transparent' && !allPalette.some(c => norm(c) === norm(value))
 
-  return (
-    <div style={{ display: 'flex', padding: '8px 14px' }}>
-      {COMPACT_PALETTE.map((group, gi) => (
-        <div key={gi} style={{ display: 'flex', flex: 1, marginLeft: gi > 0 ? 3 : 0 }}>
-          {group.map(color => {
-            const active = norm(color) === norm(value)
-            return (
-              <button
-                key={color}
-                onClick={() => onChange(color)}
-                title={color}
-                style={{
-                  flex: 1, height: 36,
-                  background: color,
-                  border: 'none',
-                  cursor: 'pointer', padding: 0,
-                  outline: active ? `2.5px solid ${TK.ink}` : 'none',
-                  outlineOffset: -2,
-                }}
-              />
-            )
-          })}
-        </div>
-      ))}
+  const renderFamily = (group: readonly string[]) => (
+    <>
+      {group.map(color => {
+        const active = norm(color) === norm(value)
+        return (
+          <button
+            key={color}
+            onClick={() => onChange(color)}
+            title={color}
+            style={{
+              flex: 1, height: 30,
+              background: color,
+              border: 'none',
+              cursor: 'pointer', padding: 0,
+              outline: active ? `2.5px solid ${TK.ink}` : 'none',
+              outlineOffset: -2,
+            }}
+          />
+        )
+      })}
+    </>
+  )
 
-      {/* Custom colour slot */}
-      <button
-        onClick={() => inputRef.current?.click()}
-        title={isCustom ? value : 'Custom colour…'}
-        style={{
-          width: 30, height: 36, flexShrink: 0,
-          marginLeft: 3,
-          background: isCustom ? value : 'transparent',
-          border: isCustom ? 'none' : `1px dashed ${TK.line}`,
-          cursor: 'pointer', padding: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          outline: isCustom ? `2.5px solid ${TK.ink}` : 'none',
-          outlineOffset: -2,
-        }}
-      >
-        {!isCustom && (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={TK.inkFaint} strokeWidth="1.4" strokeLinecap="round">
-            <path d="M5 1v8M1 5h8" />
-          </svg>
-        )}
-      </button>
+  const row1 = COMPACT_PALETTE.slice(0, 4)
+  const row2 = COMPACT_PALETTE.slice(4)   // 3 families; custom fills the 4th slot
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 14px' }}>
+      {/* Row 1 — 4 families */}
+      <div style={{ display: 'flex', gap: 3 }}>
+        {row1.map((group, gi) => (
+          <div key={gi} style={{ display: 'flex', flex: 1 }}>
+            {renderFamily(group)}
+          </div>
+        ))}
+      </div>
+
+      {/* Row 2 — 3 families + custom slot (same flex:1 width as a family) */}
+      <div style={{ display: 'flex', gap: 3 }}>
+        {row2.map((group, gi) => (
+          <div key={gi} style={{ display: 'flex', flex: 1 }}>
+            {renderFamily(group)}
+          </div>
+        ))}
+        <button
+          onClick={() => inputRef.current?.click()}
+          title={isCustom ? value : 'Custom colour…'}
+          style={{
+            flex: 1, height: 30,
+            background: isCustom ? value : 'transparent',
+            border: isCustom ? 'none' : `1px dashed ${TK.line}`,
+            cursor: 'pointer', padding: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            outline: isCustom ? `2.5px solid ${TK.ink}` : 'none',
+            outlineOffset: -2,
+          }}
+        >
+          {!isCustom && (
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={TK.inkFaint} strokeWidth="1.4" strokeLinecap="round">
+              <path d="M5 1v8M1 5h8" />
+            </svg>
+          )}
+        </button>
+      </div>
+
       <input
         ref={inputRef}
         type="color"
