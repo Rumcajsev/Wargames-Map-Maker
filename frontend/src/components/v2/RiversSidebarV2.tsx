@@ -468,7 +468,7 @@ export function RiversSidebarV2() {
               </button>
 
               {osmListOpen && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 14px 6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 14px 8px' }}>
                   {osmRiverWays.map((way, idx) => {
                     const applied = appliedOsmRiverIndices.includes(idx)
                     const hovered = hoveredOsmRiverIdx === idx
@@ -481,7 +481,7 @@ export function RiversSidebarV2() {
                         onClick={() => toggleOsmRiver(idx)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '3px 6px', cursor: 'pointer',
+                          padding: '6px 8px', cursor: 'pointer',
                           background: hovered ? tintBg(dotColor, 0.08) : 'transparent',
                           border: `1px solid ${applied ? dotColor : 'transparent'}`,
                         }}
