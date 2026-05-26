@@ -67,32 +67,52 @@ function CompactColorPalette({ value, onChange }: { value: string; onChange: (c:
         ))}
       </div>
 
-      {/* Row 2 — 3 families + custom slot (same flex:1 width as a family) */}
+      {/* Row 2 — 3 families + { black | white | custom } as the 4th slot */}
       <div style={{ display: 'flex', gap: 3 }}>
         {row2.map((group, gi) => (
           <div key={gi} style={{ display: 'flex', flex: 1 }}>
             {renderFamily(group)}
           </div>
         ))}
-        <button
-          onClick={() => inputRef.current?.click()}
-          title={isCustom ? value : 'Custom colour…'}
-          style={{
-            flex: 1, height: 30,
-            background: isCustom ? value : 'transparent',
-            border: isCustom ? 'none' : `1px dashed ${TK.line}`,
-            cursor: 'pointer', padding: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            outline: isCustom ? `2.5px solid ${TK.ink}` : 'none',
-            outlineOffset: -2,
-          }}
-        >
-          {!isCustom && (
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={TK.inkFaint} strokeWidth="1.4" strokeLinecap="round">
-              <path d="M5 1v8M1 5h8" />
-            </svg>
-          )}
-        </button>
+        <div style={{ display: 'flex', flex: 1 }}>
+          {(['#111111', '#ffffff'] as const).map(color => {
+            const active = norm(color) === norm(value)
+            return (
+              <button
+                key={color}
+                onClick={() => onChange(color)}
+                title={color === '#111111' ? 'Black' : 'White'}
+                style={{
+                  flex: 1, height: 30,
+                  background: color,
+                  border: color === '#ffffff' ? `1px solid ${TK.line2}` : 'none',
+                  cursor: 'pointer', padding: 0,
+                  outline: active ? `2.5px solid ${TK.rust}` : 'none',
+                  outlineOffset: -2,
+                }}
+              />
+            )
+          })}
+          <button
+            onClick={() => inputRef.current?.click()}
+            title={isCustom ? value : 'Custom colour…'}
+            style={{
+              flex: 1, height: 30,
+              background: isCustom ? value : 'transparent',
+              border: isCustom ? 'none' : `1px dashed ${TK.line}`,
+              cursor: 'pointer', padding: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              outline: isCustom ? `2.5px solid ${TK.rust}` : 'none',
+              outlineOffset: -2,
+            }}
+          >
+            {!isCustom && (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={TK.inkFaint} strokeWidth="1.4" strokeLinecap="round">
+                <path d="M5 1v8M1 5h8" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       <input
