@@ -86,25 +86,21 @@ export type UiSlice = {
   resetDisabledHexes: () => void
   autoDisableOceanHexes: () => void
   setAutoDisabledOceanHexKeys: (keys: string[]) => void
+  mapTitle: string
+  setMapTitle: (v: string) => void
   mapStyle: 'standard' | 'historical_simple'
   setMapStyle: (v: 'standard' | 'historical_simple') => void
   styleSnapshots: Record<string, Record<string, unknown>>
-  hachureParams: { spacing: number; length: number; wobble: number; jitter: number; hillWidth: number; mtnWidth: number; smoothing: number }
-  setHachureParam: (key: 'spacing' | 'length' | 'wobble' | 'jitter' | 'hillWidth' | 'mtnWidth' | 'smoothing', value: number) => void
+  historicalIconParams: Record<string, { spacing: number; scale: number; rotRange: number }>
+  setHistoricalIconParam: (terrain: string, key: 'spacing' | 'scale' | 'rotRange', value: number) => void
   applyMapPreset: (preset: 'default') => void
   saveProject: () => void
   restoreProject: (data: unknown) => void
 }
 
-// Applied when first visiting a style — only the keys that meaningfully differ per style.
 const STYLE_INITIAL_DEFAULTS: Record<string, Record<string, unknown>> = {
   standard: {
     roadWiggleAmp: 0.20,
-    roadWiggleFreq: 0.9,
-    railWiggleAmp: 0,
-  },
-  historical_simple: {
-    roadWiggleAmp: 0.3,
     roadWiggleFreq: 0.9,
     railWiggleAmp: 0,
   },
@@ -118,9 +114,11 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanHexes: [],
   urbanStyle: { ...DEFAULT_URBAN_STYLE },
   urbanPaintMode: null,
+  mapTitle: '',
+  setMapTitle: (v) => set({ mapTitle: v }),
   mapStyle: 'standard',
   styleSnapshots: {},
-  hachureParams: { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 },
+  historicalIconParams: {},
   hexBorderMode: 'full',
   hexBorderOpacity: 0.35,
   hexBorderColor: '#000000',
@@ -341,8 +339,12 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
     }
     return { ...(STYLE_INITIAL_DEFAULTS[v] ?? {}), mapStyle: v, styleSnapshots: savedSnapshots }
   }),
-  setHachureParam: (key, value) => set(s => ({ hachureParams: { ...s.hachureParams, [key]: value } })),
-
+  setHistoricalIconParam: (terrain, key, value) => set(s => ({
+    historicalIconParams: {
+      ...s.historicalIconParams,
+      [terrain]: { ...(s.historicalIconParams[terrain] ?? {}), [key]: value },
+    },
+  })),
   applyMapPreset: (preset) => {
     const presets = {
       default: {
@@ -772,10 +774,6 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
         if (t.bowing === undefined) t.bowing = 0.5
       }
     }
-  }
-  if (fromVersion < 46) {
-    if (!s.hachureParams) s.hachureParams = { spacing: 1.5, length: 10, wobble: 0.5, jitter: 0.05, hillWidth: 0.5, mtnWidth: 1.0, smoothing: 1 }
-    else if ((s.hachureParams as Record<string, unknown>).smoothing === undefined) (s.hachureParams as Record<string, unknown>).smoothing = 1
   }
   if (s.areasStyle && !(s.areasStyle as { borderColor?: string }).borderColor) {
     (s.areasStyle as { borderColor?: string }).borderColor = '#2c1a00'

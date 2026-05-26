@@ -3,6 +3,8 @@ import { TK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation } from '../../store/mapStore'
 import { MapView } from '../MapView'
+import { generateMapTitle, nominatimZoomForWidth } from '../../lib/generateMapTitle'
+import type { NominatimResult } from '../../lib/generateMapTitle'
 
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
 type SourceMode = 'osm' | 'blank' | 'reference'
@@ -658,9 +660,10 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     roadsStatus, railsStatus, riversOsmStatus, settlementsStatus,
     elevationStatus, elevationProgress,
     fetchRoads, fetchRails, fetchRivers, fetchSettlements, fetchElevation,
+    generatedMetadata, settlements, mapTitle, setMapTitle,
   } = useMapStore()
 
-  const [cityName, setCityName]   = useState<string | null>(null)
+  const [nominatimResult, setNominatimResult] = useState<NominatimResult | null>(null)
   const [phase, setPhase]         = useState<'terrain' | 'layers'>('terrain')
   // tick fires every second purely to trigger re-renders for elapsed time display
   const [tick, setTick]           = useState(0)
@@ -670,12 +673,30 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   const layerStartsRef      = useRef<Record<string, number>>({})
   const layersFetchedRef    = useRef(false)
 
+  // Fire Nominatim once we know the map scale (after terrain metadata arrives)
   useEffect(() => {
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json`)
+    if (!generatedMetadata) return
+    const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
+    const zoom    = nominatimZoomForWidth(widthKm)
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${center[1]}&lon=${center[0]}&format=json&zoom=${zoom}&accept-language=en`,
+      { headers: { 'User-Agent': 'IG2-map-generator' } },
+    )
       .then(r => r.json())
-      .then(d => { const a = d.address ?? {}; setCityName(a.city || a.town || a.village || a.county || null) })
+      .then(d => setNominatimResult(d as NominatimResult))
       .catch(() => {})
-  }, [])
+  }, [generatedMetadata])
+
+  // Generate title once settlements are done; also re-run if Nominatim arrives later
+  useEffect(() => {
+    if (!generatedMetadata) return
+    if (settlementsStatus !== 'done' && settlementsStatus !== 'error') return
+    const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
+    // For small maps settlements are enough; for large maps wait for Nominatim if not yet arrived
+    if (widthKm >= 100 && !nominatimResult) return
+    const title = generateMapTitle(settlements, generatedMetadata, nominatimResult ?? undefined)
+    if (title) setMapTitle(title)
+  }, [settlementsStatus, generatedMetadata, nominatimResult])
 
   // Single 1-second ticker for all elapsed timers
   useEffect(() => {
@@ -781,7 +802,7 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
           fontFamily: TK.serif, fontSize: 52, fontWeight: 400,
           color: TK.ink, margin: 0, fontStyle: 'italic',
         }}>
-          {cityName ?? 'Untitled'}
+          {mapTitle || 'Untitled'}
         </h1>
       </div>
 
