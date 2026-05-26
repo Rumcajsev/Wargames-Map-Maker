@@ -453,7 +453,7 @@ export function RiversSidebarV2() {
                 onClick={() => setOsmListOpen(o => !o)}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  width: '100%', padding: '4px 14px',
+                  width: '100%', padding: '8px 14px',
                   background: 'none', border: 'none', cursor: 'pointer',
                   fontFamily: TK.mono, fontSize: 10, color: TK.inkMute, letterSpacing: 0.3,
                   textAlign: 'left',
