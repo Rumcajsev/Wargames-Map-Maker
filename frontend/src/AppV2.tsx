@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react'
 import { useMapStore } from './store/mapStore'
 import { PresetsPanel } from './components/PresetsPanel'
 import { TerrainSidebar } from './components/TerrainSidebar'
-import { RiversSidebar } from './components/RiversSidebar'
+import { RiversSidebarV2 } from './components/v2/RiversSidebarV2'
 import { DisplaySidebar } from './components/DisplaySidebar'
 import { SettlementsSidebar } from './components/SettlementsSidebar'
 import { HighlightsSidebar } from './components/HighlightsSidebar'
@@ -94,7 +94,7 @@ export function AppV2() {
   const sidebar = activePanel === 'terrain'     ? <TerrainSidebarV2 />
     : activePanel === 'display'     ? <DisplaySidebar />
     : activePanel === 'roads'       ? <RoadsSidebarV2 />
-    : activePanel === 'rivers'      ? <RiversSidebar />
+    : activePanel === 'rivers'      ? <RiversSidebarV2 />
     : activePanel === 'settlements' ? <SettlementsSidebar />
     : activePanel === 'highlights'  ? <OverlaysSidebarV2 />
     : activePanel === 'areas'       ? <AreasSidebar />
