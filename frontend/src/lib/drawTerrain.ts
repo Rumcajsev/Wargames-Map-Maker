@@ -1,7 +1,7 @@
 /** Terrain layer rendering — hex fills, blob overlays, textures, lakes, coastline.
  *  Pure canvas operations — no React or store imports except types. */
 
-import type { GeneratedHex, BlobOverride } from '../store/mapStore'
+import type { GeneratedHex, BlobOverride, BlobPatch } from '../store/mapStore'
 import { buildTerrainBlobsV2, bleedPolygon } from './terrainBlobs'
 import { clipPolygonToConvex, pointInPolygon } from './geometry'
 import { makePermutation } from './noise'
@@ -14,6 +14,7 @@ export type BlobParams = {
   smooth: number; offset: number; bump: number
   sweepFreq: number; lobeFreq: number; lobeAmp: number
   lobeThreshold: number; lobeDirection: number
+  clearingChance: number; satelliteChance: number; patchSize: number
 }
 
 export type DrawTerrainParams = {
@@ -65,6 +66,7 @@ export type DrawTerrainParams = {
   historicalIconParams: Record<string, HistoricalIconTerrainParams>
   hillshadeCanvas: OffscreenCanvas | null
   contourCanvas: OffscreenCanvas | null
+  blobPatches: BlobPatch[]
 }
 
 export type { EdgeBlobParams, EdgeBlobChain }
@@ -284,13 +286,15 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       overridesByTerrain.get(ovTerrain)!.push([canonicalKey, override])
     }
 
-    const allTerrains = [...new Set([...defaultBlobMap.keys(), ...overridesByTerrain.keys()])]
+    const addPatchTerrains = params.blobPatches.filter(p => p.mode === 'add').map(p => p.terrain)
+    const allTerrains = [...new Set([...defaultBlobMap.keys(), ...overridesByTerrain.keys(), ...addPatchTerrains])]
       .sort((a, b) => (BLOB_Z[a] ?? 5) - (BLOB_Z[b] ?? 5))
 
     for (const terrain of allTerrains) {
       const defaultPolys = defaultBlobMap.get(terrain) ?? []
+      const cutPatches = params.blobPatches.filter(p => p.terrain === terrain && p.mode === 'cut')
 
-      // a. Fill default polys
+      // a. Fill default polys (cut patches traced as even-odd holes)
       if (defaultPolys.length > 0) {
         tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
         tCtx.beginPath()
@@ -298,6 +302,12 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
           if (poly.length < 3) continue
           tCtx.moveTo(poly[0][0], poly[0][1])
           for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+          tCtx.closePath()
+        }
+        for (const patch of cutPatches) {
+          if (patch.points.length < 3) continue
+          tCtx.moveTo(patch.points[0][0], patch.points[0][1])
+          for (let i = 1; i < patch.points.length; i++) tCtx.lineTo(patch.points[i][0], patch.points[i][1])
           tCtx.closePath()
         }
         tCtx.fill('evenodd')
@@ -316,18 +326,22 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
           return { ...p, hex: { ...p.hex, terrain } }
         })
 
-        const ovSmooth        = override.smooth         ?? terrainBlobParams.smooth
-        const ovOffset        = override.offset         ?? terrainBlobParams.offset
-        const ovNoise         = override.bump           ?? terrainBlobParams.bump
-        const ovSweepFreq     = override.sweepFreq      ?? terrainBlobParams.sweepFreq
-        const ovLobeFreq      = override.lobeFreq       ?? terrainBlobParams.lobeFreq
-        const ovLobeAmp       = override.lobeAmp        ?? terrainBlobParams.lobeAmp
-        const ovLobeThreshold = override.lobeThreshold  ?? terrainBlobParams.lobeThreshold
-        const ovLobeDirection = override.lobeDirection  ?? terrainBlobParams.lobeDirection
+        const ovSmooth          = override.smooth          ?? terrainBlobParams.smooth
+        const ovOffset          = override.offset          ?? terrainBlobParams.offset
+        const ovNoise           = override.bump            ?? terrainBlobParams.bump
+        const ovSweepFreq       = override.sweepFreq       ?? terrainBlobParams.sweepFreq
+        const ovLobeFreq        = override.lobeFreq        ?? terrainBlobParams.lobeFreq
+        const ovLobeAmp         = override.lobeAmp         ?? terrainBlobParams.lobeAmp
+        const ovLobeThreshold   = override.lobeThreshold   ?? terrainBlobParams.lobeThreshold
+        const ovLobeDirection   = override.lobeDirection   ?? terrainBlobParams.lobeDirection
+        const ovClearingChance  = override.clearingChance  ?? terrainBlobParams.clearingChance
+        const ovSatelliteChance = override.satelliteChance ?? terrainBlobParams.satelliteChance
+        const ovPatchSize       = override.patchSize       ?? terrainBlobParams.patchSize
 
         const ovBlobs = buildTerrainBlobsV2(
           ovProjected, ovSmooth, ovOffset, ovNoise,
           ovSweepFreq, ovLobeFreq, ovLobeAmp, ovLobeThreshold, ovLobeDirection, R,
+          ovClearingChance, ovSatelliteChance, ovPatchSize,
         )
         const ovPolys = ovBlobs.find(b => b.terrain === terrain)?.polys ?? []
         const ovColor = override.color ?? terrainColors[terrain] ?? '#cccccc'
@@ -366,6 +380,30 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         const extraTex = params.extraTextures.get(terrain)
         if (extraTex) applyTextureOverlay(tCtx, extraTex, defaultPolys, R, terrainTextureScales[terrain] ?? 3, 0)
       }
+
+      // d. Add patches
+      const addPatches = params.blobPatches.filter(p => p.terrain === terrain && p.mode === 'add')
+      for (const patch of addPatches) {
+        if (patch.points.length < 3) continue
+        tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
+        tCtx.beginPath()
+        tCtx.moveTo(patch.points[0][0], patch.points[0][1])
+        for (let i = 1; i < patch.points.length; i++) tCtx.lineTo(patch.points[i][0], patch.points[i][1])
+        tCtx.closePath()
+        tCtx.fill()
+        const texScale = terrainTextureScales[terrain] ?? 3
+        const patchPoly = [patch.points]
+        if (terrain === 'woods' && forestTexture) {
+          applyTextureOverlay(tCtx, forestTexture, patchPoly, R, texScale, 0)
+        } else if (terrain === 'light_woods' && lightWoodsTexture) {
+          applyTextureOverlay(tCtx, lightWoodsTexture, patchPoly, R, texScale, 0)
+        } else if (terrain === 'marsh' && marshTexture) {
+          applyTextureOverlay(tCtx, marshTexture, patchPoly, R, texScale, 0)
+        } else {
+          const extraTex = params.extraTextures.get(terrain)
+          if (extraTex) applyTextureOverlay(tCtx, extraTex, patchPoly, R, texScale, 0)
+        }
+      }
     }
 
     // ── 5. Lakes ──────────────────────────────────────────────────────────────
@@ -397,19 +435,20 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
         .map(p => ({ hex: { ...p.hex, terrain: 'lake' }, verts: p.verts }))
       if (ovLakeProjected.length === 0) continue
 
-      const ovSmooth        = override.smooth         ?? lakeBlobParams.smooth
-      const ovOffset        = override.offset         ?? lakeBlobParams.offset
-      const ovNoise         = override.bump           ?? lakeBlobParams.bump
-      const ovSweepFreq     = override.sweepFreq      ?? lakeBlobParams.sweepFreq
-      const ovLobeFreq      = override.lobeFreq       ?? lakeBlobParams.lobeFreq
-      const ovLobeAmp       = override.lobeAmp        ?? lakeBlobParams.lobeAmp
-      const ovLobeThreshold = override.lobeThreshold  ?? lakeBlobParams.lobeThreshold
-      const ovLobeDirection = override.lobeDirection  ?? lakeBlobParams.lobeDirection
+      const ovSmooth          = override.smooth          ?? lakeBlobParams.smooth
+      const ovOffset          = override.offset          ?? lakeBlobParams.offset
+      const ovNoise           = override.bump            ?? lakeBlobParams.bump
+      const ovSweepFreq       = override.sweepFreq       ?? lakeBlobParams.sweepFreq
+      const ovLobeFreq        = override.lobeFreq        ?? lakeBlobParams.lobeFreq
+      const ovLobeAmp         = override.lobeAmp         ?? lakeBlobParams.lobeAmp
+      const ovLobeThreshold   = override.lobeThreshold   ?? lakeBlobParams.lobeThreshold
+      const ovLobeDirection   = override.lobeDirection   ?? lakeBlobParams.lobeDirection
 
       const ovBlobs = buildTerrainBlobsV2(
         ovLakeProjected, ovSmooth, ovOffset, ovNoise,
         ovSweepFreq, ovLobeFreq, ovLobeAmp, ovLobeThreshold, ovLobeDirection, R,
       )
+      // Lakes intentionally omit clearing/satellite params — decorators on water would look odd.
       const ovPolys = ovBlobs.find(b => b.terrain === 'lake')?.polys ?? []
       drawLakePolys(ovPolys, override.color ?? lakeColor)
     }

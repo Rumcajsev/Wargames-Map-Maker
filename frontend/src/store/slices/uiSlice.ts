@@ -837,6 +837,11 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
       s.pageGrid = { colWidths: Array(cols).fill(pw), rowHeights: Array(rows).fill(ph) }
     }
   }
+  if (fromVersion < 56) {
+    if (s.terrainBlobClearingChance === undefined) s.terrainBlobClearingChance = 0
+    if (s.terrainBlobSatelliteChance === undefined) s.terrainBlobSatelliteChance = 0
+    if (s.terrainBlobPatchSize === undefined) s.terrainBlobPatchSize = 0.2
+  }
   return s
 }
 

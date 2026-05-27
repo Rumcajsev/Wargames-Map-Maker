@@ -67,6 +67,9 @@ export interface BlobOverride {
   lobeAmp?: number
   lobeThreshold?: number
   lobeDirection?: number
+  clearingChance?: number
+  satelliteChance?: number
+  patchSize?: number
   textureScale?: number
   enabled?: boolean
   width?: number
@@ -91,6 +94,13 @@ export type PaperSize = 'A4' | 'A3' | 'A2' | 'A1'
 export type Orientation = 'portrait' | 'landscape'
 export type HexOrientation = 'flat' | 'pointy'
 export type HexEdgeMode = 'whole' | 'half'
+
+export interface BlobPatch {
+  id: string
+  terrain: string
+  mode: 'add' | 'cut'
+  points: [number, number][]
+}
 
 export type ActiveTool =
   | { type: 'none' }
@@ -123,6 +133,7 @@ export type ActiveTool =
   | { type: 'areas-draw' }
   | { type: 'areas-erase' }
   | { type: 'align-image' }
+  | { type: 'blob-draw'; mode: 'add' | 'cut' }
 
 export type MapMode = 'single' | 'diptych'
 export type DiptychJoin = 'long' | 'short'
@@ -361,6 +372,9 @@ export const DEFAULT_TERRAIN_BLOB = {
   lobeAmp: 0.49,
   lobeThreshold: 0.08,
   lobeDirection: -1 as const,
+  clearingChance: 0,
+  satelliteChance: 0,
+  patchSize: 0.2,
 }
 
 export const DEFAULT_EDGE_BLOB = {
@@ -868,7 +882,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageOpacity: s.mapImageOpacity,
     mapTitle: s.mapTitle,
   }),
-  version: 55,
+  version: 56,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

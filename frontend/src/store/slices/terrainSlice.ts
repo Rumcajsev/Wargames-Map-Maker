@@ -1,6 +1,6 @@
 import type {
   MapStore, GeneratedHex, GridMetadata, GenerateProgress, BlobOverride,
-  ActiveTool, CustomTerrain,
+  ActiveTool, CustomTerrain, BlobPatch,
 } from '../mapStore'
 import {
   DEFAULT_THRESHOLDS,
@@ -28,6 +28,9 @@ export type TerrainSlice = {
   terrainBlobLobeAmp: number
   terrainBlobLobeThreshold: number
   terrainBlobLobeDirection: number
+  terrainBlobClearingChance: number
+  terrainBlobSatelliteChance: number
+  terrainBlobPatchSize: number
   realisticCoastline: boolean
   coastlineDebugRaw: boolean
   beachStrip: boolean
@@ -83,6 +86,8 @@ export type TerrainSlice = {
   lakeBlobLobeThreshold: number
   lakeBlobLobeDirection: number
   lakeOverrides: Record<string, BlobOverride>
+  // Blob patches (manual draw-to-add / draw-to-cut)
+  blobPatches: BlobPatch[]
   // Actions
   resetToSetup: () => void
   generateMap: () => Promise<void>
@@ -103,6 +108,9 @@ export type TerrainSlice = {
   setTerrainBlobLobeAmp: (v: number) => void
   setTerrainBlobLobeThreshold: (v: number) => void
   setTerrainBlobLobeDirection: (v: number) => void
+  setTerrainBlobClearingChance: (v: number) => void
+  setTerrainBlobSatelliteChance: (v: number) => void
+  setTerrainBlobPatchSize: (v: number) => void
   applyTerrainBlobPreset: (id: BlobPresetId) => void
   setRealisticCoastline: (v: boolean) => void
   setCoastlineDebugRaw: (v: boolean) => void
@@ -150,6 +158,8 @@ export type TerrainSlice = {
   setLakeBlobLobeThreshold: (v: number) => void
   setLakeBlobLobeDirection: (v: number) => void
   setLakeOverride: (key: string, override: BlobOverride | null) => void
+  addBlobPatch: (patch: BlobPatch) => void
+  deleteBlobPatch: (id: string) => void
 }
 
 import { TERRAIN_COLORS } from '../mapStore'
@@ -174,6 +184,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   terrainBlobLobeAmp: DEFAULT_TERRAIN_BLOB.lobeAmp,
   terrainBlobLobeThreshold: DEFAULT_TERRAIN_BLOB.lobeThreshold,
   terrainBlobLobeDirection: DEFAULT_TERRAIN_BLOB.lobeDirection,
+  terrainBlobClearingChance: DEFAULT_TERRAIN_BLOB.clearingChance,
+  terrainBlobSatelliteChance: DEFAULT_TERRAIN_BLOB.satelliteChance,
+  terrainBlobPatchSize: DEFAULT_TERRAIN_BLOB.patchSize,
   realisticCoastline: false,
   coastlineDebugRaw: false,
   beachStrip: false,
@@ -232,6 +245,8 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   lakeBlobLobeDirection: 1,
   lakeOverrides: {},
 
+  blobPatches: [],
+
   resetToSetup: () => set({
     step: 'setup',
     dataSource: 'osm',
@@ -287,6 +302,8 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     lakeOverrides: {},
     urbanHexes: [],
     excludedHexKeys: [],
+    disabledHexKeys: [],
+    autoDisabledOceanHexKeys: [],
     canalEdges: [],
     riverSegmentProps: {},
     canalSegmentProps: {},
@@ -303,12 +320,16 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     railSegmentProps: {},
     railHopProps: {},
     bridgeOverrides: {},
+    blobPatches: [],
     areas: [],
     areaHexes: {},
     iconOverlays: [],
     placedIcons: {},
     labelOverlays: [],
     placedLabels: {},
+    undoStack: [],
+    redoStack: [],
+    mapTitle: '',
     activePanel: 'terrain',
   }),
 
@@ -572,6 +593,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setTerrainBlobLobeAmp: (v) => set({ terrainBlobLobeAmp: v }),
   setTerrainBlobLobeThreshold: (v) => set({ terrainBlobLobeThreshold: v }),
   setTerrainBlobLobeDirection: (v) => set({ terrainBlobLobeDirection: v }),
+  setTerrainBlobClearingChance: (v) => set({ terrainBlobClearingChance: v }),
+  setTerrainBlobSatelliteChance: (v) => set({ terrainBlobSatelliteChance: v }),
+  setTerrainBlobPatchSize: (v) => set({ terrainBlobPatchSize: v }),
   applyTerrainBlobPreset: (id) => {
     const values = BLOB_PRESETS[id].values
     set({
@@ -583,6 +607,9 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
       terrainBlobLobeAmp: values.lobeAmp,
       terrainBlobLobeThreshold: values.lobeThreshold,
       terrainBlobLobeDirection: values.lobeDirection,
+      terrainBlobClearingChance: values.clearingChance,
+      terrainBlobSatelliteChance: values.satelliteChance,
+      terrainBlobPatchSize: values.patchSize,
     })
   },
   setRealisticCoastline: (v) => set({ realisticCoastline: v }),
@@ -699,4 +726,7 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
     }
     return { lakeOverrides: { ...s.lakeOverrides, [key]: cleaned } }
   }),
+
+  addBlobPatch: (patch) => set((s) => ({ blobPatches: [...s.blobPatches, patch] })),
+  deleteBlobPatch: (id) => set((s) => ({ blobPatches: s.blobPatches.filter(p => p.id !== id) })),
 })
