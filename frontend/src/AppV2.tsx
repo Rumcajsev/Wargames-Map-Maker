@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
+import { set as idbSet } from 'idb-keyval'
 import { useMapStore } from './store/mapStore'
 import { PresetsPanel } from './components/PresetsPanel'
 import { TerrainSidebar } from './components/TerrainSidebar'
@@ -10,11 +11,12 @@ import { AreasSidebar } from './components/AreasSidebar'
 import { ElevationSidebar } from './components/ElevationSidebar'
 import { TerrainViewCanvas, type TerrainViewCanvasHandle } from './components/TerrainViewCanvas'
 import { ImageAlignView } from './components/ImageAlignView'
-import { TK } from './theme'
+import { TK, TK_DARK } from './theme'
+import { ThemeContext } from './context/ThemeContext'
 import { EditorTopBar } from './components/v2/EditorTopBar'
-import { TerrainSidebarV2 } from './components/v2/TerrainSidebarV2'
-import { RoadsSidebarV2 } from './components/v2/RoadsSidebarV2'
-import { OverlaysSidebarV2 } from './components/v2/OverlaysSidebarV2'
+import { TerrainSidebarV3 } from './components/v2/TerrainSidebarV3'
+import { RoadsSidebarV3 } from './components/v2/RoadsSidebarV3'
+import { OverlaysSidebarV3 } from './components/v2/OverlaysSidebarV3'
 import { BottomDock } from './components/v2/BottomDock'
 import { SetupLandingPage } from './components/v2/SetupLandingPage'
 import { SetupWizard } from './components/v2/SetupWizard'
@@ -24,10 +26,20 @@ export function AppV2() {
   const canvasHandleRef = useRef<TerrainViewCanvasHandle>(null)
   const [presetsOpen, setPresetsOpen] = useState(false)
   const [screen, setScreen] = useState<'landing' | 'wizard' | 'editor'>('landing')
+  const [isDark, setIsDark] = useState(false)
 
   // If the store resets step to 'setup' while in the editor (e.g. mid-generation SSE flow),
   // treat it as wizard so the editor doesn't render against an empty store.
   const activeScreen = screen === 'editor' && step === 'setup' ? 'wizard' : screen
+
+  const captureAndStoreThumb = useCallback(() => {
+    // Give the canvas time to mount and draw before capturing
+    const timer = setTimeout(() => {
+      const dataUrl = canvasHandleRef.current?.captureThumb()
+      if (dataUrl) idbSet('hachure-thumb', dataUrl).catch(() => {})
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -74,8 +86,10 @@ export function AppV2() {
     return (
       <SetupLandingPage
         onNewMap={() => setScreen('wizard')}
-        onResume={() => setScreen('editor')}
+        onResume={() => { setScreen('editor'); captureAndStoreThumb() }}
         onLoadFile={() => { /* TODO: file load */ setScreen('editor') }}
+        isDark={isDark}
+        onToggleDark={() => setIsDark(d => !d)}
       />
     )
   }
@@ -84,52 +98,58 @@ export function AppV2() {
     return (
       <SetupWizard
         onCancel={() => setScreen('landing')}
-        onDone={() => setScreen('editor')}
+        onDone={() => { setScreen('editor'); captureAndStoreThumb() }}
+        isDark={isDark}
       />
     )
   }
 
   if (step === 'image-align') return <ImageAlignView />
 
-  const sidebar = activePanel === 'terrain'     ? <TerrainSidebarV2 />
+  const t = isDark ? TK_DARK : TK
+  const sidebar = activePanel === 'terrain'     ? <TerrainSidebarV3 />
     : activePanel === 'display'     ? <DisplaySidebar />
-    : activePanel === 'roads'       ? <RoadsSidebarV2 />
+    : activePanel === 'roads'       ? <RoadsSidebarV3 />
     : activePanel === 'rivers'      ? <RiversSidebarV2 />
     : activePanel === 'settlements' ? <SettlementsSidebar />
-    : activePanel === 'highlights'  ? <OverlaysSidebarV2 />
+    : activePanel === 'highlights'  ? <OverlaysSidebarV3 />
     : activePanel === 'areas'       ? <AreasSidebar />
     : activePanel === 'elevation'   ? <ElevationSidebar />
     : <TerrainSidebar />
 
+  const surroundColor = isDark ? '#2a2420' : '#B7B0A6'
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: TK.paper, fontFamily: TK.sans, color: TK.ink }}>
-      {presetsOpen && <PresetsPanel onClose={() => setPresetsOpen(false)} />}
+    <ThemeContext.Provider value={t}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: t.paper, fontFamily: t.sans, color: t.ink }}>
+        {presetsOpen && <PresetsPanel onClose={() => setPresetsOpen(false)} />}
 
-      <EditorTopBar onExportPDF={handleExportPDF} onGoHome={() => setScreen('landing')} />
+        <EditorTopBar onExportPDF={handleExportPDF} onGoHome={() => setScreen('landing')} />
 
-      {/* Progress bar */}
-      {generateStatus === 'loading' && generateProgress && (
-        <div style={{ height: 2, background: TK.paper2, flexShrink: 0 }}>
-          <div style={{ height: '100%', width: `${generateProgress.progress}%`, background: TK.rust, transition: 'width 0.25s ease' }} />
-        </div>
-      )}
-
-      {/* Canvas + floating sidebar */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        {/* Canvas fills the full area */}
-        <div style={{ width: '100%', height: '100%', display: 'flex' }}>
-          <TerrainViewCanvas ref={canvasHandleRef} surroundColor="#B7B0A6" />
-        </div>
-        {/* Sidebar floats over the canvas */}
-        <div style={{ position: 'absolute', top: 16, left: 16, bottom: 16, zIndex: 10, pointerEvents: 'none' }}>
-          <div style={{ pointerEvents: 'auto', height: '100%', boxShadow: '0 4px 24px rgba(0,0,0,0.13), 0 1px 6px rgba(0,0,0,0.07)' }}>
-            {sidebar}
+        {/* Progress bar */}
+        {generateStatus === 'loading' && generateProgress && (
+          <div style={{ height: 2, background: t.paper2, flexShrink: 0 }}>
+            <div style={{ height: '100%', width: `${generateProgress.progress}%`, background: t.rust, transition: 'width 0.25s ease' }} />
           </div>
-        </div>
+        )}
 
-        {/* Bottom dock */}
-        <BottomDock canvasRef={canvasHandleRef} />
+        {/* Canvas + floating sidebar */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {/* Canvas fills the full area */}
+          <div style={{ width: '100%', height: '100%', display: 'flex' }}>
+            <TerrainViewCanvas ref={canvasHandleRef} surroundColor={surroundColor} />
+          </div>
+          {/* Sidebar floats over the canvas */}
+          <div style={{ position: 'absolute', top: 16, left: 16, bottom: 16, zIndex: 10, pointerEvents: 'none' }}>
+            <div style={{ pointerEvents: 'auto', height: '100%', boxShadow: t.shadowFlyout }}>
+              {sidebar}
+            </div>
+          </div>
+
+          {/* Bottom dock */}
+          <BottomDock canvasRef={canvasHandleRef} />
+        </div>
       </div>
-    </div>
+    </ThemeContext.Provider>
   )
 }

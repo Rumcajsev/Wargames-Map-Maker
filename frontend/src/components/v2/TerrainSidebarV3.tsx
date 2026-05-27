@@ -10,17 +10,16 @@ import { useTheme } from '../../context/ThemeContext'
 import { shouldSuppressShortcut } from '../../lib/keyboard'
 import {
   BrushRow, ElevBrushRow, ToggleRow, ToggleSwitch, DashedAddBtn, MiniSlider, BigColorSwatch, tintBg,
+  STRIP_W, FLYOUT_W, StripShell, FlyoutShell, V2Divider, TriggerRow, TGap,
 } from './sidebar'
+import { TEXTURE_OPTIONS, DEFAULT_TERRAIN_TEXTURES } from '../../lib/terrainTextures'
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const STRIP_W = 154
-const FLYOUT_W = 232
 
 const OSM_TERRAINS   = [...TERRAIN_PRIORITY].filter(t => !MANUAL_ONLY_TERRAINS.has(t))
 const MANUAL_TERRAINS = [...TERRAIN_PRIORITY].filter(t => MANUAL_ONLY_TERRAINS.has(t))
 const SLIDER_TERRAINS = [...TERRAIN_PRIORITY].filter(t => t !== 'clear' && !MANUAL_ONLY_TERRAINS.has(t))
 
-const TEXTURED_TERRAINS = new Set(['clear', 'woods', 'light_woods', 'beach'])
 
 const ELEV_BRUSHES: { brush: 'flat' | 'hills' | 'mountains'; tier: 0 | 1 | 2; color: string; key: string }[] = [
   { brush: 'flat',      tier: 0, color: '#8a9a7a', key: 'Q' },
@@ -30,24 +29,6 @@ const ELEV_BRUSHES: { brush: 'flat' | 'hills' | 'mountains'; tier: 0 | 1 | 2; co
 
 const terrainLabel = (t: string) => t.replace(/_/g, ' ')
 
-// ── V3 strip primitives ────────────────────────────────────────────────────
-
-function V2Divider({ label }: { label: string }) {
-  const t = useTheme()
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 8px 3px' }}>
-      <div style={{ width: 6, height: 1, background: t.line, flexShrink: 0 }} />
-      <span style={{
-        fontFamily: t.mono, fontSize: 7.5, letterSpacing: 0.8,
-        color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap',
-      }}>
-        {label}
-      </span>
-      <div style={{ flex: 1, height: 1, background: t.line }} />
-    </div>
-  )
-}
-
 type FlyoutId =
   | 't-shape'
   | 't-import'
@@ -56,147 +37,6 @@ type FlyoutId =
   | 't-terrain'
   | 'blob-patches'
   | null
-
-function TriggerRow({
-  label, id, icon, active, onClick,
-}: {
-  label: string
-  id: FlyoutId
-  icon?: React.ReactNode
-  active: boolean
-  onClick: () => void
-}) {
-  const t = useTheme()
-  const [hov, setHov] = useState(false)
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        margin: '1px 5px', padding: '3px 6px',
-        width: 'calc(100% - 10px)',
-        background: active ? t.ink : hov ? t.paper2 : 'transparent',
-        border: `1px solid ${active ? t.ink : hov ? t.line : 'transparent'}`,
-        cursor: 'pointer',
-        transition: 'background 0.1s, border-color 0.1s',
-      }}
-    >
-      {icon && (
-        <span style={{
-          color: active ? 'rgba(251,249,244,0.7)' : t.inkFaint,
-          display: 'flex', alignItems: 'center',
-        }}>
-          {icon}
-        </span>
-      )}
-      <span style={{
-        flex: 1,
-        fontFamily: t.mono, fontSize: 8.5, letterSpacing: 0.4,
-        color: active ? t.surface : hov ? t.ink2 : t.inkFaint,
-        textAlign: 'left',
-      }}>
-        {label}
-      </span>
-      <svg width="6" height="6" viewBox="0 0 8 8" fill="none"
-        stroke={active ? 'rgba(251,249,244,0.4)' : t.inkFaint}
-        strokeWidth="1.4" strokeLinecap="round">
-        <path d="M3 1.5l2.5 2.5L3 6.5" />
-      </svg>
-    </button>
-  )
-}
-
-const TGap = () => <div style={{ height: 3 }} />
-
-function StripShell({ children }: { children: React.ReactNode }) {
-  const t = useTheme()
-  return (
-    <div style={{
-      width: STRIP_W,
-      height: '100%',
-      overflowY: 'auto',
-      overflowX: 'hidden',
-      background: t.surface,
-      borderRight: `1px solid ${t.line}`,
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-    }}>
-      {children}
-    </div>
-  )
-}
-
-// ── Flyout shell ────────────────────────────────────────────────────────────
-
-function FlyoutShell({
-  title, subtitle, onClose, children,
-}: {
-  title: string
-  subtitle?: string
-  onClose: () => void
-  children: React.ReactNode
-}) {
-  const t = useTheme()
-  return (
-    <div style={{
-      position: 'absolute',
-      top: 0,
-      left: STRIP_W,
-      width: FLYOUT_W,
-      maxHeight: '100%',
-      overflowY: 'auto',
-      background: t.surface,
-      borderTop: `1px solid ${t.line}`,
-      borderRight: `1px solid ${t.line}`,
-      borderBottom: `1px solid ${t.line}`,
-      borderLeft: `3px solid ${t.ink}`,
-      boxShadow: t.shadowFlyout,
-      zIndex: 20,
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      <div style={{
-        padding: '9px 12px 7px',
-        borderBottom: `1px solid ${t.line2}`,
-        display: 'flex', alignItems: 'flex-start', gap: 6,
-        flexShrink: 0,
-        position: 'sticky', top: 0, background: t.surface, zIndex: 1,
-      }}>
-        <div style={{ flex: 1 }}>
-          <div style={{
-            fontFamily: t.mono, fontSize: 9.5, fontWeight: 600,
-            letterSpacing: 0.5, color: t.ink,
-          }}>
-            {title}
-          </div>
-          {subtitle && (
-            <div style={{ fontFamily: t.sans, fontSize: 10, color: t.inkFaint, marginTop: 1 }}>
-              {subtitle}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: 2, color: t.inkFaint, display: 'flex', alignItems: 'center',
-          }}
-        >
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M2 2l6 6M8 2l-6 6" />
-          </svg>
-        </button>
-      </div>
-      <div style={{ padding: '6px 0 12px' }}>
-        {children}
-      </div>
-    </div>
-  )
-}
 
 // ── Flyout content: blob shape ──────────────────────────────────────────────
 
@@ -601,14 +441,22 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
   const {
     terrainColors, setTerrainColor,
     terrainTextureScales, setTerrainTextureScale,
+    terrainTextureBlendModes, setTerrainTextureBlendMode,
+    terrainTextureOpacities, setTerrainTextureOpacity,
+    terrainTextureFillOnly, setTerrainTextureFillOnly,
+    terrainTextureFile, setTerrainTextureFile,
     terrainTypeBlobStyles, setTerrainTypeBlobStyle,
     terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq,
     terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection,
   } = useMapStore()
 
   const color = terrainColors[terrain] ?? TERRAIN_COLORS[terrain] ?? '#888888'
-  const hasTexture = TEXTURED_TERRAINS.has(terrain)
+  const hasExplicitFile = terrain in terrainTextureFile
+  const textureFileId = hasExplicitFile ? (terrainTextureFile[terrain] ?? '') : (DEFAULT_TERRAIN_TEXTURES[terrain] ?? '')
   const textureScale = terrainTextureScales[terrain] ?? 3
+  const textureBlendMode: GlobalCompositeOperation = terrainTextureBlendModes[terrain] ?? 'multiply'
+  const textureOpacity = terrainTextureOpacities[terrain] ?? (terrain === 'clear' ? 0.3 : 0.6)
+  const fillOnly = terrainTextureFillOnly[terrain] ?? false
 
   const typeStyle = terrainTypeBlobStyles[terrain]
   const overrideEnabled = typeStyle?.enabled ?? false
@@ -679,10 +527,31 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
       {sectionLabel('Color')}
       <BigColorSwatch value={color} onChange={v => setTerrainColor(terrain, v)} groups={PALETTE_TERRAIN_GROUPS} />
 
-      {/* Texture scale */}
-      {hasTexture && (
-        <div style={{ borderTop: `1px solid ${tk.line2}`, paddingTop: 4 }}>
-          {sectionLabel('Texture')}
+      {/* Texture */}
+      <div style={{ borderTop: `1px solid ${tk.line2}`, paddingTop: 4 }}>
+        {sectionLabel('Texture')}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px' }}>
+          <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2, flexShrink: 0, width: 96 }}>File</span>
+          <select
+            value={textureFileId}
+            onChange={e => setTerrainTextureFile(terrain, e.target.value)}
+            style={{
+              flex: 1, background: tk.surface, color: tk.ink,
+              border: `1px solid ${tk.line}`, borderRadius: 2,
+              fontFamily: tk.mono, fontSize: 10, padding: '2px 4px', cursor: 'pointer',
+            }}
+          >
+            <option value="">None</option>
+            {TEXTURE_OPTIONS.map(({ id, label }) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+        </div>
+        {textureFileId && <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 14px' }}>
+            <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2 }}>Texture only</span>
+            <ToggleSwitch enabled={fillOnly} onChange={v => setTerrainTextureFillOnly(terrain, v)} />
+          </div>
           <MiniSlider
             label="Scale"
             display={`${textureScale.toFixed(1)}×`}
@@ -690,8 +559,34 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
             min={5} max={80} step={1}
             onChange={v => setTerrainTextureScale(terrain, v / 10)}
           />
-        </div>
-      )}
+          <MiniSlider
+            label="Opacity"
+            display={`${Math.round(textureOpacity * 100)}%`}
+            value={Math.round(textureOpacity * 100)}
+            min={0} max={100} step={1}
+            onChange={v => setTerrainTextureOpacity(terrain, v / 100)}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px' }}>
+            <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2, flexShrink: 0, width: 96 }}>Mode</span>
+            <select
+              value={textureBlendMode}
+              onChange={e => setTerrainTextureBlendMode(terrain, e.target.value as GlobalCompositeOperation | 'color')}
+              style={{
+                flex: 1, background: tk.surface, color: tk.ink,
+                border: `1px solid ${tk.line}`, borderRadius: 2,
+                fontFamily: tk.mono, fontSize: 10, padding: '2px 4px', cursor: 'pointer',
+              }}
+            >
+              <option value="multiply">Multiply</option>
+              <option value="overlay">Overlay</option>
+              <option value="screen">Screen</option>
+              <option value="darken">Darken</option>
+              <option value="soft-light">Soft Light</option>
+              <option value="color">Color</option>
+            </select>
+          </div>
+        </div>}
+      </div>
 
       {/* Blob shape override */}
       <div style={{ borderTop: `1px solid ${tk.line2}`, paddingTop: 4 }}>
@@ -725,10 +620,10 @@ function BlobEditFlyout({ onClose }: { onClose: () => void }) {
   return (
     <FlyoutShell title="Blob Edit" onClose={onClose}>
       <div style={{ padding: '6px 12px 4px', fontFamily: t.mono, fontSize: 9, color: t.inkFaint, lineHeight: 1.5 }}>
-        Draw polygons to extend or cut terrain blobs.
+        Draw freehand shapes to extend or cut terrain blobs.
         {activeTool.type === 'blob-draw' && (
           <span style={{ color: activeTool.mode === 'add' ? '#4a9a5a' : '#c04040' }}>
-            {' '}Click map to place vertices, Enter or first-point to close, Escape cancels.
+            {' '}Click and drag to draw. Release to smooth — click or Enter to commit, Escape to cancel.
           </span>
         )}
       </div>
@@ -876,9 +771,9 @@ export function TerrainSidebarV3() {
           />
         ))}
         <TGap />
-        <TriggerRow label="Shape settings" id="t-shape" active={flyout === 't-shape'} onClick={() => toggleFlyout('t-shape')} />
-        <TriggerRow label="Import / classify" id="t-import" active={flyout === 't-import'} onClick={() => toggleFlyout('t-import')} icon={IMPORT_ICON} />
-        <TriggerRow label="Painting options" id="t-opts" active={flyout === 't-opts'} onClick={() => toggleFlyout('t-opts')} />
+        <TriggerRow label="Shape settings" active={flyout === 't-shape'} onClick={() => toggleFlyout('t-shape')} />
+        <TriggerRow label="Import / classify" active={flyout === 't-import'} onClick={() => toggleFlyout('t-import')} icon={IMPORT_ICON} />
+        <TriggerRow label="Painting options" active={flyout === 't-opts'} onClick={() => toggleFlyout('t-opts')} />
 
         <V2Divider label="Terrain · manual" />
         {MANUAL_TERRAINS.map((t, idx) => (
@@ -928,7 +823,7 @@ export function TerrainSidebarV3() {
           />
         ))}
         <TGap />
-        <TriggerRow label="Import elevation" id="e-import" active={flyout === 'e-import'} onClick={() => toggleFlyout('e-import')} icon={IMPORT_ICON} />
+        <TriggerRow label="Import elevation" active={flyout === 'e-import'} onClick={() => toggleFlyout('e-import')} icon={IMPORT_ICON} />
 
         {mapStyle === 'historical_simple' && (
           <>
@@ -942,7 +837,6 @@ export function TerrainSidebarV3() {
         <V2Divider label="Blob edit" />
         <TriggerRow
           label={`Edit blobs${blobPatches.length > 0 ? ` · ${blobPatches.length}` : ''}`}
-          id="blob-patches"
           active={flyout === 'blob-patches' || activeTool.type === 'blob-draw'}
           onClick={() => toggleFlyout('blob-patches')}
         />

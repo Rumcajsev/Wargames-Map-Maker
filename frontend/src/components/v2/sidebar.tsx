@@ -1,9 +1,182 @@
 import { useRef, useState } from 'react'
-import { TK } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
+
+// ── Strip / flyout layout constants ──────────────────────────────────────────
+
+export const STRIP_W = 154
+export const FLYOUT_W = 232
+
+// ── StripShell ────────────────────────────────────────────────────────────────
+
+export function StripShell({ children }: { children: React.ReactNode }) {
+  const t = useTheme()
+  return (
+    <div style={{
+      width: STRIP_W,
+      height: '100%',
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      background: t.surface,
+      borderRight: `1px solid ${t.line}`,
+      display: 'flex',
+      flexDirection: 'column',
+      flexShrink: 0,
+    }}>
+      {children}
+    </div>
+  )
+}
+
+// ── FlyoutShell ───────────────────────────────────────────────────────────────
+
+export function FlyoutShell({
+  title, subtitle, onClose, onTitleChange, children,
+}: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  onTitleChange?: (v: string) => void
+  children: React.ReactNode
+}) {
+  const t = useTheme()
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      left: STRIP_W,
+      width: FLYOUT_W,
+      maxHeight: '100%',
+      overflowY: 'auto',
+      background: t.surface,
+      borderTop: `1px solid ${t.line}`,
+      borderRight: `1px solid ${t.line}`,
+      borderBottom: `1px solid ${t.line}`,
+      borderLeft: `3px solid ${t.ink}`,
+      boxShadow: t.shadowFlyout,
+      zIndex: 20,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <div style={{
+        padding: '9px 12px 7px',
+        borderBottom: `1px solid ${t.line2}`,
+        display: 'flex', alignItems: 'flex-start', gap: 6,
+        flexShrink: 0,
+        position: 'sticky', top: 0, background: t.surface, zIndex: 1,
+      }}>
+        <div style={{ flex: 1 }}>
+          {onTitleChange ? (
+            <input
+              value={title}
+              onChange={e => onTitleChange(e.target.value)}
+              style={{
+                fontFamily: t.mono, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.5, color: t.ink,
+                background: 'transparent', border: 'none', outline: 'none', padding: 0,
+                width: '100%',
+              }}
+            />
+          ) : (
+            <div style={{ fontFamily: t.mono, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.5, color: t.ink }}>
+              {title}
+            </div>
+          )}
+          {subtitle && (
+            <div style={{ fontFamily: t.sans, fontSize: 10, color: t.inkFaint, marginTop: 1 }}>
+              {subtitle}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: t.inkFaint, display: 'flex', alignItems: 'center' }}
+        >
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M2 2l6 6M8 2l-6 6" />
+          </svg>
+        </button>
+      </div>
+      <div style={{ padding: '6px 0 12px' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ── V2Divider ─────────────────────────────────────────────────────────────────
+
+export function V2Divider({ label }: { label: string }) {
+  const t = useTheme()
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 8px 3px' }}>
+      <div style={{ width: 6, height: 1, background: t.line, flexShrink: 0 }} />
+      <span style={{
+        fontFamily: t.mono, fontSize: 7.5, letterSpacing: 0.8,
+        color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600, whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: t.line }} />
+    </div>
+  )
+}
+
+// ── TriggerRow ────────────────────────────────────────────────────────────────
+
+export function TriggerRow({
+  label, icon, active, onClick,
+}: {
+  label: string
+  icon?: React.ReactNode
+  active: boolean
+  onClick: () => void
+}) {
+  const t = useTheme()
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        margin: '1px 5px', padding: '3px 6px',
+        width: 'calc(100% - 10px)',
+        background: active ? t.ink : hov ? t.paper2 : 'transparent',
+        border: `1px solid ${active ? t.ink : hov ? t.line : 'transparent'}`,
+        cursor: 'pointer',
+        transition: 'background 0.1s, border-color 0.1s',
+      }}
+    >
+      {icon && (
+        <span style={{ color: active ? 'rgba(251,249,244,0.7)' : t.inkFaint, display: 'flex', alignItems: 'center' }}>
+          {icon}
+        </span>
+      )}
+      <span style={{
+        flex: 1,
+        fontFamily: t.mono, fontSize: 8.5, letterSpacing: 0.4,
+        color: active ? t.surface : hov ? t.ink2 : t.inkFaint,
+        textAlign: 'left',
+      }}>
+        {label}
+      </span>
+      <svg width="6" height="6" viewBox="0 0 8 8" fill="none"
+        stroke={active ? 'rgba(251,249,244,0.4)' : t.inkFaint}
+        strokeWidth="1.4" strokeLinecap="round">
+        <path d="M3 1.5l2.5 2.5L3 6.5" />
+      </svg>
+    </button>
+  )
+}
+
+// ── TGap ──────────────────────────────────────────────────────────────────────
+
+export const TGap = () => <div style={{ height: 3 }} />
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export function tintBg(hex: string, opacity: number): string {
+  const t = useTheme()
   const r = parseInt(hex.slice(1, 3), 16)
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
@@ -13,14 +186,15 @@ export function tintBg(hex: string, opacity: number): string {
 // ── Shell ─────────────────────────────────────────────────────────────────────
 
 export function SidebarShell({ children }: { children: React.ReactNode }) {
+  const t = useTheme()
   return (
     <div style={{
-      width: TK.sidebarWidth,
+      width: t.sidebarWidth,
       height: '100%',
       overflowY: 'auto',
       overflowX: 'hidden',
-      background: TK.surface,
-      border: `1px solid ${TK.line}`,
+      background: t.surface,
+      border: `1px solid ${t.line}`,
       display: 'flex',
       flexDirection: 'column',
     }}>
@@ -32,12 +206,13 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
 // ── Header ────────────────────────────────────────────────────────────────────
 
 export function SidebarHeader({ title, count }: { title: string; count?: number }) {
+  const t = useTheme()
   return (
-    <div style={{ padding: '16px 14px 12px', borderBottom: `1px solid ${TK.line2}`, flexShrink: 0 }}>
+    <div style={{ padding: '16px 14px 12px', borderBottom: `1px solid ${t.line2}`, flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: TK.serif, fontSize: 22, fontWeight: 400, color: TK.ink }}>{title}</span>
+        <span style={{ fontFamily: t.serif, fontSize: 22, fontWeight: 400, color: t.ink }}>{title}</span>
         {count !== undefined && (
-          <span style={{ fontFamily: TK.mono, fontSize: 9.5, color: TK.inkFaint, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+          <span style={{ fontFamily: t.mono, fontSize: 9.5, color: t.inkFaint, letterSpacing: 0.8, textTransform: 'uppercase' }}>
             {count} brushes
           </span>
         )}
@@ -53,13 +228,14 @@ export function SidebarSection({
 }: {
   label: string; sub?: string; action?: React.ReactNode; children: React.ReactNode
 }) {
+  const t = useTheme()
   return (
-    <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+    <div style={{ borderTop: `1px solid ${t.line2}` }}>
       <div style={{ display: 'flex', alignItems: 'baseline', padding: '12px 14px 6px', gap: 6 }}>
-        <span style={{ fontFamily: TK.mono, fontSize: 9.5, letterSpacing: 1, color: TK.ink2, textTransform: 'uppercase', fontWeight: 600 }}>
+        <span style={{ fontFamily: t.mono, fontSize: 9.5, letterSpacing: 1, color: t.ink2, textTransform: 'uppercase', fontWeight: 600 }}>
           {label}
         </span>
-        {sub && <span style={{ fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint }}>· {sub}</span>}
+        {sub && <span style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint }}>· {sub}</span>}
         {action && <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{action}</div>}
       </div>
       <div style={{ padding: '0 0 10px' }}>
@@ -84,6 +260,7 @@ interface BrushRowProps {
 }
 
 export function BrushRow({ label, color, active, shortcut, showCog, cogOpen, onSelect, onCog, cogDataAttr }: BrushRowProps) {
+  const t = useTheme()
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -112,10 +289,10 @@ export function BrushRow({ label, color, active, shortcut, showCog, cogOpen, onS
 
       {/* Label */}
       <span style={{
-        fontFamily: TK.sans,
+        fontFamily: t.sans,
         fontSize: 12.5,
         fontWeight: active ? 600 : 500,
-        color: TK.ink,
+        color: t.ink,
         textTransform: 'capitalize',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -138,7 +315,7 @@ export function BrushRow({ label, color, active, shortcut, showCog, cogOpen, onS
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: cogOpen ? TK.rust : TK.inkFaint,
+            color: cogOpen ? t.rust : t.inkFaint,
             opacity: active || cogOpen || hovered ? 1 : 0,
             padding: 0,
           }}
@@ -153,15 +330,15 @@ export function BrushRow({ label, color, active, shortcut, showCog, cogOpen, onS
       {/* Shortcut badge */}
       {shortcut && (
         <span style={{
-          fontFamily: TK.mono,
+          fontFamily: t.mono,
           fontSize: 9.5,
-          color: active ? TK.ink : TK.inkFaint,
+          color: active ? t.ink : t.inkFaint,
           padding: '1px 5px',
-          borderTop: `1px solid ${active ? 'rgba(0,0,0,0.15)' : TK.line}`,
-          borderLeft: `1px solid ${active ? 'rgba(0,0,0,0.15)' : TK.line}`,
-          borderRight: `1px solid ${active ? 'rgba(0,0,0,0.15)' : TK.line}`,
+          borderTop: `1px solid ${active ? 'rgba(0,0,0,0.15)' : t.line}`,
+          borderLeft: `1px solid ${active ? 'rgba(0,0,0,0.15)' : t.line}`,
+          borderRight: `1px solid ${active ? 'rgba(0,0,0,0.15)' : t.line}`,
           borderBottom: `2px solid ${active ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.18)'}`,
-          background: TK.paper,
+          background: t.paper,
           minWidth: 16,
           textAlign: 'center',
           display: 'inline-block',
@@ -185,6 +362,7 @@ interface ElevBrushRowProps {
 }
 
 export function ElevBrushRow({ tier, label, color, active, shortcut, onSelect }: ElevBrushRowProps) {
+  const t = useTheme()
   return (
     <div
       onClick={onSelect}
@@ -206,19 +384,19 @@ export function ElevBrushRow({ tier, label, color, active, shortcut, onSelect }:
         {tier === 2 && <path d="M2 18 L10 4 L18 11 L24 5 L34 18 Z" fill={color} stroke="rgba(0,0,0,0.25)" strokeWidth="0.6" />}
       </svg>
 
-      <span style={{ fontFamily: TK.sans, fontSize: 12.5, fontWeight: active ? 600 : 500, color: TK.ink, textTransform: 'capitalize' }}>
+      <span style={{ fontFamily: t.sans, fontSize: 12.5, fontWeight: active ? 600 : 500, color: t.ink, textTransform: 'capitalize' }}>
         {label}
       </span>
 
       <span style={{
-        fontFamily: TK.mono, fontSize: 9.5,
-        color: active ? TK.ink : TK.inkFaint,
+        fontFamily: t.mono, fontSize: 9.5,
+        color: active ? t.ink : t.inkFaint,
         padding: '1px 5px',
-        borderTop: `1px solid ${active ? 'rgba(0,0,0,0.15)' : TK.line}`,
-        borderLeft: `1px solid ${active ? 'rgba(0,0,0,0.15)' : TK.line}`,
-        borderRight: `1px solid ${active ? 'rgba(0,0,0,0.15)' : TK.line}`,
+        borderTop: `1px solid ${active ? 'rgba(0,0,0,0.15)' : t.line}`,
+        borderLeft: `1px solid ${active ? 'rgba(0,0,0,0.15)' : t.line}`,
+        borderRight: `1px solid ${active ? 'rgba(0,0,0,0.15)' : t.line}`,
         borderBottom: `2px solid ${active ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.18)'}`,
-        background: TK.paper,
+        background: t.paper,
         minWidth: 16,
         textAlign: 'center',
         display: 'inline-block',
@@ -236,6 +414,7 @@ export function ToggleRow({
 }: {
   label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void
 }) {
+  const t = useTheme()
   return (
     <div
       onClick={() => onChange(!checked)}
@@ -246,21 +425,21 @@ export function ToggleRow({
         height: 14,
         marginTop: 1,
         flexShrink: 0,
-        background: checked ? TK.rust : 'transparent',
-        border: `1px solid ${checked ? TK.rust : TK.line}`,
+        background: checked ? t.rust : 'transparent',
+        border: `1px solid ${checked ? t.rust : t.line}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
         {checked && (
-          <svg width="9" height="7" viewBox="0 0 9 7" fill="none" stroke={TK.surface} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="9" height="7" viewBox="0 0 9 7" fill="none" stroke={t.surface} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M1 3.5l2.5 2.5L8 1" />
           </svg>
         )}
       </div>
       <div>
-        <div style={{ fontFamily: TK.sans, fontSize: 12, fontWeight: 500, color: TK.ink }}>{label}</div>
-        {hint && <div style={{ fontFamily: TK.sans, fontSize: 10.5, color: TK.inkMute, marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}
+        <div style={{ fontFamily: t.sans, fontSize: 12, fontWeight: 500, color: t.ink }}>{label}</div>
+        {hint && <div style={{ fontFamily: t.sans, fontSize: 10.5, color: t.inkMute, marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}
       </div>
     </div>
   )
@@ -273,6 +452,7 @@ export function FlyoutBtn({
 }: {
   label: string; isOpen: boolean; dataAttr?: string; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; disabled?: boolean
 }) {
+  const t = useTheme()
   return (
     <button
       {...(dataAttr ? { [dataAttr]: '' } : {})}
@@ -284,18 +464,18 @@ export function FlyoutBtn({
         alignItems: 'center',
         width: '100%',
         padding: '7px 14px',
-        background: isOpen ? TK.rustTint : 'transparent',
+        background: isOpen ? t.rustTint : 'transparent',
         border: 'none',
-        borderTop: `1px solid ${TK.line2}`,
+        borderTop: `1px solid ${t.line2}`,
         cursor: disabled ? 'default' : 'pointer',
-        fontFamily: TK.sans,
+        fontFamily: t.sans,
         fontSize: 12,
-        color: disabled ? TK.inkFaint : isOpen ? TK.rust : TK.ink2,
+        color: disabled ? t.inkFaint : isOpen ? t.rust : t.ink2,
         textAlign: 'left',
       }}
     >
       <span>{label}</span>
-      <span style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkFaint }}>›</span>
+      <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkFaint }}>›</span>
     </button>
   )
 }
@@ -303,6 +483,7 @@ export function FlyoutBtn({
 // ── DashedAddBtn ──────────────────────────────────────────────────────────────
 
 export function DashedAddBtn({ label, onClick, dataAttr }: { label: string; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; dataAttr?: string }) {
+  const t = useTheme()
   return (
     <button
       {...(dataAttr ? { [dataAttr]: '' } : {})}
@@ -315,12 +496,12 @@ export function DashedAddBtn({ label, onClick, dataAttr }: { label: string; onCl
         padding: '7px 12px',
         width: 'calc(100% - 20px)',
         background: 'transparent',
-        border: `1px dashed ${TK.line}`,
+        border: `1px dashed ${t.line}`,
         cursor: 'pointer',
-        fontFamily: TK.sans,
+        fontFamily: t.sans,
         fontSize: 11,
         fontWeight: 400,
-        color: TK.inkFaint,
+        color: t.inkFaint,
       }}
     >
       <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
@@ -334,7 +515,8 @@ export function DashedAddBtn({ label, onClick, dataAttr }: { label: string; onCl
 // ── SectionDivider ────────────────────────────────────────────────────────────
 
 export function SectionDivider() {
-  return <div style={{ height: 1, background: TK.line2, margin: '4px 0' }} />
+  const t = useTheme()
+  return <div style={{ height: 1, background: t.line2, margin: '4px 0' }} />
 }
 
 // ── SidebarDetailHeader ───────────────────────────────────────────────────────
@@ -348,10 +530,11 @@ export function SidebarDetailHeader({
   onReset?: () => void
   onTitleChange?: (v: string) => void
 }) {
+  const t = useTheme()
   return (
     <div style={{
       padding: '10px 14px',
-      borderBottom: `1px solid ${TK.line2}`,
+      borderBottom: `1px solid ${t.line2}`,
       flexShrink: 0,
       display: 'flex',
       alignItems: 'center',
@@ -362,28 +545,28 @@ export function SidebarDetailHeader({
         style={{
           display: 'flex', alignItems: 'center', gap: 5,
           background: 'none', border: 'none', cursor: 'pointer',
-          color: TK.inkMute, padding: 0, flexShrink: 0,
+          color: t.inkMute, padding: 0, flexShrink: 0,
         }}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6 2L3 5l3 3" />
         </svg>
-        <span style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' }}>Back</span>
+        <span style={{ fontFamily: t.mono, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' }}>Back</span>
       </button>
-      <div style={{ width: 1, height: 12, background: TK.line }} />
+      <div style={{ width: 1, height: 12, background: t.line }} />
       {onTitleChange ? (
         <input
           value={title}
           onChange={e => onTitleChange(e.target.value)}
           style={{
-            fontFamily: TK.serif, fontSize: 18, fontWeight: 400, color: TK.ink,
+            fontFamily: t.serif, fontSize: 18, fontWeight: 400, color: t.ink,
             background: 'transparent', border: 'none', outline: 'none',
             flex: 1, minWidth: 0, padding: 0,
           }}
         />
       ) : (
         <span style={{
-          fontFamily: TK.serif, fontSize: 18, fontWeight: 400, color: TK.ink,
+          fontFamily: t.serif, fontSize: 18, fontWeight: 400, color: t.ink,
           textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           flex: 1,
         }}>
@@ -393,8 +576,8 @@ export function SidebarDetailHeader({
       {status && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{
-            fontFamily: TK.mono, fontSize: 8.5, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600,
-            color: status === 'modified' ? TK.rust : TK.inkFaint,
+            fontFamily: t.mono, fontSize: 8.5, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600,
+            color: status === 'modified' ? t.rust : t.inkFaint,
           }}>
             {status}
           </span>
@@ -404,7 +587,7 @@ export function SidebarDetailHeader({
               title="Reset to defaults"
               style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                color: TK.inkMute, display: 'flex', alignItems: 'center',
+                color: t.inkMute, display: 'flex', alignItems: 'center',
               }}
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -421,13 +604,14 @@ export function SidebarDetailHeader({
 // ── DetailViewShell ───────────────────────────────────────────────────────────
 
 export function DetailViewShell({ header, children }: { header: React.ReactNode; children: React.ReactNode }) {
+  const t = useTheme()
   return (
     <div style={{
-      width: TK.sidebarWidth,
+      width: t.sidebarWidth,
       height: '100%',
       overflow: 'hidden',
-      background: TK.surface,
-      border: `1px solid ${TK.line}`,
+      background: t.surface,
+      border: `1px solid ${t.line}`,
       display: 'flex',
       flexDirection: 'column',
     }}>
@@ -442,12 +626,13 @@ export function DetailViewShell({ header, children }: { header: React.ReactNode;
 // ── ToggleSwitch ──────────────────────────────────────────────────────────────
 
 export function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  const t = useTheme()
   return (
     <button
       onClick={() => onChange(!enabled)}
       style={{
         width: 30, height: 16, flexShrink: 0,
-        background: enabled ? TK.ink : TK.line,
+        background: enabled ? t.ink : t.line,
         border: 'none', cursor: 'pointer', padding: 0,
         position: 'relative',
       }}
@@ -456,7 +641,7 @@ export function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange
         position: 'absolute',
         top: 3, left: enabled ? 15 : 3,
         width: 10, height: 10,
-        background: TK.surface,
+        background: t.surface,
         transition: 'left 0.12s ease',
       }} />
     </button>
@@ -475,12 +660,13 @@ export function DetailSection({
   action?: React.ReactNode
   preview?: React.ReactNode
 }) {
+  const t = useTheme()
   return (
-    <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+    <div style={{ borderTop: `1px solid ${t.line2}` }}>
       <div style={{
         position: 'sticky', top: 0, zIndex: 1,
-        background: TK.paper2,
-        borderBottom: `1px solid ${TK.line2}`,
+        background: t.paper2,
+        borderBottom: `1px solid ${t.line2}`,
         ...(preview ? { position: 'relative' as const } : {}),
       }}>
         {/* When there's a preview, it fills the header area and the label is overlaid */}
@@ -490,9 +676,9 @@ export function DetailSection({
           ...(preview ? { position: 'absolute' as const, top: 0, left: 0, right: 0 } : {}),
         }}>
           <span style={{
-            fontFamily: TK.mono, fontSize: 9.5, letterSpacing: 1, fontWeight: 600,
+            fontFamily: t.mono, fontSize: 9.5, letterSpacing: 1, fontWeight: 600,
             textTransform: 'uppercase',
-            color: toggle && !toggle.enabled ? TK.inkFaint : TK.ink2,
+            color: toggle && !toggle.enabled ? t.inkFaint : t.ink2,
           }}>
             {label}
           </span>
@@ -500,13 +686,13 @@ export function DetailSection({
           {toggle && <ToggleSwitch enabled={toggle.enabled} onChange={toggle.onChange} />}
         </div>
         {hint && !preview && (
-          <div style={{ padding: '0 14px 8px', fontFamily: TK.sans, fontSize: 11, color: TK.inkMute, lineHeight: 1.4 }}>
+          <div style={{ padding: '0 14px 8px', fontFamily: t.sans, fontSize: 11, color: t.inkMute, lineHeight: 1.4 }}>
             {hint}
           </div>
         )}
       </div>
       {(!toggle || toggle.enabled) && (
-        <div style={{ padding: '8px 0 16px', background: TK.surface }}>
+        <div style={{ padding: '8px 0 16px', background: t.surface }}>
           {children}
         </div>
       )}
@@ -525,9 +711,10 @@ export function MiniSlider({
   disabled?: boolean;
   accentColor?: string;
 }) {
+  const t = useTheme()
   const trackRef = useRef<HTMLDivElement>(null)
   const pct = Math.max(0, Math.min(1, (value - min) / (max - min)))
-  const fillColor = accentColor ?? TK.ink
+  const fillColor = accentColor ?? t.ink
 
   const compute = (clientX: number) => {
     const el = trackRef.current
@@ -541,24 +728,24 @@ export function MiniSlider({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', opacity: disabled ? 0.4 : 1 }}>
-      <span style={{ fontFamily: TK.sans, fontSize: 11, color: TK.ink2, flexShrink: 0, width: 96 }}>{label}</span>
+      <span style={{ fontFamily: t.sans, fontSize: 11, color: t.ink2, flexShrink: 0, width: 96 }}>{label}</span>
       <div
         onPointerDown={e => { if (disabled) return; e.currentTarget.setPointerCapture(e.pointerId); compute(e.clientX) }}
         onPointerMove={e => { if (disabled || e.buttons === 0) return; compute(e.clientX) }}
         style={{ flex: 1, padding: '6px 0', cursor: disabled ? 'default' : 'ew-resize', userSelect: 'none', touchAction: 'none' }}
       >
-        <div ref={trackRef} style={{ position: 'relative', height: 2, background: TK.line }}>
+        <div ref={trackRef} style={{ position: 'relative', height: 2, background: t.line }}>
           <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${pct * 100}%`, background: fillColor }} />
           <div style={{
             position: 'absolute', top: '50%', left: `${pct * 100}%`,
             transform: 'translate(-50%, -50%)',
             width: 12, height: 12,
-            background: TK.surface,
+            background: t.surface,
             border: `1.5px solid ${fillColor}`,
           }} />
         </div>
       </div>
-      <span style={{ fontFamily: TK.mono, fontSize: 10.5, color: TK.inkMute, flexShrink: 0, width: 34, textAlign: 'right' }}>{display}</span>
+      <span style={{ fontFamily: t.mono, fontSize: 10.5, color: t.inkMute, flexShrink: 0, width: 34, textAlign: 'right' }}>{display}</span>
     </div>
   )
 }
@@ -568,6 +755,7 @@ export function MiniSlider({
 type ColorGroup = { label: string; colors: readonly string[] }
 
 function SwatchBtn({ color, active, onClick }: { color: string; active: boolean; onClick: () => void }) {
+  const t = useTheme()
   return (
     <button
       onClick={onClick}
@@ -575,12 +763,12 @@ function SwatchBtn({ color, active, onClick }: { color: string; active: boolean;
       style={{
         width: 26, height: 26,
         background: color,
-        border: active ? `2px solid ${TK.paper}` : `1px solid rgba(0,0,0,0.14)`,
+        border: active ? `2px solid ${t.paper}` : `1px solid rgba(0,0,0,0.14)`,
         cursor: 'pointer',
         padding: 0,
         flexShrink: 0,
         boxSizing: 'border-box',
-        boxShadow: active ? `0 0 0 1.5px ${TK.ink}` : 'none',
+        boxShadow: active ? `0 0 0 1.5px ${t.ink}` : 'none',
         outline: 'none',
       }}
     />
@@ -594,6 +782,7 @@ export function BigColorSwatch({
   onChange: (color: string) => void
   groups: readonly ColorGroup[]
 }) {
+  const t = useTheme()
   const inputRef = useRef<HTMLInputElement>(null)
   const norm = (c: string) => c.toLowerCase()
   const paletteColors = groups.flatMap(g => g.colors)
@@ -649,7 +838,7 @@ export function BigColorSwatch({
           style={{
             width: 26, height: 26,
             background: 'transparent',
-            border: `1px dashed ${TK.ink2}`,
+            border: `1px dashed ${t.ink2}`,
             cursor: 'pointer',
             padding: 0,
             flexShrink: 0,
@@ -658,7 +847,7 @@ export function BigColorSwatch({
             outline: 'none',
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={TK.ink2} strokeWidth="1.4" strokeLinecap="round">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={t.ink2} strokeWidth="1.4" strokeLinecap="round">
             <path d="M5 1v8M1 5h8" />
           </svg>
         </button>
@@ -684,6 +873,7 @@ export function InlineColorSwatch({
   onChange: (color: string) => void
   palette: readonly string[]
 }) {
+  const t = useTheme()
   const inputRef = useRef<HTMLInputElement>(null)
   const norm = (c: string) => c.toLowerCase()
   const isCustom = !palette.some(c => norm(c) === norm(value))
@@ -703,7 +893,7 @@ export function InlineColorSwatch({
               border: `1px solid rgba(0,0,0,0.12)`,
               cursor: 'pointer', padding: 0, flexShrink: 0,
               boxSizing: 'border-box',
-              boxShadow: active ? `0 0 0 2px ${TK.surface}, 0 0 0 3.5px ${TK.ink}` : 'none',
+              boxShadow: active ? `0 0 0 2px ${t.surface}, 0 0 0 3.5px ${t.ink}` : 'none',
               outline: 'none',
             }}
           />
@@ -715,12 +905,12 @@ export function InlineColorSwatch({
         style={{
           width: 18, height: 18,
           background: isCustom ? value : 'transparent',
-          border: isCustom ? `1px solid rgba(0,0,0,0.12)` : `1px dashed ${TK.line}`,
+          border: isCustom ? `1px solid rgba(0,0,0,0.12)` : `1px dashed ${t.line}`,
           cursor: 'pointer', padding: 0, flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: TK.mono, fontSize: 10, color: TK.inkFaint,
+          fontFamily: t.mono, fontSize: 10, color: t.inkFaint,
           boxSizing: 'border-box',
-          boxShadow: isCustom ? `0 0 0 2px ${TK.surface}, 0 0 0 3.5px ${TK.ink}` : 'none',
+          boxShadow: isCustom ? `0 0 0 2px ${t.surface}, 0 0 0 3.5px ${t.ink}` : 'none',
           outline: 'none',
         }}
       >
@@ -746,6 +936,7 @@ export function SegmentedControl<T extends string>({
   value: T
   onChange: (v: T) => void
 }) {
+  const t = useTheme()
   return (
     <div style={{ display: 'flex' }}>
       {options.map((opt, i) => (
@@ -755,10 +946,10 @@ export function SegmentedControl<T extends string>({
           style={{
             flex: 1,
             padding: '4px 0',
-            fontFamily: TK.mono, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase',
-            background: value === opt.value ? TK.ink : 'transparent',
-            color: value === opt.value ? TK.surface : TK.inkMute,
-            border: `1px solid ${value === opt.value ? TK.ink : TK.line}`,
+            fontFamily: t.mono, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase',
+            background: value === opt.value ? t.ink : 'transparent',
+            color: value === opt.value ? t.surface : t.inkMute,
+            border: `1px solid ${value === opt.value ? t.ink : t.line}`,
             marginLeft: i > 0 ? -1 : 0,
             cursor: 'pointer',
             position: 'relative',
