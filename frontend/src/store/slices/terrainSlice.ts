@@ -43,6 +43,13 @@ export type TerrainSlice = {
   coastlineChaikinPasses: number
   terrainColors: Record<string, string>
   terrainTextureScales: Record<string, number>
+  terrainTextureBlendModes: Record<string, GlobalCompositeOperation | 'color' | 'color-bg'>
+  terrainTextureOpacities: Record<string, number>
+  terrainTextureTintColors: Record<string, string>
+  terrainTextureTintOpacities: Record<string, number>
+  terrainTextureFillOnly: Record<string, boolean>
+  terrainTextureFile: Record<string, string>
+  terrainTextureEnabled: Record<string, boolean>
   terrainBlobOverrides: Record<string, BlobOverride>
   terrainTypeBlobStyles: Record<string, BlobOverride>
   // Terrain render mode (field mode detached — see terrainBlobs.ts / drawTerrain.ts)
@@ -124,6 +131,13 @@ export type TerrainSlice = {
   setCoastlineChaikinPasses: (v: number) => void
   setTerrainColor: (terrain: string, color: string) => void
   setTerrainTextureScale: (terrain: string, scale: number) => void
+  setTerrainTextureBlendMode: (terrain: string, mode: GlobalCompositeOperation | 'color' | 'color-bg') => void
+  setTerrainTextureOpacity: (terrain: string, opacity: number) => void
+  setTerrainTextureTintColor: (terrain: string, color: string) => void
+  setTerrainTextureTintOpacity: (terrain: string, opacity: number) => void
+  setTerrainTextureFillOnly: (terrain: string, v: boolean) => void
+  setTerrainTextureFile: (terrain: string, fileId: string) => void
+  setTerrainTextureEnabled: (terrain: string, v: boolean) => void
   setTerrainBlobOverride: (key: string, override: BlobOverride | null) => void
   setTerrainTypeBlobStyle: (terrain: string, style: BlobOverride | null) => void
   setTerrainRenderMode: (v: 'blob') => void
@@ -199,6 +213,13 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   coastlineChaikinPasses: 2,
   terrainColors: { ...TERRAIN_COLORS },
   terrainTextureScales: { clear: 3, woods: 3, light_woods: 3 },
+  terrainTextureBlendModes: {},
+  terrainTextureOpacities: {},
+  terrainTextureTintColors: {},
+  terrainTextureTintOpacities: {},
+  terrainTextureFillOnly: {},
+  terrainTextureFile: {},
+  terrainTextureEnabled: {},
   terrainBlobOverrides: {},
   terrainTypeBlobStyles: {},
 
@@ -354,7 +375,76 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
       usedBearing = bearing
     }
 
-    set({ generateStatus: 'loading', generateError: null, generateProgress: null, generatedHexes: [], generatedMetadata: null })
+    set({
+      generateStatus: 'loading',
+      generateError: null,
+      generateProgress: null,
+      generatedHexes: [],
+      generatedMetadata: null,
+      // Clear all previous map content so a new map always starts clean
+      settlements: [],
+      settlementsStatus: 'idle',
+      settlementsError: null,
+      settlementLabelOverrides: {},
+      settlementEditMode: false,
+      settlementPlaceTarget: null,
+      settlementMoveIndex: null,
+      settlementPlaceTier: null,
+      rawRoadWays: [],
+      roadEdges: [],
+      roadsStatus: 'idle',
+      roadsError: null,
+      rawRailWays: [],
+      railEdges: [],
+      railsStatus: 'idle',
+      railsError: null,
+      riverEdges: [],
+      canalEdges: [],
+      riverSegmentProps: {},
+      canalSegmentProps: {},
+      riverChainOverrides: {},
+      riverHopProps: {},
+      roadChainOverrides: {},
+      roadControlOverrides: {},
+      roadSnapBindings: {},
+      roadSegmentProps: {},
+      roadHopProps: {},
+      railChainOverrides: {},
+      railControlOverrides: {},
+      railSnapBindings: {},
+      railSegmentProps: {},
+      railHopProps: {},
+      elevationStatus: 'idle',
+      elevationError: null,
+      elevationProgress: null,
+      highlights: [],
+      highlightedHexes: {},
+      highlightLines: {},
+      highlightEdgePaths: {},
+      highlightPaintMode: false,
+      highlightLineEraser: false,
+      areas: [],
+      areaHexes: {},
+      iconOverlays: [],
+      placedIcons: {},
+      labelOverlays: [],
+      placedLabels: {},
+      urbanHexes: [],
+      excludedHexKeys: [],
+      disabledHexKeys: [],
+      autoDisabledOceanHexKeys: [],
+      edgeBlobPainted: {},
+      edgeBlobOverrides: {},
+      terrainBlobOverrides: {},
+      lakeOverrides: {},
+      blobPatches: [],
+      bridgeOverrides: {},
+      undoStack: [],
+      redoStack: [],
+      mapTitle: '',
+      activeTool: { type: 'none' } as ActiveTool,
+      activePanel: 'terrain',
+    })
 
     const params = new URLSearchParams({
       center_lon: String(usedCenter[0]),
@@ -624,6 +714,13 @@ export const createTerrainSlice = (set: Set, get: () => MapStore): TerrainSlice 
   setCoastlineChaikinPasses: (v) => set({ coastlineChaikinPasses: v }),
   setTerrainColor: (terrain, color) => set((s) => ({ terrainColors: { ...s.terrainColors, [terrain]: color } })),
   setTerrainTextureScale: (terrain, scale) => set((s) => ({ terrainTextureScales: { ...s.terrainTextureScales, [terrain]: scale } })),
+  setTerrainTextureBlendMode: (terrain, mode) => set((s) => ({ terrainTextureBlendModes: { ...s.terrainTextureBlendModes, [terrain]: mode } })),
+  setTerrainTextureOpacity: (terrain, opacity) => set((s) => ({ terrainTextureOpacities: { ...s.terrainTextureOpacities, [terrain]: opacity } })),
+  setTerrainTextureTintColor: (terrain, color) => set((s) => ({ terrainTextureTintColors: { ...s.terrainTextureTintColors, [terrain]: color } })),
+  setTerrainTextureTintOpacity: (terrain, opacity) => set((s) => ({ terrainTextureTintOpacities: { ...s.terrainTextureTintOpacities, [terrain]: opacity } })),
+  setTerrainTextureFillOnly: (terrain, v) => set((s) => ({ terrainTextureFillOnly: { ...s.terrainTextureFillOnly, [terrain]: v } })),
+  setTerrainTextureFile: (terrain, fileId) => set((s) => ({ terrainTextureFile: { ...s.terrainTextureFile, [terrain]: fileId } })),
+  setTerrainTextureEnabled: (terrain, v) => set((s) => ({ terrainTextureEnabled: { ...s.terrainTextureEnabled, [terrain]: v } })),
 
   setTerrainBlobOverride: (key, override) => set((s) => {
     if (override === null) {

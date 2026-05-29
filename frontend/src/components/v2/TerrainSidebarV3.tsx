@@ -445,14 +445,17 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
     terrainTextureOpacities, setTerrainTextureOpacity,
     terrainTextureFillOnly, setTerrainTextureFillOnly,
     terrainTextureFile, setTerrainTextureFile,
+    terrainTextureEnabled, setTerrainTextureEnabled,
     terrainTypeBlobStyles, setTerrainTypeBlobStyle,
     terrainBlobSmooth, terrainBlobOffset, terrainBlobBump, terrainBlobSweepFreq,
     terrainBlobLobeFreq, terrainBlobLobeAmp, terrainBlobLobeThreshold, terrainBlobLobeDirection,
   } = useMapStore()
 
   const color = terrainColors[terrain] ?? TERRAIN_COLORS[terrain] ?? '#888888'
+  const hasDefaultTexture = terrain in DEFAULT_TERRAIN_TEXTURES
+  const textureEnabled = terrain in terrainTextureEnabled ? terrainTextureEnabled[terrain] : hasDefaultTexture
   const hasExplicitFile = terrain in terrainTextureFile
-  const textureFileId = hasExplicitFile ? (terrainTextureFile[terrain] ?? '') : (DEFAULT_TERRAIN_TEXTURES[terrain] ?? '')
+  const textureFileId = hasExplicitFile ? (terrainTextureFile[terrain] ?? '') : (DEFAULT_TERRAIN_TEXTURES[terrain] ?? TEXTURE_OPTIONS[0].id)
   const textureScale = terrainTextureScales[terrain] ?? 3
   const textureBlendMode: GlobalCompositeOperation = terrainTextureBlendModes[terrain] ?? 'multiply'
   const textureOpacity = terrainTextureOpacities[terrain] ?? (terrain === 'clear' ? 0.3 : 0.6)
@@ -529,25 +532,30 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
 
       {/* Texture */}
       <div style={{ borderTop: `1px solid ${tk.line2}`, paddingTop: 4 }}>
-        {sectionLabel('Texture')}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px' }}>
-          <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2, flexShrink: 0, width: 96 }}>File</span>
-          <select
-            value={textureFileId}
-            onChange={e => setTerrainTextureFile(terrain, e.target.value)}
-            style={{
-              flex: 1, background: tk.surface, color: tk.ink,
-              border: `1px solid ${tk.line}`, borderRadius: 2,
-              fontFamily: tk.mono, fontSize: 10, padding: '2px 4px', cursor: 'pointer',
-            }}
-          >
-            <option value="">None</option>
-            {TEXTURE_OPTIONS.map(({ id, label }) => (
-              <option key={id} value={id}>{label}</option>
-            ))}
-          </select>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px 6px' }}>
+          <span style={{ fontFamily: tk.mono, fontSize: 8.5, letterSpacing: 0.8, color: tk.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Texture</span>
+          <ToggleSwitch enabled={textureEnabled} onChange={v => {
+            setTerrainTextureEnabled(terrain, v)
+            if (v && !(terrain in terrainTextureFile) && !hasDefaultTexture) setTerrainTextureFile(terrain, TEXTURE_OPTIONS[0].id)
+          }} />
         </div>
-        {textureFileId && <div>
+        {textureEnabled && <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px' }}>
+            <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2, flexShrink: 0, width: 96 }}>File</span>
+            <select
+              value={textureFileId}
+              onChange={e => setTerrainTextureFile(terrain, e.target.value)}
+              style={{
+                flex: 1, background: tk.surface, color: tk.ink,
+                border: `1px solid ${tk.line}`, borderRadius: 2,
+                fontFamily: tk.mono, fontSize: 10, padding: '2px 4px', cursor: 'pointer',
+              }}
+            >
+              {TEXTURE_OPTIONS.map(({ id, label }) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </select>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 14px' }}>
             <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2 }}>Texture only</span>
             <ToggleSwitch enabled={fillOnly} onChange={v => setTerrainTextureFillOnly(terrain, v)} />
@@ -570,19 +578,21 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
             <span style={{ fontFamily: tk.sans, fontSize: 11, color: tk.ink2, flexShrink: 0, width: 96 }}>Mode</span>
             <select
               value={textureBlendMode}
-              onChange={e => setTerrainTextureBlendMode(terrain, e.target.value as GlobalCompositeOperation | 'color')}
+              onChange={e => setTerrainTextureBlendMode(terrain, e.target.value as GlobalCompositeOperation | 'color' | 'color-bg')}
               style={{
                 flex: 1, background: tk.surface, color: tk.ink,
                 border: `1px solid ${tk.line}`, borderRadius: 2,
                 fontFamily: tk.mono, fontSize: 10, padding: '2px 4px', cursor: 'pointer',
               }}
             >
+              <option value="color">Marks</option>
+              <option value="color-bg">Background</option>
+              <option disabled>──────────</option>
               <option value="multiply">Multiply</option>
               <option value="overlay">Overlay</option>
               <option value="screen">Screen</option>
               <option value="darken">Darken</option>
               <option value="soft-light">Soft Light</option>
-              <option value="color">Color</option>
             </select>
           </div>
         </div>}
@@ -591,7 +601,7 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
       {/* Blob shape override */}
       <div style={{ borderTop: `1px solid ${tk.line2}`, paddingTop: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px 6px' }}>
-          <span style={{ fontFamily: tk.mono, fontSize: 8.5, letterSpacing: 0.8, color: tk.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Blob shape</span>
+          <span style={{ fontFamily: tk.mono, fontSize: 8.5, letterSpacing: 0.8, color: tk.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Custom blob shape</span>
           <ToggleSwitch enabled={overrideEnabled} onChange={handleEnableToggle} />
         </div>
         <div style={{ opacity: overrideEnabled ? 1 : 0.35, pointerEvents: overrideEnabled ? 'auto' : 'none' }}>
