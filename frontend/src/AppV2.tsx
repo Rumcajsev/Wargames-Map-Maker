@@ -3,10 +3,9 @@ import { set as idbSet } from 'idb-keyval'
 import { useMapStore } from './store/mapStore'
 import { PresetsPanel } from './components/PresetsPanel'
 import { TerrainSidebar } from './components/TerrainSidebar'
-import { RiversSidebarV2 } from './components/v2/RiversSidebarV2'
-import { DisplaySidebar } from './components/DisplaySidebar'
-import { SettlementsSidebar } from './components/SettlementsSidebar'
-import { HighlightsSidebar } from './components/HighlightsSidebar'
+import { RiversSidebarV3 } from './components/v2/RiversSidebarV3'
+import { DisplaySidebarV3 } from './components/v2/DisplaySidebarV3'
+import { SettlementsSidebarV3 } from './components/v2/SettlementsSidebarV3'
 import { AreasSidebar } from './components/AreasSidebar'
 import { ElevationSidebar } from './components/ElevationSidebar'
 import { TerrainViewCanvas, type TerrainViewCanvasHandle } from './components/TerrainViewCanvas'
@@ -108,10 +107,10 @@ export function AppV2() {
 
   const t = isDark ? TK_DARK : TK
   const sidebar = activePanel === 'terrain'     ? <TerrainSidebarV3 />
-    : activePanel === 'display'     ? <DisplaySidebar />
+    : activePanel === 'display'     ? <DisplaySidebarV3 />
     : activePanel === 'roads'       ? <RoadsSidebarV3 />
-    : activePanel === 'rivers'      ? <RiversSidebarV2 />
-    : activePanel === 'settlements' ? <SettlementsSidebar />
+    : activePanel === 'rivers'      ? <RiversSidebarV3 />
+    : activePanel === 'settlements' ? <SettlementsSidebarV3 />
     : activePanel === 'highlights'  ? <OverlaysSidebarV3 />
     : activePanel === 'areas'       ? <AreasSidebar />
     : activePanel === 'elevation'   ? <ElevationSidebar />
