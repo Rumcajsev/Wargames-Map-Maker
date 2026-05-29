@@ -514,6 +514,12 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
     }
   }
 
+  const applyBlobPreset = (id: BlobPresetId) => {
+    const v = BLOB_PRESETS[id].values
+    setLocalBlob({ smooth: v.smooth, offset: v.offset, bump: v.bump, sweepFreq: v.sweepFreq, lobeFreq: v.lobeFreq, lobeAmp: v.lobeAmp, lobeThreshold: v.lobeThreshold, lobeDirection: v.lobeDirection })
+    setTerrainTypeBlobStyle(terrain, { smooth: v.smooth, offset: v.offset, bump: v.bump, sweepFreq: v.sweepFreq, lobeFreq: v.lobeFreq, lobeAmp: v.lobeAmp, lobeThreshold: v.lobeThreshold, lobeDirection: v.lobeDirection })
+  }
+
   const sectionLabel = (label: string) => (
     <div style={{ padding: '6px 12px 2px', fontFamily: tk.mono, fontSize: 8.5, letterSpacing: 0.8, color: tk.inkFaint, textTransform: 'uppercase' as const, fontWeight: 600 }}>
       {label}
@@ -605,6 +611,7 @@ function TerrainCogFlyout({ terrain, onClose }: { terrain: string; onClose: () =
           <ToggleSwitch enabled={overrideEnabled} onChange={handleEnableToggle} />
         </div>
         {overrideEnabled && <div>
+          <BlobPresetChips currentValues={local} onSelect={applyBlobPreset} />
           <MiniSlider label="Corner Rounding" display={local.smooth} value={local.smooth} min={0} max={5} step={1} onChange={v => setBlob('smooth', v)} />
           <MiniSlider label="Waviness" display={`${Math.round(local.bump * 100)}%`} value={Math.round(local.bump * 100)} min={0} max={60} step={1} onChange={v => setBlob('bump', v / 100)} />
           <MiniSlider label="Inset" display={`${local.offset > 0 ? '+' : ''}${Math.round(local.offset * 100)}%`} value={Math.round(local.offset * 100)} min={-80} max={30} step={1} onChange={v => setBlob('offset', v / 100)} />
