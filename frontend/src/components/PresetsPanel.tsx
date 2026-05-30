@@ -1,25 +1,48 @@
 import { useRef, useState, useEffect } from 'react'
 import { useMapStore } from '../store/mapStore'
+import { BUILTIN_PRESETS, BUILTIN_PALETTES, isPresetEdited, isPaletteEdited } from '../lib/stylePreset'
+import { useTheme } from '../context/ThemeContext'
 
 interface Props {
+  anchorRef: React.RefObject<HTMLElement>
   onClose: () => void
 }
 
-export function PresetsPanel({ onClose }: Props) {
-  const { userPresets, savePreset, loadPreset, deletePreset, exportPreset, importPresetData } = useMapStore()
+export function PresetsDropdown({ anchorRef, onClose }: Props) {
+  const t = useTheme()
+  const {
+    userPresets, activePresetId, activePaletteId,
+    savePreset, loadPreset, loadBuiltinPreset, loadBuiltinPalette,
+    deletePreset, exportPreset, importPresetData,
+  } = useMapStore()
+  const presetEdited = useMapStore(s => isPresetEdited(s, s.activePresetId))
+  const paletteEdited = useMapStore(s => isPaletteEdited(s, s.activePaletteId))
+
   const [saveName, setSaveName] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const anchorRect = anchorRef.current?.getBoundingClientRect()
+  const top = anchorRect ? anchorRect.bottom + 4 : 48
+  const left = anchorRect ? anchorRect.left : 0
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) onClose()
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        anchorRef.current && !anchorRef.current.contains(e.target as Node)
+      ) onClose()
     }
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
+    document.addEventListener('keydown', keyHandler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('keydown', keyHandler)
+    }
+  }, [anchorRef, onClose])
 
   const handleSave = () => {
     if (!saveName.trim()) return
@@ -31,6 +54,7 @@ export function PresetsPanel({ onClose }: Props) {
     loadPreset(id)
     setLoadedId(id)
     setTimeout(() => setLoadedId(null), 1500)
+    onClose()
   }
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,197 +76,211 @@ export function PresetsPanel({ onClose }: Props) {
     e.target.value = ''
   }
 
-  const sorted = [...userPresets].sort((a, b) => b.createdAt - a.createdAt)
+  const sortedUser = [...userPresets].sort((a, b) => b.createdAt - a.createdAt)
+
+  const divider = <div style={{ height: 1, background: t.line2, margin: '4px 0' }} />
+
+  const sectionTitle = (label: string) => (
+    <div style={{
+      padding: '8px 14px 4px',
+      fontSize: 10,
+      letterSpacing: 0.8,
+      color: t.inkFaint,
+      textTransform: 'uppercase',
+      fontFamily: t.mono,
+    }}>{label}</div>
+  )
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 1000,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'rgba(0,0,0,0.5)',
-    }}>
-      <div
-        ref={panelRef}
-        style={{
-          width: 360,
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#13141f',
-          border: '1px solid #2a2a4a',
-          borderRadius: 4,
-          fontFamily: 'ui-monospace, monospace',
-          fontSize: 12,
-          color: '#a0a0c0',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 14px',
-          borderBottom: '1px solid #2a2a4a',
-          flexShrink: 0,
-        }}>
-          <span style={{ color: '#d0d0f0', fontWeight: 700, letterSpacing: 1, fontSize: 11, textTransform: 'uppercase' }}>
-            Style Presets
-          </span>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#5a5a7a', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#5a5a7a')}
-          >
-            ×
-          </button>
-        </div>
+    <div
+      ref={dropdownRef}
+      style={{
+        position: 'fixed',
+        top,
+        left,
+        zIndex: 2000,
+        width: 280,
+        maxHeight: 'calc(100vh - 80px)',
+        display: 'flex',
+        flexDirection: 'column',
+        background: t.paper,
+        border: `1px solid ${t.line}`,
+        borderRadius: 4,
+        fontFamily: t.sans,
+        fontSize: 13,
+        color: t.ink,
+        boxShadow: t.shadowFlyout,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
 
-        {/* Preset list */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-          {sorted.length === 0 ? (
-            <div style={{ padding: '20px 14px', color: '#3a3a5a', textAlign: 'center', fontSize: 11 }}>
-              No saved presets yet.
-            </div>
-          ) : (
-            sorted.map(entry => (
-              <div
-                key={entry.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 14px',
-                  borderBottom: '1px solid #1e1f2e',
-                }}
-              >
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#c0c0e0' }}>
-                  {entry.name}
-                </span>
+        {/* ── Style presets ── */}
+        {sectionTitle('Style')}
+        {BUILTIN_PRESETS.map(preset => {
+          const isActive = activePresetId === preset.id
+          return (
+            <button
+              key={preset.id}
+              onClick={() => { loadBuiltinPreset(preset.id); onClose() }}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '7px 14px',
+                background: isActive ? t.rustTint : 'none',
+                border: 'none', borderBottom: `1px solid ${t.line2}`,
+                cursor: 'pointer', fontFamily: t.sans, fontSize: 13,
+                color: isActive ? t.rust : t.ink, textAlign: 'left',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = t.paper2 }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
+            >
+              <span style={{ fontWeight: isActive ? 600 : 400 }}>{preset.name}</span>
+              <span style={{ fontSize: 11, color: isActive ? t.rust : t.inkFaint }}>
+                {isActive && presetEdited ? 'edited' : isActive ? '✓' : ''}
+              </span>
+            </button>
+          )
+        })}
+
+        {activePresetId && presetEdited && (
+          <button
+            onClick={() => { loadBuiltinPreset(activePresetId); onClose() }}
+            style={{
+              display: 'block', width: '100%', padding: '5px 14px',
+              background: 'none', border: 'none', borderBottom: `1px solid ${t.line2}`,
+              color: t.inkMute, cursor: 'pointer', fontFamily: t.sans, fontSize: 11, textAlign: 'left',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = t.ink }}
+            onMouseLeave={e => { e.currentTarget.style.color = t.inkMute }}
+          >↺ Revert style to preset defaults</button>
+        )}
+
+        {divider}
+
+        {/* ── Colour palettes ── */}
+        {sectionTitle('Colour palette')}
+        {BUILTIN_PALETTES.map(palette => {
+          const isActive = activePaletteId === palette.id
+          return (
+            <button
+              key={palette.id}
+              onClick={() => { loadBuiltinPalette(palette.id); onClose() }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 14px',
+                background: isActive ? t.rustTint : 'none',
+                border: 'none', borderBottom: `1px solid ${t.line2}`,
+                cursor: 'pointer', fontFamily: t.sans, fontSize: 13,
+                color: isActive ? t.rust : t.ink, textAlign: 'left',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = t.paper2 }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'none' }}
+            >
+              {/* Swatch strip */}
+              <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                {palette.swatches.map((c, i) => (
+                  <div key={i} style={{ width: 12, height: 12, borderRadius: 2, background: c, border: `1px solid ${t.line}` }} />
+                ))}
+              </div>
+              <span style={{ flex: 1, fontWeight: isActive ? 600 : 400 }}>{palette.name}</span>
+              <span style={{ fontSize: 11, color: isActive ? t.rust : t.inkFaint }}>
+                {isActive && paletteEdited ? 'edited' : isActive ? '✓' : ''}
+              </span>
+            </button>
+          )
+        })}
+
+        {activePaletteId && paletteEdited && (
+          <button
+            onClick={() => { loadBuiltinPalette(activePaletteId); onClose() }}
+            style={{
+              display: 'block', width: '100%', padding: '5px 14px',
+              background: 'none', border: 'none', borderBottom: `1px solid ${t.line2}`,
+              color: t.inkMute, cursor: 'pointer', fontFamily: t.sans, fontSize: 11, textAlign: 'left',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = t.ink }}
+            onMouseLeave={e => { e.currentTarget.style.color = t.inkMute }}
+          >↺ Revert palette to defaults</button>
+        )}
+
+        {/* ── User presets ── */}
+        {sortedUser.length > 0 && (
+          <>
+            {divider}
+            {sectionTitle('My presets')}
+            {sortedUser.map(entry => (
+              <div key={entry.id} style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${t.line2}` }}>
                 <button
                   onClick={() => handleLoad(entry.id)}
-                  style={actionBtn(loadedId === entry.id ? 'green' : 'default')}
-                  onMouseEnter={e => { if (loadedId !== entry.id) e.currentTarget.style.color = '#a0a0c0' }}
-                  onMouseLeave={e => { if (loadedId !== entry.id) e.currentTarget.style.color = '#6a6a8a' }}
+                  style={{
+                    flex: 1, padding: '7px 14px', background: 'none', border: 'none',
+                    color: loadedId === entry.id ? t.rust : t.ink,
+                    cursor: 'pointer', fontFamily: t.sans, fontSize: 13, textAlign: 'left',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = t.paper2 }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
                 >
-                  {loadedId === entry.id ? '✓' : 'Load'}
+                  {loadedId === entry.id ? '✓ ' : ''}{entry.name}
                 </button>
-                <button
-                  onClick={() => exportPreset(entry.id)}
-                  style={actionBtn('default')}
-                  title="Export to file"
-                  onMouseEnter={e => (e.currentTarget.style.color = '#a0a0c0')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#6a6a8a')}
-                >
-                  ↓
-                </button>
-                <button
-                  onClick={() => deletePreset(entry.id)}
-                  style={actionBtn('danger')}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#e07070')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#6a4a4a')}
-                >
-                  ×
-                </button>
+                <button onClick={() => exportPreset(entry.id)} style={iconBtn(t)} title="Export">↓</button>
+                <button onClick={() => deletePreset(entry.id)} style={iconBtn(t)}>×</button>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </>
+        )}
+      </div>
 
-        {/* Save section */}
-        <div style={{ padding: '10px 14px', borderTop: '1px solid #2a2a4a', flexShrink: 0 }}>
-          <div style={{ fontSize: 10, letterSpacing: 1, color: '#4a4a6a', textTransform: 'uppercase', marginBottom: 6 }}>
-            Save current settings as
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              value={saveName}
-              onChange={e => setSaveName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-              placeholder="Preset name…"
-              style={{
-                flex: 1,
-                background: '#0e0f18',
-                border: '1px solid #2a2a4a',
-                borderRadius: 3,
-                color: '#c0c0e0',
-                fontFamily: 'inherit',
-                fontSize: 12,
-                padding: '4px 8px',
-                outline: 'none',
-              }}
-            />
-            <button
-              onClick={handleSave}
-              disabled={!saveName.trim()}
-              style={{
-                padding: '4px 12px',
-                background: saveName.trim() ? '#2a4a3a' : '#1a1a2a',
-                border: `1px solid ${saveName.trim() ? '#3a6a4a' : '#2a2a3a'}`,
-                borderRadius: 3,
-                color: saveName.trim() ? '#8ad0a0' : '#3a3a5a',
-                cursor: saveName.trim() ? 'pointer' : 'default',
-                fontFamily: 'inherit',
-                fontSize: 12,
-                flexShrink: 0,
-              }}
-            >
-              Save
-            </button>
-          </div>
+      {/* ── Save as ── */}
+      <div style={{ padding: '10px 14px', borderTop: `1px solid ${t.line}`, flexShrink: 0 }}>
+        <div style={{ fontSize: 10, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontFamily: t.mono, marginBottom: 6 }}>
+          Save current as
         </div>
-
-        {/* Import section */}
-        <div style={{ padding: '8px 14px 12px', borderTop: '1px solid #1e1f2e', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <input
-            ref={fileInputRef}
-            type="file"
-            accept=".ig2style,.json"
-            style={{ display: 'none' }}
-            onChange={handleImportFile}
+            value={saveName}
+            onChange={e => setSaveName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+            placeholder="Name…"
+            style={{
+              flex: 1, background: t.paper2, border: `1px solid ${t.line}`, borderRadius: 3,
+              color: t.ink, fontFamily: t.sans, fontSize: 12, padding: '5px 8px', outline: 'none',
+            }}
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleSave}
+            disabled={!saveName.trim()}
             style={{
-              width: '100%',
-              padding: '5px 0',
-              background: 'none',
-              border: '1px solid #2a2a4a',
-              borderRadius: 3,
-              color: '#5a5a7a',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: 11,
-              letterSpacing: 0.5,
+              padding: '5px 12px', borderRadius: 3, fontFamily: t.sans, fontSize: 12, flexShrink: 0,
+              background: saveName.trim() ? t.rust : t.paper2,
+              border: `1px solid ${saveName.trim() ? t.rust : t.line}`,
+              color: saveName.trim() ? '#fff' : t.inkFaint,
+              cursor: saveName.trim() ? 'pointer' : 'default',
             }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#a0a0c0'; e.currentTarget.style.borderColor = '#4a4a7a' }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#5a5a7a'; e.currentTarget.style.borderColor = '#2a2a4a' }}
-          >
-            Import from file…
-          </button>
-          {importError && (
-            <div style={{ marginTop: 6, color: '#e07070', fontSize: 10 }}>{importError}</div>
-          )}
+          >Save</button>
         </div>
+      </div>
+
+      {/* ── Import ── */}
+      <div style={{ padding: '5px 14px 10px', borderTop: `1px solid ${t.line2}`, flexShrink: 0 }}>
+        <input ref={fileInputRef} type="file" accept=".ig2style,.json" style={{ display: 'none' }} onChange={handleImportFile} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            width: '100%', padding: '5px 0', background: 'none', border: `1px solid ${t.line}`,
+            borderRadius: 3, color: t.inkMute, cursor: 'pointer', fontFamily: t.sans, fontSize: 11,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = t.ink; e.currentTarget.style.borderColor = t.inkMute }}
+          onMouseLeave={e => { e.currentTarget.style.color = t.inkMute; e.currentTarget.style.borderColor = t.line }}
+        >Import from file…</button>
+        {importError && <div style={{ marginTop: 5, color: t.rust, fontSize: 11 }}>{importError}</div>}
       </div>
     </div>
   )
 }
 
-function actionBtn(variant: 'default' | 'green' | 'danger'): React.CSSProperties {
-  const color = variant === 'green' ? '#6ad090' : variant === 'danger' ? '#6a4a4a' : '#6a6a8a'
+function iconBtn(t: ReturnType<typeof useTheme>): React.CSSProperties {
   return {
-    background: 'none',
-    border: 'none',
-    color,
-    cursor: 'pointer',
-    fontFamily: 'ui-monospace, monospace',
-    fontSize: 11,
-    padding: '2px 4px',
-    flexShrink: 0,
+    background: 'none', border: 'none', color: t.inkFaint, cursor: 'pointer',
+    fontFamily: t.sans, fontSize: 13, padding: '7px 8px', flexShrink: 0,
   }
 }

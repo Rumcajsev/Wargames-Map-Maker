@@ -1,7 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { set as idbSet } from 'idb-keyval'
 import { useMapStore } from './store/mapStore'
-import { PresetsPanel } from './components/PresetsPanel'
 import { TerrainSidebar } from './components/TerrainSidebar'
 import { RiversSidebarV3 } from './components/v2/RiversSidebarV3'
 import { DisplaySidebarV3 } from './components/v2/DisplaySidebarV3'
@@ -22,10 +21,9 @@ import { SetupLandingPage } from './components/v2/SetupLandingPage'
 import { SetupWizard } from './components/v2/SetupWizard'
 
 export function AppV2() {
-  const { step, activePanel, undo, redo, generateStatus, generateProgress } = useMapStore()
+  const { step, activePanel, undo, redo, generateStatus, generateProgress, uiScale } = useMapStore()
   const canvasHandleRef = useRef<TerrainViewCanvasHandle>(null)
-  const [presetsOpen, setPresetsOpen] = useState(false)
-  const [screen, setScreen] = useState<'landing' | 'wizard' | 'editor'>('landing')
+const [screen, setScreen] = useState<'landing' | 'wizard' | 'editor'>('landing')
   const [isDark, setIsDark] = useState(false)
 
   // If the store resets step to 'setup' while in the editor (e.g. mid-generation SSE flow),
@@ -122,8 +120,6 @@ export function AppV2() {
   return (
     <ThemeContext.Provider value={t}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: t.paper, fontFamily: t.sans, color: t.ink }}>
-        {presetsOpen && <PresetsPanel onClose={() => setPresetsOpen(false)} />}
-
         <EditorTopBar onExportPDF={handleExportPDF} onGoHome={() => setScreen('landing')} />
 
         {/* Progress bar */}
@@ -141,7 +137,7 @@ export function AppV2() {
           </div>
           {/* Sidebar floats over the canvas */}
           <div style={{ position: 'absolute', top: 16, left: 16, bottom: 16, zIndex: 10, pointerEvents: 'none' }}>
-            <div style={{ pointerEvents: 'auto', height: '100%', boxShadow: t.shadowFlyout }}>
+            <div style={{ pointerEvents: 'auto', height: '100%', boxShadow: t.shadowFlyout, zoom: uiScale }}>
               {sidebar}
             </div>
           </div>

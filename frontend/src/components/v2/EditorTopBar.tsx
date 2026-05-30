@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useCallback } from 'react'
 import { useMapStore } from '../../store/mapStore'
 import { useTheme } from '../../context/ThemeContext'
+import { PresetsDropdown } from '../PresetsPanel'
+import { BUILTIN_PRESET_MAP, BUILTIN_PALETTE_MAP, isPresetEdited, isPaletteEdited } from '../../lib/stylePreset'
 
 const TABS = [
   { id: 'terrain',     label: 'Terrain'     },
@@ -20,13 +22,17 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
     undoStack, redoStack, undo, redo,
     activePanel, setActivePanel,
     saveProject, restoreProject,
-    mapStyle, setMapStyle,
     mapTitle, setMapTitle,
+    activePresetId, activePaletteId,
   } = useMapStore()
+  const presetEdited = useMapStore(s => isPresetEdited(s, s.activePresetId))
+  const paletteEdited = useMapStore(s => isPaletteEdited(s, s.activePaletteId))
 
   const [exporting, setExporting] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [presetsOpen, setPresetsOpen] = useState(false)
+  const presetsBtnRef = useRef<HTMLButtonElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -70,7 +76,12 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0
 
+  const activePresetName = activePresetId ? (BUILTIN_PRESET_MAP[activePresetId]?.name ?? null) : null
+  const activePaletteName = activePaletteId ? (BUILTIN_PALETTE_MAP[activePaletteId]?.name ?? null) : null
+
   return (
+    <>
+    {presetsOpen && <PresetsDropdown anchorRef={presetsBtnRef} onClose={() => setPresetsOpen(false)} />}
     <div style={{
       height: t.topBarHeight,
       flexShrink: 0,
@@ -148,6 +159,33 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
             )}
           </>
         )}
+
+        {/* Preset chip — sits right after the title */}
+        <span style={{ color: t.line, fontSize: 12 }}>|</span>
+        <button
+          ref={presetsBtnRef}
+          onClick={() => setPresetsOpen(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            background: presetsOpen ? t.paper2 : 'none',
+            border: 'none', borderRadius: 3, padding: '3px 7px',
+            cursor: 'pointer', fontFamily: t.sans, fontSize: 12,
+            color: activePresetName ? t.ink2 : t.inkMute,
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => { if (!presetsOpen) e.currentTarget.style.background = t.paper2 }}
+          onMouseLeave={e => { if (!presetsOpen) e.currentTarget.style.background = 'none' }}
+        >
+          {activePresetName
+            ? <>
+                {activePresetName}
+                {activePaletteName && <span style={{ color: t.inkMute }}> · {activePaletteName}</span>}
+                {(presetEdited || paletteEdited) && <span style={{ color: t.rust, fontSize: 10 }}> (edited)</span>}
+              </>
+            : 'Preset'
+          }
+          <span style={{ color: t.inkFaint, fontSize: 10 }}>▾</span>
+        </button>
       </div>
 
       {/* Center: tabs */}
@@ -179,32 +217,8 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
         })}
       </div>
 
-      {/* Right: style switcher + save/load + undo/redo + PRINT */}
+      {/* Right: save/load + undo/redo + PRINT */}
       <div style={{ display: 'flex', alignItems: 'stretch', borderLeft: `1px solid ${t.line}`, flexShrink: 0 }}>
-        {/* Map style switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 10px' }}>
-          {(['standard', 'historical_simple'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setMapStyle(s)}
-              style={{
-                padding: '3px 9px',
-                background: mapStyle === s ? t.ink : 'transparent',
-                color: mapStyle === s ? t.paper : t.inkMute,
-                border: `1px solid ${mapStyle === s ? t.ink : t.line}`,
-                cursor: 'pointer',
-                fontFamily: t.mono,
-                fontSize: 9.5,
-                letterSpacing: 0.3,
-              }}
-            >
-              {s === 'standard' ? 'Standard' : 'Historical'}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ width: 1, background: t.line, margin: '8px 4px', flexShrink: 0 }} />
-
         {/* Save / Load */}
         <button onClick={saveProject} style={ghostBtnStyle(t)}>Save</button>
         <button onClick={() => fileInputRef.current?.click()} style={ghostBtnStyle(t)}>Load</button>
@@ -252,6 +266,7 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
         </button>
       </div>
     </div>
+    </>
   )
 }
 
