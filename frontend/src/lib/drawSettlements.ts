@@ -1,6 +1,8 @@
 /** Settlement icons and label placement rendering. Pure canvas — no React or store imports. */
 
 import type { Settlement, SettlementTierStyle } from '../store/mapStore'
+import type { LabelSpec } from './labelPresets'
+import { specToFont } from './labelPresets'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 type SettlementTier = 1 | 2 | 3 | 4
@@ -8,6 +10,12 @@ type SettlementTier = 1 | 2 | 3 | 4
 export type DrawSettlementsParams = {
   settlements: Settlement[]
   tierStyles: Record<SettlementTier, SettlementTierStyle>
+  labelSpecs: {
+    cityMajor: LabelSpec
+    cityMinor: LabelSpec
+    town: LabelSpec
+    village: LabelSpec
+  }
   roadChains: { chain: [number, number][] }[]
   railChains: { chain: [number, number][] }[]
   project: (lon: number, lat: number) => [number, number]
@@ -27,7 +35,7 @@ function closestPointOnSegment(
 }
 
 export function drawSettlements(sCtx: Ctx, {
-  settlements, tierStyles, roadChains, railChains, project, hexCenterOf, hexRadiusPx,
+  settlements, tierStyles, labelSpecs, roadChains, railChains, project, hexCenterOf, hexRadiusPx,
 }: DrawSettlementsParams) {
   const placed = settlements.filter(s => s.included && s.hex_q !== null)
 
@@ -108,12 +116,15 @@ export function drawSettlements(sCtx: Ctx, {
       if (ts.strokeWidth > 0) sCtx.stroke()
     }
 
-    const fontSize = Math.max(5, r * 1.8)
-    const weight = tier <= 2 ? 'bold ' : ''
-    const font = `${weight}${fontSize}px "Palatino Linotype", Palatino, Georgia, serif`
+    const tierSpecKey = tier === 1 ? 'cityMajor' : tier === 2 ? 'cityMinor' : tier === 3 ? 'town' : 'village'
+    const baseSpec = labelSpecs[tierSpecKey as keyof typeof labelSpecs]
+    const resolved: LabelSpec = s.labelOverride ? { ...baseSpec, ...s.labelOverride } : baseSpec
+    const basePx = r * 1.8
+    const font = specToFont(resolved, basePx)
     sCtx.font = font
-    const tw = sCtx.measureText(s.name).width
-    const th = fontSize
+    const label = resolved.uppercase ? s.name.toUpperCase() : s.name
+    const tw = sCtx.measureText(label).width
+    const th = basePx
 
     const gap = (ts.displayMode === 'icon' ? r : 0) + 3
 
@@ -143,10 +154,15 @@ export function drawSettlements(sCtx: Ctx, {
     }
 
     placedBoxes.push([best.bx, best.by, tw, th])
-    sCtx.fillStyle = '#111111'
+    sCtx.fillStyle = resolved.color
     sCtx.font = font
     sCtx.textAlign = best.align
     sCtx.textBaseline = best.base
-    sCtx.fillText(s.name, best.x, best.y)
+    if (resolved.letterSpacing > 0) {
+      sCtx.save()
+      ;(sCtx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${resolved.letterSpacing}em`
+    }
+    sCtx.fillText(label, best.x, best.y)
+    if (resolved.letterSpacing > 0) sCtx.restore()
   }
 }

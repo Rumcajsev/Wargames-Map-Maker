@@ -19,6 +19,7 @@ import { type MegaHexSlice, createMegaHexSlice } from './slices/megaHexSlice'
 import { type AreasSlice, createAreasSlice } from './slices/areasSlice'
 import { type PresetsSlice, createPresetsSlice } from './slices/presetsSlice'
 import { type MapImageSlice, createMapImageSlice } from './slices/mapImageSlice'
+import type { LabelSpec } from '../lib/labelPresets'
 
 export interface RoadGeomOverride {
   wiggleAmp: number
@@ -505,6 +506,7 @@ export interface Settlement {
   included: boolean
   isCustom?: boolean
   tier?: SettlementTier
+  labelOverride?: Partial<LabelSpec>
 }
 
 export interface IconOverlay {
@@ -882,7 +884,7 @@ export const useMapStore = create<MapStore>()(persist((set, get) => ({
     mapImageOpacity: s.mapImageOpacity,
     mapTitle: s.mapTitle,
   }),
-  version: 59,
+  version: 61,
   migrate: migratePersisted,
   merge: (persisted, current) => rehydrateState({ ...current, ...(persisted as Partial<MapStore>) }),
 }))

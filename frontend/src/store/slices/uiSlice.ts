@@ -86,6 +86,8 @@ export type UiSlice = {
   resetDisabledHexes: () => void
   autoDisableOceanHexes: () => void
   setAutoDisabledOceanHexKeys: (keys: string[]) => void
+  uiScale: 0.8 | 1.0 | 1.25
+  setUiScale: (v: 0.8 | 1.0 | 1.25) => void
   mapTitle: string
   setMapTitle: (v: string) => void
   mapStyle: 'standard' | 'historical_simple'
@@ -114,6 +116,8 @@ export const createUiSlice = (set: Set, get: () => MapStore): UiSlice => ({
   urbanHexes: [],
   urbanStyle: { ...DEFAULT_URBAN_STYLE },
   urbanPaintMode: null,
+  uiScale: 1.0,
+  setUiScale: (v) => set({ uiScale: v }),
   mapTitle: '',
   setMapTitle: (v) => set({ mapTitle: v }),
   mapStyle: 'standard',
@@ -847,6 +851,16 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (!s.hillshadeDisabledElevClasses) s.hillshadeDisabledElevClasses = []
     if (!s.contourDisabledTerrains) s.contourDisabledTerrains = []
     if (!s.contourDisabledElevClasses) s.contourDisabledElevClasses = []
+  }
+  if (fromVersion < 60) {
+    if (s.uiScale === undefined) s.uiScale = 1.0
+  }
+  if (fromVersion < 61) {
+    delete s.settlementLabelFont
+    delete s.settlementLabelColor
+    delete s.settlementLabelSizeScale
+    if (s.labelPresetId === undefined) s.labelPresetId = 'ibm_hybrid'
+    if (s.labelOverrides === undefined) s.labelOverrides = {}
   }
   return s
 }

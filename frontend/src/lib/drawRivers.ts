@@ -2,6 +2,8 @@
 
 import type { RiverStyleConfig } from '../store/mapStore'
 import { riverSmooth, applyWobble, drawVariableWidthStroke } from './riverChains'
+import type { LabelSpec } from './labelPresets'
+import { specToFont } from './labelPresets'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -14,6 +16,8 @@ export type ChainEntry = {
   hopKeys?: string[]
   hopRanges?: [number, number][]
 }
+
+export type RiverLabelEntry = { name: string; coords: [number, number][] }
 
 export type DrawRiversParams = {
   riverChainData: ChainEntry[]
@@ -34,6 +38,9 @@ export type DrawRiversParams = {
   wobbleDetail: number
   R: number
   project: (lon: number, lat: number) => [number, number]
+  showRiverLabels?: boolean
+  riverLabelData?: RiverLabelEntry[]
+  waterLabelSpec?: LabelSpec
 }
 
 function makeSegHalfWidths(segProps: SegProps, baseHW: number) {
@@ -188,6 +195,87 @@ function drawRiverLayer(
   }
 }
 
+function drawRiverLabels(
+  rCtx: Ctx,
+  labelData: RiverLabelEntry[],
+  spec: LabelSpec,
+  project: (lon: number, lat: number) => [number, number],
+) {
+  const basePx = 9
+  rCtx.save()
+  rCtx.font = specToFont(spec, basePx)
+  rCtx.textAlign = 'center'
+  rCtx.textBaseline = 'middle'
+
+  const seen = new Set<string>()
+
+  for (const { name, coords } of labelData) {
+    if (!name || seen.has(name)) continue
+
+    const pts = coords.map(([lon, lat]) => project(lon, lat))
+    if (pts.length < 2) continue
+
+    // Total arc length
+    let totalLen = 0
+    const segLens: number[] = []
+    for (let i = 1; i < pts.length; i++) {
+      const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+      segLens.push(d)
+      totalLen += d
+    }
+
+    const tw = rCtx.measureText(name).width
+    if (totalLen < tw * 1.5) continue  // chain too short to label
+
+    // Anchor at arc midpoint
+    let target = totalLen * 0.5
+    let ax = pts[0][0], ay = pts[0][1]
+    let angleIdx = 0
+    for (let i = 0; i < segLens.length; i++) {
+      if (target <= segLens[i]) {
+        const t = target / segLens[i]
+        ax = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t
+        ay = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t
+        angleIdx = i
+        break
+      }
+      target -= segLens[i]
+    }
+
+    // Average tangent over middle third
+    const lo = totalLen * 0.33, hi = totalLen * 0.66
+    let sumX = 0, sumY = 0, acc = 0
+    for (let i = 0; i < segLens.length; i++) {
+      const s = acc, e = acc + segLens[i]
+      if (e > lo && s < hi) {
+        const dx = pts[i + 1][0] - pts[i][0]
+        const dy = pts[i + 1][1] - pts[i][1]
+        const w = Math.min(e, hi) - Math.max(s, lo)
+        sumX += dx * w; sumY += dy * w
+      }
+      acc = e
+    }
+    let angle = Math.atan2(sumY, sumX)
+    // Keep text readable — flip if pointing left
+    if (angle < -Math.PI / 2 || angle > Math.PI / 2) angle += Math.PI
+
+    const label = spec.uppercase ? name.toUpperCase() : name
+    seen.add(name)
+
+    rCtx.save()
+    rCtx.translate(ax, ay)
+    rCtx.rotate(angle)
+    rCtx.strokeStyle = 'rgba(255,255,255,0.7)'
+    rCtx.lineWidth = 2.5
+    rCtx.strokeText(label, 0, 0)
+    rCtx.fillStyle = spec.color
+    rCtx.fillText(label, 0, 0)
+    rCtx.restore()
+  }
+
+  rCtx.restore()
+}
+
 export function drawRivers(rCtx: Ctx, params: DrawRiversParams) {
   const {
     riverChainData, canalChainData,
@@ -198,6 +286,7 @@ export function drawRivers(rCtx: Ctx, params: DrawRiversParams) {
     lakeProjCenters, smoothPasses, wobbleBroad, wobbleDetail, R,
     riverHopProps, selectedHopKey,
     project,
+    showRiverLabels, riverLabelData, waterLabelSpec,
   } = params
 
   drawRiverLayer(rCtx, canalChainData, canalSegProps, canalStyle, selectedCanalKeys,
@@ -205,4 +294,8 @@ export function drawRivers(rCtx: Ctx, params: DrawRiversParams) {
 
   drawRiverLayer(rCtx, riverChainData, riverSegProps, riverStyle, selectedRiverKeys,
     selectedHopKey, riverBaseHW, true, lakeProjCenters, R, smoothPasses, wobbleBroad, wobbleDetail, riverHopProps, project)
+
+  if (showRiverLabels && riverLabelData && riverLabelData.length > 0 && waterLabelSpec) {
+    drawRiverLabels(rCtx, riverLabelData, waterLabelSpec, project)
+  }
 }

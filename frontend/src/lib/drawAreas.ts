@@ -3,6 +3,8 @@
 
 import type { MapArea, AreasStyle, GeneratedHex } from '../store/mapStore'
 import { resampleClosed, gaussianSmoothClosed } from './drawHighlights'
+import type { LabelSpec } from './labelPresets'
+import { specToFont } from './labelPresets'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -16,6 +18,7 @@ export type DrawAreasParams = {
   inMargin: (verts: [number, number][]) => boolean
   R: number
   style: AreasStyle
+  terrainLabelSpec?: LabelSpec
   lineScale?: number
 }
 
@@ -192,16 +195,19 @@ export function drawAreas(ctx: Ctx, {
 
     const ptSize = Math.max(8, R * 0.28 * style.labelSize) * ls
     ctx.save()
-    ctx.font = `italic ${ptSize}px "Palatino Linotype", Palatino, Georgia, serif`
+    if (terrainLabelSpec) {
+      ctx.font = specToFont(terrainLabelSpec, ptSize / terrainLabelSpec.sizeScale)
+    } else {
+      ctx.font = `italic ${ptSize}px "Palatino Linotype", Palatino, Georgia, serif`
+    }
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    // Halo
+    const label = terrainLabelSpec?.uppercase ? area.name.toUpperCase() : area.name
     ctx.strokeStyle = 'rgba(255,255,255,0.75)'
     ctx.lineWidth = 3 * ls
-    ctx.strokeText(area.name, lx, ly)
-    // Fill — label color stays per-area for visual variety
+    ctx.strokeText(label, lx, ly)
     ctx.fillStyle = area.color
-    ctx.fillText(area.name, lx, ly)
+    ctx.fillText(label, lx, ly)
     ctx.restore()
   }
 

@@ -3,6 +3,8 @@ import type {
 } from '../mapStore'
 import { DEFAULT_SETTLEMENT_TIER_STYLES } from '../mapStore'
 import { pointInPolygon } from '../../lib/geometry'
+import type { LabelCategory, LabelSpec } from '../../lib/labelPresets'
+import { DEFAULT_LABEL_PRESET_ID } from '../../lib/labelPresets'
 
 export type SettlementsSlice = {
   settlements: Settlement[]
@@ -13,9 +15,8 @@ export type SettlementsSlice = {
   settlementTierThresholds: [number, number, number]
   settlementsAutoPlace: number
   showSettlementLabels: boolean
-  settlementLabelFont: 'classic' | 'antique' | 'modern'
-  settlementLabelColor: string
-  settlementLabelSizeScale: number
+  labelPresetId: string
+  labelOverrides: Partial<Record<LabelCategory, Partial<LabelSpec>>>
   settlementLabelOverrides: Record<number, { hidden?: boolean; dx?: number; dy?: number }>
   settlementEditMode: boolean
   settlementPlaceTarget: { q: number; r: number; vertices: [number, number][] } | null
@@ -38,9 +39,10 @@ export type SettlementsSlice = {
   placeSettlementAtHex: (hexQ: number, hexR: number, vertices: [number, number][], center: [number, number], tier: SettlementTier) => void
   lookupSettlementsInHex: (vertices: [number, number][]) => Promise<Settlement[]>
   setShowSettlementLabels: (v: boolean) => void
-  setSettlementLabelFont: (v: 'classic' | 'antique' | 'modern') => void
-  setSettlementLabelColor: (v: string) => void
-  setSettlementLabelSizeScale: (v: number) => void
+  setLabelPresetId: (v: string) => void
+  setLabelCategoryOverride: (cat: LabelCategory, patch: Partial<LabelSpec>) => void
+  resetLabelCategoryOverride: (cat: LabelCategory) => void
+  resetAllLabelOverrides: () => void
   setSettlementLabelOverride: (index: number, override: { hidden?: boolean; dx?: number; dy?: number }) => void
   resetSettlementLabelOverride: (index: number) => void
   setSettlementEditMode: (v: boolean) => void
@@ -61,9 +63,8 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
   settlementTierThresholds: [50000, 10000, 2000],
   settlementsAutoPlace: 5,
   showSettlementLabels: true,
-  settlementLabelFont: 'classic',
-  settlementLabelColor: '#1a1008',
-  settlementLabelSizeScale: 1.0,
+  labelPresetId: DEFAULT_LABEL_PRESET_ID,
+  labelOverrides: {},
   settlementLabelOverrides: {},
   settlementEditMode: false,
   settlementPlaceTarget: null,
@@ -80,9 +81,16 @@ export const createSettlementsSlice = (set: Set, get: () => MapStore): Settlemen
     set({ settlements: settlements.filter((s) => s.isCustom), settlementsStatus: 'idle', settlementsError: null })
   },
   setShowSettlementLabels: (v) => set({ showSettlementLabels: v }),
-  setSettlementLabelFont: (v) => set({ settlementLabelFont: v }),
-  setSettlementLabelColor: (v) => set({ settlementLabelColor: v }),
-  setSettlementLabelSizeScale: (v) => set({ settlementLabelSizeScale: v }),
+  setLabelPresetId: (v) => set({ labelPresetId: v }),
+  setLabelCategoryOverride: (cat, patch) => {
+    const prev = get().labelOverrides
+    set({ labelOverrides: { ...prev, [cat]: { ...(prev[cat] ?? {}), ...patch } } })
+  },
+  resetLabelCategoryOverride: (cat) => {
+    const { [cat]: _, ...rest } = get().labelOverrides
+    set({ labelOverrides: rest })
+  },
+  resetAllLabelOverrides: () => set({ labelOverrides: {} }),
   setSettlementLabelOverride: (index, override) => {
     const prev = get().settlementLabelOverrides
     set({ settlementLabelOverrides: { ...prev, [index]: { ...prev[index], ...override } } })

@@ -13,6 +13,8 @@ import {
   BrushRow, MiniSlider, InlineColorSwatch, SegmentedControl,
   StripShell, FlyoutShell, V2Divider, TriggerRow, TGap,
 } from './sidebar'
+import { resolveLabels } from '../../lib/labelPresets'
+import type { LabelSpec } from '../../lib/labelPresets'
 
 // ── FlyoutState ───────────────────────────────────────────────────────────────
 
@@ -20,6 +22,7 @@ type FlyoutState =
   | { kind: 'tier'; tier: SettlementTier }
   | { kind: 'urban' }
   | { kind: 'osm' }
+  | { kind: 'label'; index: number }
   | null
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -338,6 +341,127 @@ function OsmSettlementsFlyout({ onClose }: { onClose: () => void }) {
 
 // ── SettlementsSidebarV3 ──────────────────────────────────────────────────────
 
+const FONT_OPTIONS_COMPACT = [
+  { label: 'IBM Plex Serif',      value: '"IBM Plex Serif", Georgia, serif' },
+  { label: 'Cormorant Garamond',  value: '"Cormorant Garamond", Georgia, serif' },
+  { label: 'Cinzel',              value: '"Cinzel", Georgia, serif' },
+  { label: 'Cinzel Decorative',   value: '"Cinzel Decorative", Georgia, serif' },
+  { label: 'Crimson Pro',         value: '"Crimson Pro", Georgia, serif' },
+  { label: 'GFS Didot',           value: '"GFS Didot", Georgia, serif' },
+  { label: 'DM Serif Display',    value: '"DM Serif Display", Georgia, serif' },
+  { label: 'Spectral',            value: '"Spectral", Georgia, serif' },
+  { label: 'Playfair Display',    value: '"Playfair Display", Georgia, serif' },
+  { label: 'Libre Baskerville',   value: '"Libre Baskerville", Georgia, serif' },
+  { label: 'Arvo',                value: '"Arvo", Georgia, serif' },
+  { label: 'IM Fell English',     value: '"IM Fell English", serif' },
+  { label: 'Almendra',            value: '"Almendra", Georgia, serif' },
+  { label: 'IBM Plex Sans Cond.', value: '"IBM Plex Sans Condensed", sans-serif' },
+  { label: 'Oswald',              value: '"Oswald", sans-serif' },
+  { label: 'Teko',                value: '"Teko", sans-serif' },
+  { label: 'Fjalla One',          value: '"Fjalla One", sans-serif' },
+  { label: 'PT Sans Narrow',      value: '"PT Sans Narrow", sans-serif' },
+  { label: 'Roboto Condensed',    value: '"Roboto Condensed", sans-serif' },
+  { label: 'Raleway',             value: '"Raleway", sans-serif' },
+  { label: 'Cabin Condensed',     value: '"Cabin Condensed", sans-serif' },
+  { label: 'Source Code Pro',     value: '"Source Code Pro", monospace' },
+  { label: 'Georgia (system)',    value: 'Georgia, serif' },
+]
+
+function SettlementLabelFlyout({ index, onClose }: { index: number; onClose: () => void }) {
+  const t = useTheme()
+  const { settlements, updateSettlement, labelPresetId, labelOverrides } = useMapStore()
+  const s = settlements[index]
+  if (!s) return null
+
+  const tier = (s.tier ?? (s.type === 'city' ? 1 : s.type === 'town' ? 3 : 4)) as SettlementTier
+  const catKey = tier === 1 ? 'cityMajor' : tier === 2 ? 'cityMinor' : tier === 3 ? 'town' : 'village'
+  const resolved = resolveLabels(labelPresetId, labelOverrides)
+  const base = resolved[catKey as keyof typeof resolved]
+  const override = s.labelOverride ?? {}
+  const merged: LabelSpec = { ...base, ...override }
+
+  const hasOverride = Object.keys(override).length > 0
+
+  const patch = (p: Partial<LabelSpec>) => updateSettlement(index, { labelOverride: { ...override, ...p } })
+  const reset = () => updateSettlement(index, { labelOverride: undefined })
+
+  return (
+    <FlyoutShell title={`Label — ${s.name}`} onClose={onClose}>
+      <div style={{ padding: '6px 14px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+        {/* Font family */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint, width: 52, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>Font</span>
+          <select
+            value={merged.family}
+            onChange={e => patch({ family: e.target.value })}
+            style={{ flex: 1, fontFamily: t.mono, fontSize: 9.5, background: t.paper2, color: t.ink, border: `1px solid ${t.line}`, padding: '3px 4px' }}
+          >
+            {FONT_OPTIONS_COMPACT.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Color */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint, width: 52, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>Color</span>
+          <input type="color" value={merged.color} onChange={e => patch({ color: e.target.value })}
+            style={{ width: 26, height: 22, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+          <span style={{ fontFamily: t.mono, fontSize: 9.5, color: t.inkMute }}>{merged.color}</span>
+        </div>
+
+        {/* Size scale */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint, width: 52, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>Size</span>
+          <input type="range" min={0.4} max={2.0} step={0.05} value={merged.sizeScale}
+            onChange={e => patch({ sizeScale: parseFloat(e.target.value) })}
+            style={{ flex: 1 }} />
+          <span style={{ fontFamily: t.mono, fontSize: 9.5, color: t.inkMute, width: 28 }}>{merged.sizeScale.toFixed(2)}×</span>
+        </div>
+
+        {/* Toggles */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['italic', 'uppercase'] as const).map(key => (
+            <button key={key} onClick={() => patch({ [key]: !merged[key] })} style={{
+              padding: '2px 8px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.3,
+              background: merged[key] ? t.ink : 'transparent',
+              color: merged[key] ? t.surface : t.inkMute,
+              border: `1px solid ${merged[key] ? t.ink : t.line}`,
+              cursor: 'pointer',
+            }}>
+              {key === 'italic' ? 'Italic' : 'UPPER'}
+            </button>
+          ))}
+        </div>
+
+        {/* Preview */}
+        <div style={{
+          padding: '8px 10px', background: t.paper2, border: `1px solid ${t.line}`,
+          fontFamily: merged.family.split(',')[0].replace(/"/g, ''),
+          fontSize: 14 * merged.sizeScale,
+          fontStyle: merged.italic ? 'italic' : 'normal',
+          fontWeight: merged.weight,
+          color: merged.color,
+          letterSpacing: `${merged.letterSpacing}em`,
+          textTransform: merged.uppercase ? 'uppercase' : 'none',
+        }}>
+          {s.name}
+        </div>
+
+        {hasOverride && (
+          <button onClick={reset} style={{
+            alignSelf: 'flex-start', padding: '2px 10px', fontFamily: t.mono, fontSize: 9,
+            background: 'transparent', color: t.inkMute, border: `1px solid ${t.line}`, cursor: 'pointer',
+          }}>
+            ↺ Reset to preset
+          </button>
+        )}
+      </div>
+    </FlyoutShell>
+  )
+}
+
 export function SettlementsSidebarV3() {
   const t = useTheme()
   const {
@@ -441,7 +565,7 @@ export function SettlementsSidebarV3() {
             <div
               key={i}
               style={{
-                display: 'grid', gridTemplateColumns: '16px 1fr 18px 18px',
+                display: 'grid', gridTemplateColumns: '16px 1fr 18px 18px 18px',
                 alignItems: 'center', gap: 4,
                 padding: '4px 8px', borderBottom: `1px solid ${t.line2}`,
               }}
@@ -481,6 +605,17 @@ export function SettlementsSidebarV3() {
                 }}
               >↔</button>
               <button
+                onClick={() => setFlyout(prev => prev?.kind === 'label' && prev.index === i ? null : { kind: 'label', index: i })}
+                title="Label style"
+                style={{
+                  background: flyout?.kind === 'label' && flyout.index === i ? t.paper2 : 'none',
+                  border: `1px solid ${flyout?.kind === 'label' && flyout.index === i ? t.line : 'transparent'}`,
+                  color: s.labelOverride && Object.keys(s.labelOverride).length > 0 ? '#7de0a0' : t.inkFaint,
+                  cursor: 'pointer', padding: '1px 2px', fontSize: 9, fontFamily: t.mono,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >T</button>
+              <button
                 onClick={() => deleteSettlement(i)}
                 title="Delete"
                 style={{ background: 'none', border: 'none', color: t.inkFaint, cursor: 'pointer', padding: '1px 2px', fontSize: 12, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -507,6 +642,9 @@ export function SettlementsSidebarV3() {
       )}
       {flyout?.kind === 'osm' && (
         <OsmSettlementsFlyout onClose={() => setFlyout(null)} />
+      )}
+      {flyout?.kind === 'label' && (
+        <SettlementLabelFlyout index={flyout.index} onClose={() => setFlyout(null)} />
       )}
 
     </div>

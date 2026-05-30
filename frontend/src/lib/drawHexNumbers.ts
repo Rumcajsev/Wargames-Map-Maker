@@ -1,6 +1,7 @@
 /** Hex COLROW number rendering. Pure canvas — no React or store imports. */
 
 import type { GeneratedHex } from '../store/mapStore'
+import type { LabelSpec } from './labelPresets'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
@@ -12,6 +13,7 @@ export type HexNumberParams = {
   edgeIndex: number
   color: string
   fontScale: number
+  hexRefSpec?: LabelSpec
   R: number
   edgeMode: string
   inMargin: (verts: [number, number][]) => boolean
@@ -102,12 +104,18 @@ function edgeTransform(
 }
 
 export function drawHexNumbers(params: HexNumberParams) {
-  const { ctx, projected, numberMap, edgeIndex, color, fontScale, R, edgeMode, inMargin } = params
+  const { ctx, projected, numberMap, edgeIndex, color, fontScale, hexRefSpec, R, edgeMode, inMargin } = params
 
   const fontSize = Math.max(1, R * 0.12 * fontScale)
   ctx.save()
-  ctx.font = `${fontSize}px Georgia, serif`
-  ctx.fillStyle = color
+  if (hexRefSpec) {
+    const px = Math.max(1, fontSize * hexRefSpec.sizeScale)
+    ctx.font = `${hexRefSpec.weight} ${px}px ${hexRefSpec.family}`
+    ctx.fillStyle = hexRefSpec.color
+  } else {
+    ctx.font = `${fontSize}px Georgia, serif`
+    ctx.fillStyle = color
+  }
   ctx.textAlign = 'center'
 
   for (const { hex, verts } of projected) {

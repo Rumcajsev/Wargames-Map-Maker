@@ -40,6 +40,7 @@ import type { BridgePoint } from '../lib/detectBridges'
 import { drawRoadHandles as _drawRoadHandles, drawRailHandles as _drawRailHandles, drawRiverHandles as _drawRiverHandles } from '../lib/drawEditHandles'
 import { drawPaperBackground as _drawPaperBackground, drawPaperMargin as _drawPaperMargin } from '../lib/drawPaperChrome'
 import { shouldSuppressShortcut } from '../lib/keyboard'
+import { resolveLabels } from '../lib/labelPresets'
 
 const OSM_OVERLAY_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -211,6 +212,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
     coastlineDPEpsilon, coastlineChaikinPasses,
     terrainRenderMode,
     settlements, settlementTierStyles, settlementPlaceTier, addSettlement, placeSettlementAtHex,
+    labelPresetId, labelOverrides,
     settlementMoveIndex, setSettlementMoveIndex, updateSettlement,
     urbanHexes, urbanStyle, urbanPaintMode, toggleUrbanHex,
     highlights, highlightedHexes, highlightLines, highlightEdgePaths,
@@ -1020,6 +1022,9 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   const hexNumberFontScaleRef = useRef(hexNumberFontScale)
   hexNumberFontScaleRef.current = hexNumberFontScale
 
+  const resolvedLabelSpecsRef = useRef(resolveLabels(labelPresetId, labelOverrides))
+  resolvedLabelSpecsRef.current = resolveLabels(labelPresetId, labelOverrides)
+
   const mapBgColorRef = useRef(mapBgColor)
   mapBgColorRef.current = mapBgColor
   const mapStyleRef = useRef(mapStyle)
@@ -1711,6 +1716,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
         edgeIndex: hexNumberEdgeRef.current,
         color: hexNumberColorRef.current,
         fontScale: hexNumberFontScaleRef.current,
+        hexRefSpec: resolvedLabelSpecsRef.current.hexRef,
         R,
         edgeMode,
         inMargin,
@@ -1781,7 +1787,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
           const oCtx = offscreen.getContext('2d')!
           oCtx.scale(dpr * offZoom, dpr * offZoom)
           oCtx.translate(-px, -py)
-          _drawAreas(oCtx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, riverEdges: riverEdgesRef.current, canalEdges: canalEdgesRef.current, edgeMode, inMargin, R, style: areasStyleRef.current })
+          _drawAreas(oCtx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, riverEdges: riverEdgesRef.current, canalEdges: canalEdgesRef.current, edgeMode, inMargin, R, style: areasStyleRef.current, terrainLabelSpec: resolvedLabelSpecsRef.current.terrain })
           areasLayerRef.current = offscreen
           areasDirtyRef.current = false
           areasLayerPapWRef.current = papW
@@ -1790,7 +1796,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
         ctx.drawImage(areasLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        _drawAreas(ctx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, riverEdges: riverEdgesRef.current, canalEdges: canalEdgesRef.current, edgeMode, inMargin, R, style: areasStyleRef.current, lineScale })
+        _drawAreas(ctx, { areas: areasRef.current, areaHexes: areaHexesRef.current, projected, riverEdges: riverEdgesRef.current, canalEdges: canalEdgesRef.current, edgeMode, inMargin, R, style: areasStyleRef.current, terrainLabelSpec: resolvedLabelSpecsRef.current.terrain, lineScale })
       }
     }
 
@@ -1864,6 +1870,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
       riverHopProps: riverHopPropsRef.current,
       selectedHopKey: selectedHopKeyRef.current,
       project,
+      showRiverLabels: showRiverLabelsRef.current,
+      riverLabelData: showRiverLabelsRef.current
+        ? osmRiverWaysRef.current.filter(w => w.name).map(w => ({ name: w.name, coords: w.coords }))
+        : undefined,
+      waterLabelSpec: resolvedLabelSpecsRef.current.water,
     }
 
     // Compute drag state upfront — needed for both river and road live previews below
@@ -2215,7 +2226,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
           oCtx.rect(px, py, pw, ph)
           oCtx.clip()
           const activeRoadChainsS = smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
-          _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
+          _drawSettlements(oCtx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, labelSpecs: resolvedLabelSpecsRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
           oCtx.restore()
           settlementsLayerRef.current = offscreen
           settlementsDirtyRef.current = false
@@ -2226,7 +2237,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
       }
       if (isExport) {
         const activeRoadChainsS = smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
-        _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
+        _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, labelSpecs: resolvedLabelSpecsRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
       }
     }
 
@@ -2642,7 +2653,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   useEffect(() => { buildingsDirtyRef.current = true }, [urbanHexes, urbanStyle, settlements, settlementTierStyles, roadBaseData])
   useEffect(() => { bridgesDirtyRef.current = true }, [bridgesEnabled, smoothedRoadData, smoothedRoadDataV2, smoothedRailData, riverEdges, canalEdges, generatedHexes])
   useEffect(() => { roadsDirtyRef.current = true }, [smoothedRoadData, smoothedRailData, roadTierStyles, railStyle, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railControlOverrides, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, railSelectMode, showRawOsmRoads, mapStyle])
-  useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, smoothedRoadData, smoothedRailData])
+  useEffect(() => { settlementsDirtyRef.current = true }, [settlements, settlementTierStyles, labelPresetId, labelOverrides, smoothedRoadData, smoothedRailData])
 
   // Redraw when data changes
   useEffect(() => { draw() }, [generatedHexes, hexBorderMode, hexEdgeMode, hexBorderOpacity, hexBorderColor, hexBorderDifference, hexNumbersEnabled, hexNumberEdge, hexNumberColor, hexNumberFontScale, hexNumberStartCorner, hexNumberMap, smoothedRoadData, smoothedRailData, showRawOsmRoads, roadNodeEditMode, riverNodeEditMode, riverChainOverrides, riverEdges, canalEdges, riverEditMode, canalEditMode, riverWidthScale, canalWidthScale, riverCurveSteps, riverWobble, riverDetail, riverWiggleFreq, riverWiggleAmp, riverSmoothing, riverPathSmoothing, showRiverLabels, riverLabelColor, riverSegmentProps, canalSegmentProps, riverSelectMode, canalSelectMode, selectedSegmentKeys, selectedCanalSegmentKeys, riverStyle, canalStyle, riverHopProps, selectedHopKey, defaultTerrainBlobs, defaultLakeBlobs, terrainColors, terrainTextureScales, terrainTextureBlendModes, terrainTextureOpacities, terrainTextureTintColors, terrainTextureTintOpacities, terrainTextureFillOnly, terrainTextureFile, terrainTextureEnabled, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, settlements, settlementTierStyles, urbanHexes, urbanStyle, roadTierStyles, railStyle, highlights, highlightedHexes, highlightLines, highlightEdgePaths, iconOverlays, placedIcons, labelOverlays, placedLabels, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, roadSegmentProps, roadHopProps, selectedRoadSegmentKeys, selectedRoadHopKey, roadSelectMode, railNodeEditMode, railControlOverrides, railSelectMode, railWiggleAmp, railWiggleFreq, railSmoothing, railSegmentProps, railHopProps, selectedRailSegmentKeys, selectedRailHopKey, mapBgColor, mapBorderEnabled, mapBorderColor, mapBorderWidth, clipToHexGrid, excludedHexKeys, disabledHexKeys, autoDisabledOceanHexKeys, megaHexEnabled, megaHexRadius, megaHexColor, megaHexOpacity, megaHexLineWidth, megaHexOriginQ, megaHexOriginR, areasMode, areas, areaHexes, areasStyle, bridgesEnabled, bridgeStyle, bridgeTiers, bridgeOverrides, showElevationDebug, mapStyle, draw])
