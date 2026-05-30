@@ -204,8 +204,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
     hillsColor, mountainsColor, reliefShadingOpacity,
     heightmapUrl, heightmapMeta,
     hillshadeAzimuth, hillshadeAltitude, hillshadeIntensity,
+    hillshadeDisabledTerrains, hillshadeDisabledElevClasses,
     setHillshadeAzimuth, setHillshadeAltitude, setHillshadeIntensity,
     contoursEnabled, contourInterval, contourBaseElevation, contourSmoothPasses, contourLineWidth,
+    contourDisabledTerrains, contourDisabledElevClasses,
     coastlineDPEpsilon, coastlineChaikinPasses,
     terrainRenderMode,
     settlements, settlementTierStyles, settlementPlaceTier, addSettlement, placeSettlementAtHex,
@@ -796,6 +798,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   heightmapMetaRef.current = heightmapMeta
   const hillshadeCanvasRef = useRef<OffscreenCanvas | null>(null)
   const heightmapImgDataRef = useRef<ImageData | null>(null)
+  const hillshadeDisabledTerrainsSetRef = useRef(new Set<string>())
+  hillshadeDisabledTerrainsSetRef.current = new Set(hillshadeDisabledTerrains)
+  const hillshadeDisabledElevClassesSetRef = useRef(new Set<string>())
+  hillshadeDisabledElevClassesSetRef.current = new Set(hillshadeDisabledElevClasses)
   const contourCanvasRef = useRef<OffscreenCanvas | null>(null)
   const contoursEnabledRef = useRef(contoursEnabled)
   contoursEnabledRef.current = contoursEnabled
@@ -807,6 +813,10 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
   contourSmoothPassesRef.current = contourSmoothPasses
   const contourLineWidthRef = useRef(contourLineWidth)
   contourLineWidthRef.current = contourLineWidth
+  const contourDisabledTerrainsSetRef = useRef(new Set<string>())
+  contourDisabledTerrainsSetRef.current = new Set(contourDisabledTerrains)
+  const contourDisabledElevClassesSetRef = useRef(new Set<string>())
+  contourDisabledElevClassesSetRef.current = new Set(contourDisabledElevClasses)
   const coastlineDPEpsilonRef = useRef(coastlineDPEpsilon)
   coastlineDPEpsilonRef.current = coastlineDPEpsilon
   const coastlineChaikinPassesRef = useRef(coastlineChaikinPasses)
@@ -1525,7 +1535,11 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
       historicalIconSets: historicalIconSetsRef.current,
       historicalIconParams: historicalIconParamsRef.current,
       hillshadeCanvas: hillshadeCanvasRef.current,
+      hillshadeDisabledTerrains: hillshadeDisabledTerrainsSetRef.current,
+      hillshadeDisabledElevClasses: hillshadeDisabledElevClassesSetRef.current,
       contourCanvas: contourCanvasRef.current,
+      contourDisabledTerrains: contourDisabledTerrainsSetRef.current,
+      contourDisabledElevClasses: contourDisabledElevClassesSetRef.current,
       blobPatches: blobPatchesRef.current,
     }
 
@@ -2121,12 +2135,8 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
         tiers: bridgeTiersRef.current,
         overrides: bridgeOverridesRef.current,
         style: bridgeStyleRef.current,
-        tierStyles: (isExport
-          ? roadTierStylesRef.current.map(s => ({ ...s, outerW: s.outerW * lineScale }))
-          : roadTierStylesRef.current) as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
-        railStyle: isExport
-          ? { ...railStyleRef.current, thickness: railStyleRef.current.thickness * lineScale }
-          : railStyleRef.current,
+        tierStyles: roadTierStylesRef.current as [RoadTierStyle, RoadTierStyle, RoadTierStyle],
+        railStyle: railStyleRef.current,
         lineScale: isExport ? lineScale : 1,
         project,
       })
@@ -2215,7 +2225,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
         ctx.drawImage(settlementsLayerRef.current, px, py, pw, ph)
       }
       if (isExport) {
-        const activeRoadChainsS = ROAD_V2 && smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
+        const activeRoadChainsS = smoothedRoadDataV2Ref.current ? smoothedRoadDataV2Ref.current.chains : smoothedRoadDataRef.current.chains
         _drawSettlements(ctx, { settlements: settlementsRef.current, tierStyles: settlementTierStylesRef.current, roadChains: activeRoadChainsS, railChains: smoothedRailDataRef.current.chains, project, hexCenterOf: (q, r) => { const h = hexesRef.current.find(h => h.q === q && h.r === r); return h ? project(h.center[0], h.center[1]) : null }, hexRadiusPx: hexRadiusRef.current })
       }
     }
@@ -2540,6 +2550,7 @@ export const TerrainViewCanvas = forwardRef<TerrainViewCanvasHandle, { surroundC
 
   // Mark terrain layer dirty when terrain-affecting data changes
   useEffect(() => { terrainDirtyRef.current = true }, [defaultTerrainBlobs, defaultLakeBlobs, defaultElevationBlobs, terrainColors, terrainTextureScales, terrainTextureBlendModes, terrainTextureOpacities, terrainTextureTintColors, terrainTextureTintOpacities, terrainTextureFillOnly, terrainTextureFile, terrainTextureEnabled, terrainBlobOverrides, terrainTypeBlobStyles, lakeOverrides, terrainRenderMode, hexEdgeMode, generatedHexes, realisticCoastline, coastlineDebugRaw, smoothedCoastlineBoundary, rawCoastlineBoundary, beachStrip, beachColor, beachWidth, hillsColor, mountainsColor, reliefShadingOpacity, coastlineDPEpsilon, coastlineChaikinPasses, edgeBlobPainted, edgeBlobOverrides, edgeBlobSmooth, edgeBlobOffset, edgeBlobBump, edgeBlobSweepFreq, edgeBlobLobeFreq, edgeBlobLobeAmp, edgeBlobLobeThreshold, edgeBlobLobeDirection, edgeBlobWidth, mapStyle, historicalIconParams, blobPatches])
+  useEffect(() => { terrainDirtyRef.current = true; draw() }, [hillshadeDisabledTerrains, hillshadeDisabledElevClasses, contourDisabledTerrains, contourDisabledElevClasses]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Decode heightmap PNG → ImageData when URL changes, then recompute derived canvases
   useEffect(() => {

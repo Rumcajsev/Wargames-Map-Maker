@@ -4,7 +4,7 @@
 import type { GeneratedHex, BlobOverride, BlobPatch } from '../store/mapStore'
 import { buildTerrainBlobsV2, bleedPolygon } from './terrainBlobs'
 import { clipPolygonToConvex, pointInPolygon } from './geometry'
-import { makePermutation } from './noise'
+import { makePermutation, perturbXY, perturbNormal } from './noise'
 import { findEdgeChains, buildEdgeBlobPolys, type EdgeBlobChain, type EdgeBlobParams, parseEdgeBlobKey, sharedEdgeVertices } from './edgeBlobs'
 import { drawHistoricalIcons, type HistoricalIconTerrainParams } from './drawHistoricalIcons'
 
@@ -23,10 +23,13 @@ export type DrawTerrainParams = {
   inMargin: (verts: [number, number][]) => boolean
   terrainColors: Record<string, string>
   terrainTextureScales: Record<string, number>
-  clearTexture: HTMLImageElement | null
-  forestTexture: HTMLImageElement | null
-  lightWoodsTexture: HTMLImageElement | null
-  marshTexture: HTMLImageElement | null
+  terrainTextureBlendModes: Record<string, GlobalCompositeOperation | 'color' | 'color-bg'>
+  terrainTextureOpacities: Record<string, number>
+  terrainTextureTintColors: Record<string, string>
+  terrainTextureTintOpacities: Record<string, number>
+  terrainTextureFillOnly: Record<string, boolean>
+  /** terrain name → loaded texture image */
+  terrainTextures: Map<string, HTMLImageElement | null>
   px: number; py: number; pw: number; ph: number
   defaultTerrainBlobs: { terrain: string; polys: [number, number][][] }[]
   defaultLakeBlobs: { terrain: string; polys: [number, number][][] }[]
@@ -56,8 +59,6 @@ export type DrawTerrainParams = {
   edgeBlobOverrides: Record<string, BlobOverride>
   hexVertMap: Map<string, [number, number][]>
   mapStyle: 'standard' | 'historical_simple'
-  /** terrain name → texture image, for beach / mountains / custom terrains */
-  extraTextures: Map<string, HTMLImageElement | null>
   elevationBlobs: { hills: [number, number][][]; mountains: [number, number][][] }
   hillsColor: string
   mountainsColor: string
@@ -65,11 +66,65 @@ export type DrawTerrainParams = {
   historicalIconSets: Record<string, HTMLImageElement[]>
   historicalIconParams: Record<string, HistoricalIconTerrainParams>
   hillshadeCanvas: OffscreenCanvas | null
+  hillshadeDisabledTerrains: Set<string>
+  hillshadeDisabledElevClasses: Set<string>
   contourCanvas: OffscreenCanvas | null
+  contourDisabledTerrains: Set<string>
+  contourDisabledElevClasses: Set<string>
   blobPatches: BlobPatch[]
 }
 
 export type { EdgeBlobParams, EdgeBlobChain }
+
+function patchSeed(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function perturbPatch(pts: [number, number][], params: BlobParams, R: number, seed: number): [number, number][] {
+  const p1x = makePermutation(seed)
+  const p1y = makePermutation(seed + 31)
+  let p = perturbXY(pts, p1x, p1y, params.sweepFreq / R, params.bump * R * 0.5)
+  if (params.lobeAmp > 0) {
+    const p2a = makePermutation(seed + 67)
+    const p2b = makePermutation(seed + 113)
+    p = perturbNormal(p, p2a, p2b, params.lobeFreq / R, params.bump * params.lobeAmp * R * params.lobeDirection, params.lobeThreshold)
+  }
+  return p
+}
+
+/** Cache of pre-processed color-mode textures: key = `${tex.src}_${hexColor}` */
+const colorModeTextureCache = new Map<string, OffscreenCanvas>()
+
+/**
+ * Converts a B&W texture to a colored, alpha-masked canvas.
+ * invert=false (Marks):     dark pixels → terrain color (opaque), bright → transparent
+ * invert=true  (Background): bright pixels → terrain color (opaque), dark → transparent
+ * Result is cached per (texture src, color, invert) triple.
+ */
+function getTintedTexture(tex: HTMLImageElement, hexColor: string, invert: boolean): OffscreenCanvas | null {
+  const key = `${tex.src}_${hexColor}_${invert}`
+  if (colorModeTextureCache.has(key)) return colorModeTextureCache.get(key)!
+  if (!tex.complete || tex.naturalWidth === 0) return null
+  const r = parseInt(hexColor.slice(1, 3), 16)
+  const g = parseInt(hexColor.slice(3, 5), 16)
+  const b = parseInt(hexColor.slice(5, 7), 16)
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return null
+  const oc = new OffscreenCanvas(tex.naturalWidth, tex.naturalHeight)
+  const octx = oc.getContext('2d')!
+  octx.drawImage(tex, 0, 0)
+  const img = octx.getImageData(0, 0, tex.naturalWidth, tex.naturalHeight)
+  const d = img.data
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114
+    d[i] = r; d[i + 1] = g; d[i + 2] = b
+    d[i + 3] = Math.round(invert ? lum : 255 - lum)
+  }
+  octx.putImageData(img, 0, 0)
+  colorModeTextureCache.set(key, oc)
+  return oc
+}
 
 function applyTextureOverlay(
   tCtx: Ctx,
@@ -78,28 +133,65 @@ function applyTextureOverlay(
   R: number,
   scaleR: number,
   bleedPx: number,
+  blendMode: GlobalCompositeOperation = 'multiply',
+  opacity = 0.6,
+  tintColor = '',
+  tintOpacity = 0.5,
+  colorMode = false,
 ): void {
   if (!tex.complete || polys.length === 0) return
-  const pattern = tCtx.createPattern(tex, 'repeat')
-  if (!pattern) return
   const texSize = R * scaleR
-  pattern.setTransform(new DOMMatrix([texSize / tex.naturalWidth, 0, 0, texSize / tex.naturalHeight, 0, 0]))
-  tCtx.save()
-  tCtx.globalCompositeOperation = 'multiply'
-  tCtx.globalAlpha = 0.6
-  tCtx.fillStyle = pattern
-  tCtx.beginPath()
-  for (const poly of polys) {
-    if (poly.length < 3) continue
-    const bleedSeed = Math.abs(Math.round(poly[0][0] * 73 + poly[0][1] * 97)) + 31
-    const bleedPerm = makePermutation(bleedSeed)
-    const p = bleedPx > 0 ? bleedPolygon(poly, bleedPx, R, bleedPerm) : poly
-    tCtx.moveTo(p[0][0], p[0][1])
-    for (let i = 1; i < p.length; i++) tCtx.lineTo(p[i][0], p[i][1])
-    tCtx.closePath()
+  const transform = new DOMMatrix([texSize / tex.naturalWidth, 0, 0, texSize / tex.naturalHeight, 0, 0])
+
+  const buildPath = () => {
+    tCtx.beginPath()
+    for (const poly of polys) {
+      if (poly.length < 3) continue
+      const bleedSeed = Math.abs(Math.round(poly[0][0] * 73 + poly[0][1] * 97)) + 31
+      const bleedPerm = makePermutation(bleedSeed)
+      const p = bleedPx > 0 ? bleedPolygon(poly, bleedPx, R, bleedPerm) : poly
+      tCtx.moveTo(p[0][0], p[0][1])
+      for (let i = 1; i < p.length; i++) tCtx.lineTo(p[i][0], p[i][1])
+      tCtx.closePath()
+    }
   }
-  tCtx.fill('evenodd')
-  tCtx.restore()
+
+  if (colorMode && tintColor) {
+    const invertAlpha = blendMode === ('color-bg' as GlobalCompositeOperation)
+    const tinted = getTintedTexture(tex, tintColor, invertAlpha)
+    if (!tinted) return
+    const pattern = tCtx.createPattern(tinted, 'repeat')
+    if (!pattern) return
+    pattern.setTransform(transform)
+    tCtx.save()
+    tCtx.globalCompositeOperation = 'source-over'
+    tCtx.globalAlpha = opacity
+    tCtx.fillStyle = pattern
+    buildPath()
+    tCtx.fill('evenodd')
+    tCtx.restore()
+  } else {
+    const pattern = tCtx.createPattern(tex, 'repeat')
+    if (!pattern) return
+    pattern.setTransform(transform)
+    tCtx.save()
+    tCtx.globalCompositeOperation = blendMode
+    tCtx.globalAlpha = opacity
+    tCtx.fillStyle = pattern
+    buildPath()
+    tCtx.fill('evenodd')
+    tCtx.restore()
+
+    if (tintColor && tintOpacity > 0) {
+      tCtx.save()
+      tCtx.globalCompositeOperation = 'multiply'
+      tCtx.globalAlpha = tintOpacity
+      tCtx.fillStyle = tintColor
+      buildPath()
+      tCtx.fill('evenodd')
+      tCtx.restore()
+    }
+  }
 }
 
 function drawElevationBlobsWithShading(
@@ -160,8 +252,8 @@ function polyArea(pts: [number, number][]): number {
 export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   const {
     projected, edgeMode, inMargin,
-    terrainColors, terrainTextureScales,
-    clearTexture, forestTexture, lightWoodsTexture, marshTexture,
+    terrainColors, terrainTextureScales, terrainTextureBlendModes, terrainTextureOpacities,
+    terrainTextureTintColors, terrainTextureTintOpacities, terrainTextureFillOnly, terrainTextures,
     px, py, pw, ph,
     defaultTerrainBlobs, defaultLakeBlobs,
     terrainBlobOverrides, lakeOverrides,
@@ -189,30 +281,28 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   }
 
   // ── 2. Clear texture overlay ────────────────────────────────────────────────
-  if (clearTexture && clearTexture.complete) {
-    const clearPattern = tCtx.createPattern(clearTexture, 'repeat')
-    if (clearPattern) {
-      const clearTexSize = R * (terrainTextureScales['clear'] ?? 3)
-      clearPattern.setTransform(new DOMMatrix([
-        clearTexSize / clearTexture.naturalWidth, 0,
-        0, clearTexSize / clearTexture.naturalHeight,
-        0, 0,
-      ]))
-      tCtx.save()
-      tCtx.globalCompositeOperation = 'multiply'
-      tCtx.globalAlpha = 0.3
-      tCtx.fillStyle = clearPattern
+  {
+    const clearTex = terrainTextures.get('clear') ?? null
+    if (clearTex) {
+      const clearPolys: [number, number][][] = []
       for (const { hex, verts } of projected) {
         if (hex.terrain !== 'clear') continue
         if (edgeMode === 'whole' && hex.partial) continue
         if (!hex.partial && !inMargin(verts)) continue
-        tCtx.beginPath()
-        tCtx.moveTo(verts[0][0], verts[0][1])
-        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
-        tCtx.closePath()
-        tCtx.fill()
+        clearPolys.push(verts)
       }
-      tCtx.restore()
+      {
+        const clearRawMode = terrainTextureBlendModes['clear'] ?? 'multiply'
+        const clearIsColor = clearRawMode === 'color' || clearRawMode === 'color-bg'
+        applyTextureOverlay(
+          tCtx, clearTex, clearPolys, R, terrainTextureScales['clear'] ?? 3, 0,
+          clearIsColor ? 'source-over' : clearRawMode as GlobalCompositeOperation,
+          terrainTextureOpacities['clear'] ?? 0.3,
+          clearIsColor ? (terrainColors['clear'] ?? '') : (terrainTextureTintColors['clear'] ?? ''),
+          clearIsColor ? 1.0 : (terrainTextureTintOpacities['clear'] ?? 0.5),
+          clearIsColor,
+        )
+      }
     }
   }
 
@@ -294,23 +384,35 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const defaultPolys = defaultBlobMap.get(terrain) ?? []
       const cutPatches = params.blobPatches.filter(p => p.terrain === terrain && p.mode === 'cut')
 
+      const rawMode = terrainTextureBlendModes[terrain] ?? 'multiply'
+      const isColorMode = rawMode === 'color' || rawMode === 'color-bg'
+      const fillOnly = (terrainTextureFillOnly[terrain] ?? false) || isColorMode
+      const tex = terrainTextures.get(terrain) ?? null
+      const texBlend = rawMode as GlobalCompositeOperation
+      const texOpacity = terrainTextureOpacities[terrain] ?? 0.6
+      const texTint = isColorMode ? (terrainColors[terrain] ?? '') : (terrainTextureTintColors[terrain] ?? '')
+      const texTintOpacity = isColorMode ? 1.0 : (terrainTextureTintOpacities[terrain] ?? 0.5)
+
       // a. Fill default polys (cut patches traced as even-odd holes)
       if (defaultPolys.length > 0) {
-        tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
-        tCtx.beginPath()
-        for (const poly of defaultPolys) {
-          if (poly.length < 3) continue
-          tCtx.moveTo(poly[0][0], poly[0][1])
-          for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
-          tCtx.closePath()
+        if (!fillOnly) {
+          tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
+          tCtx.beginPath()
+          for (const poly of defaultPolys) {
+            if (poly.length < 3) continue
+            tCtx.moveTo(poly[0][0], poly[0][1])
+            for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+            tCtx.closePath()
+          }
+          for (const patch of cutPatches) {
+            if (patch.points.length < 3) continue
+            const cPts = perturbPatch(patch.points, terrainBlobParams, R, patchSeed(patch.id))
+            tCtx.moveTo(cPts[0][0], cPts[0][1])
+            for (let i = 1; i < cPts.length; i++) tCtx.lineTo(cPts[i][0], cPts[i][1])
+            tCtx.closePath()
+          }
+          tCtx.fill('evenodd')
         }
-        for (const patch of cutPatches) {
-          if (patch.points.length < 3) continue
-          tCtx.moveTo(patch.points[0][0], patch.points[0][1])
-          for (let i = 1; i < patch.points.length; i++) tCtx.lineTo(patch.points[i][0], patch.points[i][1])
-          tCtx.closePath()
-        }
-        tCtx.fill('evenodd')
       }
 
       // b. Override passes for this terrain
@@ -344,65 +446,41 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
           ovClearingChance, ovSatelliteChance, ovPatchSize,
         )
         const ovPolys = ovBlobs.find(b => b.terrain === terrain)?.polys ?? []
-        const ovColor = override.color ?? terrainColors[terrain] ?? '#cccccc'
 
-        tCtx.fillStyle = ovColor
-        tCtx.beginPath()
-        for (const poly of ovPolys) {
-          if (poly.length < 3) continue
-          tCtx.moveTo(poly[0][0], poly[0][1])
-          for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
-          tCtx.closePath()
+        if (!fillOnly) {
+          const ovColor = override.color ?? terrainColors[terrain] ?? '#cccccc'
+          tCtx.fillStyle = ovColor
+          tCtx.beginPath()
+          for (const poly of ovPolys) {
+            if (poly.length < 3) continue
+            tCtx.moveTo(poly[0][0], poly[0][1])
+            for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+            tCtx.closePath()
+          }
+          tCtx.fill('evenodd')
         }
-        tCtx.fill('evenodd')
 
         const ovTexScale = override.textureScale ?? (terrainTextureScales[terrain] ?? 3)
-        if (terrain === 'woods' && forestTexture) {
-          applyTextureOverlay(tCtx, forestTexture, ovPolys, R, ovTexScale, R * 0.12)
-        } else if (terrain === 'light_woods' && lightWoodsTexture) {
-          applyTextureOverlay(tCtx, lightWoodsTexture, ovPolys, R, ovTexScale, R * 0.12)
-        } else if (terrain === 'marsh' && marshTexture) {
-          applyTextureOverlay(tCtx, marshTexture, ovPolys, R, ovTexScale, R * 0.12)
-        } else {
-          const extraTex = params.extraTextures.get(terrain)
-          if (extraTex) applyTextureOverlay(tCtx, extraTex, ovPolys, R, ovTexScale, R * 0.12)
-        }
+        if (tex) applyTextureOverlay(tCtx, tex, ovPolys, R, ovTexScale, R * 0.12, texBlend, texOpacity, texTint, texTintOpacity, isColorMode)
       }
 
       // c. Global texture for default polys (no bleed)
-      if (terrain === 'woods' && forestTexture) {
-        applyTextureOverlay(tCtx, forestTexture, defaultPolys, R, terrainTextureScales['woods'] ?? 3, 0)
-      } else if (terrain === 'light_woods' && lightWoodsTexture) {
-        applyTextureOverlay(tCtx, lightWoodsTexture, defaultPolys, R, terrainTextureScales['light_woods'] ?? 3, 0)
-      } else if (terrain === 'marsh' && marshTexture) {
-        applyTextureOverlay(tCtx, marshTexture, defaultPolys, R, terrainTextureScales['marsh'] ?? 3, 0)
-      } else {
-        const extraTex = params.extraTextures.get(terrain)
-        if (extraTex) applyTextureOverlay(tCtx, extraTex, defaultPolys, R, terrainTextureScales[terrain] ?? 3, 0)
-      }
+      if (tex) applyTextureOverlay(tCtx, tex, defaultPolys, R, terrainTextureScales[terrain] ?? 3, 0, texBlend, texOpacity, texTint, texTintOpacity, isColorMode)
 
-      // d. Add patches
+      // d. Add patches — perturbed with same wobble as main blobs
       const addPatches = params.blobPatches.filter(p => p.terrain === terrain && p.mode === 'add')
       for (const patch of addPatches) {
         if (patch.points.length < 3) continue
-        tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
-        tCtx.beginPath()
-        tCtx.moveTo(patch.points[0][0], patch.points[0][1])
-        for (let i = 1; i < patch.points.length; i++) tCtx.lineTo(patch.points[i][0], patch.points[i][1])
-        tCtx.closePath()
-        tCtx.fill()
-        const texScale = terrainTextureScales[terrain] ?? 3
-        const patchPoly = [patch.points]
-        if (terrain === 'woods' && forestTexture) {
-          applyTextureOverlay(tCtx, forestTexture, patchPoly, R, texScale, 0)
-        } else if (terrain === 'light_woods' && lightWoodsTexture) {
-          applyTextureOverlay(tCtx, lightWoodsTexture, patchPoly, R, texScale, 0)
-        } else if (terrain === 'marsh' && marshTexture) {
-          applyTextureOverlay(tCtx, marshTexture, patchPoly, R, texScale, 0)
-        } else {
-          const extraTex = params.extraTextures.get(terrain)
-          if (extraTex) applyTextureOverlay(tCtx, extraTex, patchPoly, R, texScale, 0)
+        const aPts = perturbPatch(patch.points, terrainBlobParams, R, patchSeed(patch.id))
+        if (!fillOnly) {
+          tCtx.fillStyle = terrainColors[terrain] ?? '#cccccc'
+          tCtx.beginPath()
+          tCtx.moveTo(aPts[0][0], aPts[0][1])
+          for (let i = 1; i < aPts.length; i++) tCtx.lineTo(aPts[i][0], aPts[i][1])
+          tCtx.closePath()
+          tCtx.fill()
         }
+        if (tex) applyTextureOverlay(tCtx, tex, [aPts], R, terrainTextureScales[terrain] ?? 3, 0, texBlend, texOpacity, texTint, texTintOpacity)
       }
     }
 
@@ -484,27 +562,27 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
       const hexTerrainSet = terrainToHexes.get(chain.terrain)
       const polys = buildEdgeBlobPolys(chain, hexVertMap, chainParams, R, hexTerrainSet)
       if (polys.length === 0) continue
-      const color = override?.color ?? terrainColors[chain.terrain] ?? '#cccccc'
-      tCtx.fillStyle = color
-      tCtx.beginPath()
-      for (const poly of polys) {
-        if (poly.length < 3) continue
-        tCtx.moveTo(poly[0][0], poly[0][1])
-        for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
-        tCtx.closePath()
+      if (!(terrainTextureFillOnly[chain.terrain] ?? false)) {
+        const color = override?.color ?? terrainColors[chain.terrain] ?? '#cccccc'
+        tCtx.fillStyle = color
+        tCtx.beginPath()
+        for (const poly of polys) {
+          if (poly.length < 3) continue
+          tCtx.moveTo(poly[0][0], poly[0][1])
+          for (let i = 1; i < poly.length; i++) tCtx.lineTo(poly[i][0], poly[i][1])
+          tCtx.closePath()
+        }
+        tCtx.fill('evenodd')
       }
-      tCtx.fill('evenodd')
       const texScale = override?.textureScale ?? (terrainTextureScales[chain.terrain] ?? 3)
-      if (chain.terrain === 'woods' && forestTexture) {
-        applyTextureOverlay(tCtx, forestTexture, polys, R, texScale, R * 0.12)
-      } else if (chain.terrain === 'light_woods' && lightWoodsTexture) {
-        applyTextureOverlay(tCtx, lightWoodsTexture, polys, R, texScale, R * 0.12)
-      } else if (chain.terrain === 'marsh' && marshTexture) {
-        applyTextureOverlay(tCtx, marshTexture, polys, R, texScale, R * 0.12)
-      } else {
-        const extraTex = params.extraTextures.get(chain.terrain)
-        if (extraTex) applyTextureOverlay(tCtx, extraTex, polys, R, texScale, R * 0.12)
-      }
+      const edgeRawMode = terrainTextureBlendModes[chain.terrain] ?? 'multiply'
+      const edgeIsColor = edgeRawMode === 'color' || edgeRawMode === 'color-bg'
+      const edgeTexBlend: GlobalCompositeOperation = edgeIsColor ? 'source-over' : edgeRawMode as GlobalCompositeOperation
+      const edgeTexOpacity = terrainTextureOpacities[chain.terrain] ?? 0.6
+      const edgeTexTint = edgeIsColor ? (terrainColors[chain.terrain] ?? '') : (terrainTextureTintColors[chain.terrain] ?? '')
+      const edgeTexTintOpacity = edgeIsColor ? 1.0 : (terrainTextureTintOpacities[chain.terrain] ?? 0.5)
+      const edgeTex = terrainTextures.get(chain.terrain) ?? null
+      if (edgeTex) applyTextureOverlay(tCtx, edgeTex, polys, R, texScale, R * 0.12, edgeTexBlend, edgeTexOpacity, edgeTexTint, edgeTexTintOpacity, edgeIsColor)
     }
   }
 
@@ -648,6 +726,18 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   // ── Hillshade overlay ─────────────────────────────────────────────────────
   if (params.hillshadeCanvas) {
     tCtx.save()
+    const hsDT = params.hillshadeDisabledTerrains
+    const hsDEC = params.hillshadeDisabledElevClasses
+    if (hsDT.size > 0 || hsDEC.size > 0) {
+      tCtx.beginPath()
+      for (const { hex, verts } of projected) {
+        if (hsDT.has(hex.terrain) || hsDEC.has(hex.elevation_class ?? 'flat')) continue
+        tCtx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+        tCtx.closePath()
+      }
+      tCtx.clip()
+    }
     tCtx.globalCompositeOperation = 'overlay'
     tCtx.drawImage(params.hillshadeCanvas, params.px, params.py, params.pw, params.ph)
     tCtx.restore()
@@ -656,6 +746,18 @@ export function drawTerrain(tCtx: Ctx, params: DrawTerrainParams): void {
   // ── Contour lines ─────────────────────────────────────────────────────────
   if (params.contourCanvas) {
     tCtx.save()
+    const cDT = params.contourDisabledTerrains
+    const cDEC = params.contourDisabledElevClasses
+    if (cDT.size > 0 || cDEC.size > 0) {
+      tCtx.beginPath()
+      for (const { hex, verts } of projected) {
+        if (cDT.has(hex.terrain) || cDEC.has(hex.elevation_class ?? 'flat')) continue
+        tCtx.moveTo(verts[0][0], verts[0][1])
+        for (let i = 1; i < verts.length; i++) tCtx.lineTo(verts[i][0], verts[i][1])
+        tCtx.closePath()
+      }
+      tCtx.clip()
+    }
     tCtx.drawImage(params.contourCanvas, params.px, params.py, params.pw, params.ph)
     tCtx.restore()
   }

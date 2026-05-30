@@ -34,6 +34,8 @@ type FlyoutId =
   | 't-import'
   | 't-opts'
   | 'e-import'
+  | 'e-hillshade'
+  | 'e-contours'
   | 't-terrain'
   | 'blob-patches'
   | null
@@ -313,7 +315,7 @@ function PaintingOptionsFlyout({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ── Flyout content: elevation ───────────────────────────────────────────────
+// ── Flyout content: elevation import / classify ────────────────────────────
 
 function ElevationFlyout({ onClose }: { onClose: () => void }) {
   const t = useTheme()
@@ -322,11 +324,6 @@ function ElevationFlyout({ onClose }: { onClose: () => void }) {
     elevationStatus, elevationError, elevationProgress,
     showElevationDebug, setShowElevationDebug,
     classificationParams, setClassificationParam,
-    heightmapUrl,
-    hillshadeAzimuth, hillshadeAltitude, hillshadeIntensity,
-    setHillshadeAzimuth, setHillshadeAltitude, setHillshadeIntensity,
-    contoursEnabled, contourInterval, contourLineWidth,
-    setContoursEnabled, setContourInterval, setContourLineWidth,
     fetchElevation, dataSource,
   } = useMapStore()
 
@@ -398,33 +395,129 @@ function ElevationFlyout({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      {heightmapUrl && (
-        <div style={{ borderTop: `1px solid ${t.line2}`, paddingTop: 4 }}>
-          <div style={{ padding: '4px 12px 2px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Hillshade</div>
-          <MiniSlider label="Sun azimuth"  display={`${hillshadeAzimuth}°`}      value={hillshadeAzimuth}  min={0} max={360} step={5}    onChange={setHillshadeAzimuth} />
-          <MiniSlider label="Sun altitude" display={`${hillshadeAltitude}°`}     value={hillshadeAltitude} min={5} max={85}  step={5}    onChange={setHillshadeAltitude} />
-          <MiniSlider label="Intensity"    display={hillshadeIntensity.toFixed(2)} value={hillshadeIntensity} min={0} max={1} step={0.05} onChange={setHillshadeIntensity} />
-        </div>
-      )}
-
-      {heightmapUrl && (
-        <div style={{ borderTop: `1px solid ${t.line2}`, paddingTop: 4 }}>
-          <div style={{ padding: '4px 12px 2px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Contours</div>
-          <ToggleRow label="Enabled" checked={contoursEnabled} onChange={setContoursEnabled} />
-          {contoursEnabled && (
-            <>
-              <MiniSlider label="Interval"   display={`${contourInterval}m`}  value={contourInterval}  min={10} max={500} step={10}   onChange={setContourInterval} />
-              <MiniSlider label="Line width" display={String(contourLineWidth)} value={contourLineWidth} min={0.5} max={4} step={0.25} onChange={setContourLineWidth} />
-            </>
-          )}
-        </div>
-      )}
-
       {hasData && (
         <div style={{ borderTop: `1px solid ${t.line2}`, padding: '6px 12px 0' }}>
           <ToggleRow label="Show avg / max per hex" checked={showElevationDebug} onChange={setShowElevationDebug} />
         </div>
       )}
+    </FlyoutShell>
+  )
+}
+
+// ── Shared sub-component: terrain + elevation-class visibility filter ────────
+
+const ELEV_CLASS_LABELS = ['flat', 'hills', 'mountains'] as const
+
+function TerrainVisibilityFilter({
+  disabledTerrains,
+  disabledElevClasses,
+  onChangeTerrain,
+  onChangeElevClass,
+  customTerrains,
+}: {
+  disabledTerrains: string[]
+  disabledElevClasses: string[]
+  onChangeTerrain: (v: string[]) => void
+  onChangeElevClass: (v: string[]) => void
+  customTerrains: { id: string; name: string }[]
+}) {
+  const t = useTheme()
+  const allTerrains = [...TERRAIN_PRIORITY, ...customTerrains.map(ct => ct.id)]
+  const labelFor = (id: string) => {
+    const ct = customTerrains.find(c => c.id === id)
+    return ct ? ct.name : terrainLabel(id)
+  }
+  const toggleTerrain = (id: string, enabled: boolean) =>
+    onChangeTerrain(enabled ? disabledTerrains.filter(t => t !== id) : [...disabledTerrains, id])
+  const toggleElevClass = (cls: string, enabled: boolean) =>
+    onChangeElevClass(enabled ? disabledElevClasses.filter(c => c !== cls) : [...disabledElevClasses, cls])
+
+  return (
+    <>
+      <div style={{ borderTop: `1px solid ${t.line2}`, paddingTop: 4 }}>
+        <div style={{ padding: '4px 12px 2px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
+          Show on terrains
+        </div>
+        {allTerrains.map(id => (
+          <ToggleRow
+            key={id}
+            label={labelFor(id)}
+            checked={!disabledTerrains.includes(id)}
+            onChange={v => toggleTerrain(id, v)}
+          />
+        ))}
+      </div>
+      <div style={{ borderTop: `1px solid ${t.line2}`, paddingTop: 4 }}>
+        <div style={{ padding: '4px 12px 2px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
+          Show on elevation class
+        </div>
+        {ELEV_CLASS_LABELS.map(cls => (
+          <ToggleRow
+            key={cls}
+            label={cls}
+            checked={!disabledElevClasses.includes(cls)}
+            onChange={v => toggleElevClass(cls, v)}
+          />
+        ))}
+      </div>
+    </>
+  )
+}
+
+// ── Flyout content: hillshade ───────────────────────────────────────────────
+
+function HilshadeFlyout({ onClose }: { onClose: () => void }) {
+  const {
+    hillshadeAzimuth, hillshadeAltitude, hillshadeIntensity,
+    setHillshadeAzimuth, setHillshadeAltitude, setHillshadeIntensity,
+    hillshadeDisabledTerrains, hillshadeDisabledElevClasses,
+    setHillshadeDisabledTerrains, setHillshadeDisabledElevClasses,
+    customTerrains,
+  } = useMapStore()
+
+  return (
+    <FlyoutShell title="Hillshade" onClose={onClose}>
+      <MiniSlider label="Sun azimuth"  display={`${hillshadeAzimuth}°`}        value={hillshadeAzimuth}  min={0} max={360} step={5}    onChange={setHillshadeAzimuth} />
+      <MiniSlider label="Sun altitude" display={`${hillshadeAltitude}°`}       value={hillshadeAltitude} min={5} max={85}  step={5}    onChange={setHillshadeAltitude} />
+      <MiniSlider label="Intensity"    display={hillshadeIntensity.toFixed(2)} value={hillshadeIntensity} min={0} max={1} step={0.05} onChange={setHillshadeIntensity} />
+      <TerrainVisibilityFilter
+        disabledTerrains={hillshadeDisabledTerrains}
+        disabledElevClasses={hillshadeDisabledElevClasses}
+        onChangeTerrain={setHillshadeDisabledTerrains}
+        onChangeElevClass={setHillshadeDisabledElevClasses}
+        customTerrains={customTerrains}
+      />
+    </FlyoutShell>
+  )
+}
+
+// ── Flyout content: contours ────────────────────────────────────────────────
+
+function ContoursFlyout({ onClose }: { onClose: () => void }) {
+  const {
+    contoursEnabled, contourInterval, contourLineWidth,
+    setContoursEnabled, setContourInterval, setContourLineWidth,
+    contourDisabledTerrains, contourDisabledElevClasses,
+    setContourDisabledTerrains, setContourDisabledElevClasses,
+    customTerrains,
+  } = useMapStore()
+
+  return (
+    <FlyoutShell title="Contours" onClose={onClose}>
+      <ToggleRow label="Enabled" checked={contoursEnabled} onChange={setContoursEnabled} />
+      {contoursEnabled && (
+        <>
+          <MiniSlider label="Interval"   display={`${contourInterval}m`}    value={contourInterval}  min={10} max={500} step={10}   onChange={setContourInterval} />
+          <MiniSlider label="Line width" display={contourLineWidth.toFixed(2)} value={contourLineWidth} min={0.5} max={4} step={0.25} onChange={setContourLineWidth} />
+        </>
+      )}
+      <TerrainVisibilityFilter
+        disabledTerrains={contourDisabledTerrains}
+        disabledElevClasses={contourDisabledElevClasses}
+        onChangeTerrain={setContourDisabledTerrains}
+        onChangeElevClass={setContourDisabledElevClasses}
+        customTerrains={customTerrains}
+      />
     </FlyoutShell>
   )
 }
@@ -717,6 +810,7 @@ export function TerrainSidebarV3() {
     terrainColors, customTerrains,
     mapStyle,
     blobPatches,
+    heightmapUrl,
   } = useMapStore()
 
   const [flyout, setFlyout] = useState<FlyoutId>(null)
@@ -840,7 +934,13 @@ export function TerrainSidebarV3() {
           />
         ))}
         <TGap />
-        <TriggerRow label="Import elevation" active={flyout === 'e-import'} onClick={() => toggleFlyout('e-import')} icon={IMPORT_ICON} />
+        <TriggerRow label="Import / classify" active={flyout === 'e-import'} onClick={() => toggleFlyout('e-import')} icon={IMPORT_ICON} />
+        {heightmapUrl && (
+          <>
+            <TriggerRow label="Hillshade" active={flyout === 'e-hillshade'} onClick={() => toggleFlyout('e-hillshade')} />
+            <TriggerRow label="Contours"  active={flyout === 'e-contours'}  onClick={() => toggleFlyout('e-contours')} />
+          </>
+        )}
 
         {mapStyle === 'historical_simple' && (
           <>
@@ -865,6 +965,8 @@ export function TerrainSidebarV3() {
       {flyout === 't-import'     && <ClassificationFlyout onClose={() => setFlyout(null)} />}
       {flyout === 't-opts'       && <PaintingOptionsFlyout onClose={() => setFlyout(null)} />}
       {flyout === 'e-import'     && <ElevationFlyout      onClose={() => setFlyout(null)} />}
+      {flyout === 'e-hillshade'  && <HilshadeFlyout       onClose={() => setFlyout(null)} />}
+      {flyout === 'e-contours'   && <ContoursFlyout       onClose={() => setFlyout(null)} />}
       {flyout === 'blob-patches' && <BlobEditFlyout       onClose={() => { setFlyout(null); setActiveTool({ type: 'none' }) }} />}
       {flyout === 't-terrain' && cogTerrain && (
         <TerrainCogFlyout terrain={cogTerrain} onClose={() => setFlyout(null)} />

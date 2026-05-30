@@ -17,6 +17,7 @@ import { TerrainSidebarV3 } from './components/v2/TerrainSidebarV3'
 import { RoadsSidebarV3 } from './components/v2/RoadsSidebarV3'
 import { OverlaysSidebarV3 } from './components/v2/OverlaysSidebarV3'
 import { BottomDock } from './components/v2/BottomDock'
+import { CanvasToolbar } from './components/v2/CanvasToolbar'
 import { SetupLandingPage } from './components/v2/SetupLandingPage'
 import { SetupWizard } from './components/v2/SetupWizard'
 
@@ -144,6 +145,9 @@ export function AppV2() {
               {sidebar}
             </div>
           </div>
+
+          {/* Tool options bar — centered, context-sensitive */}
+          <CanvasToolbar />
 
           {/* Bottom dock */}
           <BottomDock canvasRef={canvasHandleRef} />
