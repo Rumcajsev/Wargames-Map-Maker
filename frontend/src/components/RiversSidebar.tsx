@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMapStore, LAKE_COLOR } from '../store/mapStore'
+import { shouldSuppressShortcut } from '../lib/keyboard'
 import { RiversSettingsFlyout } from './RiversSettingsFlyout'
 import { riverChainCache, computeTaperRanges } from '../lib/riverChains'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
@@ -251,7 +252,7 @@ export function RiversSidebar() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (shouldSuppressShortcut(e)) return
       if (e.key === '1') setActiveTool(riverEditMode ? { type: 'none' } : { type: 'river-paint' })
       else if (e.key === '2') setActiveTool(canalEditMode ? { type: 'none' } : { type: 'canal-paint' })
       else if (e.key === '3') setActiveTool(lakePaintMode ? { type: 'none' } : { type: 'lake' })

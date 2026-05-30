@@ -10,6 +10,7 @@ import { ElevationFlyout } from './ElevationFlyout'
 import { ToolButton, CogIcon } from './ToolButton'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
 import { EnabledSection, SectionLabel } from './ui'
+import { shouldSuppressShortcut } from '../lib/keyboard'
 
 const ELEVATION_BRUSHES = [
   { brush: 'flat'      as const, color: '#5a7a5a', accent: '#3a7a3a' },
@@ -73,7 +74,7 @@ export function TerrainSidebar() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if ((e.target as HTMLElement).tagName === 'INPUT') return
+      if (shouldSuppressShortcut(e)) return
       const idx = parseInt(e.key) - 1
       if (idx >= 0 && idx < TERRAIN_PRIORITY.length) {
         selectBrush(TERRAIN_PRIORITY[idx])

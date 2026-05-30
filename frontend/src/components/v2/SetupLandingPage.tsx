@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { get as idbGet } from 'idb-keyval'
 import { TK, TK_DARK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import { HowItWorksModal } from './HowItWorksModal'
@@ -9,16 +10,26 @@ export function SetupLandingPage({
   onNewMap,
   onResume,
   onLoadFile,
+  isDark,
+  onToggleDark,
 }: {
   onNewMap: () => void
   onResume: () => void
   onLoadFile: () => void
+  isDark: boolean
+  onToggleDark: () => void
 }) {
-  const { generatedHexes, generatedMetadata, paperSize, orientation } = useMapStore()
+  const { generatedHexes, generatedMetadata, paperSize, orientation, mapTitle } = useMapStore()
   const hasSavedMap = generatedHexes.length > 0
   const [showHowItWorks, setShowHowItWorks] = useState(false)
-  const [isDark, setIsDark] = useState(false)
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null)
   const t = isDark ? TK_DARK : TK
+
+  useEffect(() => {
+    idbGet('hachure-thumb').then(v => {
+      if (typeof v === 'string') setThumbUrl(v)
+    }).catch(() => {})
+  }, [])
 
   return (
     <div style={{
@@ -31,30 +42,32 @@ export function SetupLandingPage({
       color: t.ink,
       transition: 'background 0.25s, color 0.25s',
     }}>
-      {/* Ghost map background */}
+      {/* Ghost map background — full screen */}
       <div style={{
         position: 'absolute',
-        right: 0, top: 0, bottom: 0,
-        width: '65%',
-        overflow: 'hidden',
+        inset: 0,
         pointerEvents: 'none',
+        overflow: 'hidden',
       }}>
         <img
-          src="/map-placeholder.jpg"
+          src={thumbUrl ?? '/map-placeholder.jpg'}
           alt=""
           style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            objectPosition: 'left center',
-            opacity: isDark ? 0.18 : 0.25,
+            position: 'absolute',
+            height: '120%',
+            width: 'auto',
+            top: '50%',
+            right: '-8%',
+            transform: 'translateY(-50%)',
+            opacity: isDark ? 0.20 : 0.30,
             mixBlendMode: isDark ? 'screen' : 'multiply',
           }}
         />
+        {/* Fade from left — solid until ~30%, fully transparent by 65% */}
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: `linear-gradient(to right, ${t.paper} 0%, ${t.paper}cc 20%, ${t.paper}44 55%, transparent 100%)`,
+          background: `linear-gradient(to right, ${t.paper} 0%, ${t.paper} 30%, ${t.paper}cc 44%, ${t.paper}44 58%, transparent 68%)`,
         }} />
       </div>
 
@@ -67,7 +80,7 @@ export function SetupLandingPage({
       }}>
         <HachureLogo />
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <DarkModeToggle isDark={isDark} onToggle={() => setIsDark(d => !d)} t={t} />
+          <DarkModeToggle isDark={isDark} onToggle={onToggleDark} t={t} />
           <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkFaint, letterSpacing: 1.5 }}>V0.1</span>
         </div>
       </div>
@@ -121,7 +134,7 @@ export function SetupLandingPage({
               onMouseLeave={e => { e.currentTarget.style.background = t.ink }}
             >
               <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontFamily: t.sans, fontWeight: 600, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: t.paper }}>
                     Resume
                   </span>
@@ -129,6 +142,11 @@ export function SetupLandingPage({
                     last session
                   </span>
                 </div>
+                {mapTitle && (
+                  <div style={{ fontFamily: t.serif, fontSize: 17, fontStyle: 'italic', color: t.paper, marginBottom: 3 }}>
+                    {mapTitle}
+                  </div>
+                )}
                 <div style={{ fontFamily: t.sans, fontSize: 11, color: t.inkFaint }}>
                   {generatedMetadata
                     ? `${paperSize} · ${orientation} · ${generatedMetadata.hex_count} hexes · ${generatedMetadata.hex_size_km.toFixed(1)} km each`

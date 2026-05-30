@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { TK } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
 import type { TerrainViewCanvasHandle } from '../TerrainViewCanvas'
+import { shouldSuppressShortcut } from '../../lib/keyboard'
 
 // ── Primitives ────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ function DockBtn({
   label: string
   children: React.ReactNode
 }) {
+  const t = useTheme()
   return (
     <button
       onClick={onClick}
@@ -25,26 +27,28 @@ function DockBtn({
         height: 36,
         padding: '0 12px',
         display: 'flex', alignItems: 'center', gap: 7,
-        background: active ? TK.ink : 'none',
+        background: active ? t.ink : 'none',
         border: 'none',
         cursor: 'pointer',
-        color: active ? TK.surface : TK.ink2,
+        color: active ? t.surface : t.ink2,
         flexShrink: 0,
       }}
     >
       {children}
-      <span style={{ fontFamily: TK.mono, fontSize: 10, letterSpacing: 0.4 }}>{label}</span>
+      <span style={{ fontFamily: t.mono, fontSize: 10, letterSpacing: 0.4 }}>{label}</span>
     </button>
   )
 }
 
 function DockDivider() {
-  return <div style={{ width: 1, height: 20, background: TK.line, flexShrink: 0, margin: '0 2px' }} />
+  const t = useTheme()
+  return <div style={{ width: 1, height: 20, background: t.line, flexShrink: 0, margin: '0 2px' }} />
 }
 
 // ── BottomDock ────────────────────────────────────────────────────────────────
 
 export function BottomDock({ canvasRef }: { canvasRef: React.RefObject<TerrainViewCanvasHandle | null> }) {
+  const t = useTheme()
   const [overlayOn, setOverlayOn] = useState(false)
 
   const peekStart = () => { canvasRef.current?.peekStart(); setOverlayOn(true) }
@@ -55,7 +59,8 @@ export function BottomDock({ canvasRef }: { canvasRef: React.RefObject<TerrainVi
     let held = false
     const onDown = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || held) return
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (shouldSuppressShortcut(e)) return
+      e.preventDefault()
       held = true
       setOverlayOn(true)
     }
@@ -81,9 +86,9 @@ export function BottomDock({ canvasRef }: { canvasRef: React.RefObject<TerrainVi
       zIndex: 20,
       display: 'flex',
       alignItems: 'center',
-      background: TK.surface,
-      border: `1px solid ${TK.line}`,
-      boxShadow: TK.shadowFlyout,
+      background: t.surface,
+      border: `1px solid ${t.line}`,
+      boxShadow: t.shadowFlyout,
       pointerEvents: 'auto',
     }}>
       <DockBtn onMouseDown={peekStart} onMouseUp={peekEnd} onMouseLeave={peekEnd} active={overlayOn} label="Map peek">
@@ -92,15 +97,15 @@ export function BottomDock({ canvasRef }: { canvasRef: React.RefObject<TerrainVi
           <circle cx="7" cy="7" r="1.8" />
         </svg>
         <span style={{
-          fontFamily: TK.mono,
+          fontFamily: t.mono,
           fontSize: 9.5,
-          color: overlayOn ? TK.ink2 : TK.inkFaint,
+          color: overlayOn ? t.ink2 : t.inkFaint,
           padding: '1px 5px',
-          borderTop: `1px solid ${overlayOn ? 'rgba(0,0,0,0.15)' : TK.line}`,
-          borderLeft: `1px solid ${overlayOn ? 'rgba(0,0,0,0.15)' : TK.line}`,
-          borderRight: `1px solid ${overlayOn ? 'rgba(0,0,0,0.15)' : TK.line}`,
+          borderTop: `1px solid ${overlayOn ? 'rgba(0,0,0,0.15)' : t.line}`,
+          borderLeft: `1px solid ${overlayOn ? 'rgba(0,0,0,0.15)' : t.line}`,
+          borderRight: `1px solid ${overlayOn ? 'rgba(0,0,0,0.15)' : t.line}`,
           borderBottom: `2px solid ${overlayOn ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.18)'}`,
-          background: TK.paper,
+          background: t.paper,
           letterSpacing: 0,
         }}>
           space

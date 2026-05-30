@@ -3,7 +3,7 @@ import {
   useMapStore,
   type HexHighlight, type IconOverlay, type LabelOverlay,
 } from '../../store/mapStore'
-import { TK } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
 import {
   SidebarShell, SidebarHeader, SidebarSection, SidebarDetailHeader,
   DetailViewShell, ToggleRow, DashedAddBtn,
@@ -25,6 +25,7 @@ const COMPACT_PALETTE = [
 ] as const
 
 function CompactColorPalette({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const t = useTheme()
   const inputRef = useRef<HTMLInputElement>(null)
   const norm = (c: string) => c.toLowerCase()
   const allPalette: string[] = (COMPACT_PALETTE as readonly (readonly string[])[]).flat()
@@ -44,7 +45,7 @@ function CompactColorPalette({ value, onChange }: { value: string; onChange: (c:
               background: color,
               border: 'none',
               cursor: 'pointer', padding: 0,
-              outline: active ? `2.5px solid ${TK.ink}` : 'none',
+              outline: active ? `2.5px solid ${t.ink}` : 'none',
               outlineOffset: -2,
             }}
           />
@@ -85,9 +86,9 @@ function CompactColorPalette({ value, onChange }: { value: string; onChange: (c:
                 style={{
                   flex: 1, height: 30,
                   background: color,
-                  border: color === '#ffffff' ? `1px solid ${TK.line2}` : 'none',
+                  border: color === '#ffffff' ? `1px solid ${t.line2}` : 'none',
                   cursor: 'pointer', padding: 0,
-                  outline: active ? `2.5px solid ${TK.rust}` : 'none',
+                  outline: active ? `2.5px solid ${t.rust}` : 'none',
                   outlineOffset: -2,
                 }}
               />
@@ -99,15 +100,15 @@ function CompactColorPalette({ value, onChange }: { value: string; onChange: (c:
             style={{
               flex: 1, height: 30,
               background: isCustom ? value : 'transparent',
-              border: isCustom ? 'none' : `1px dashed ${TK.line}`,
+              border: isCustom ? 'none' : `1px dashed ${t.line}`,
               cursor: 'pointer', padding: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              outline: isCustom ? `2.5px solid ${TK.rust}` : 'none',
+              outline: isCustom ? `2.5px solid ${t.rust}` : 'none',
               outlineOffset: -2,
             }}
           >
             {!isCustom && (
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={TK.inkFaint} strokeWidth="1.4" strokeLinecap="round">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={t.inkFaint} strokeWidth="1.4" strokeLinecap="round">
                 <path d="M5 1v8M1 5h8" />
               </svg>
             )}
@@ -146,6 +147,7 @@ const OVERLAY_DEFAULTS = {
 // ── Swatch SVGs (list view) ───────────────────────────────────────────────────
 
 function HighlightSwatch({ h }: { h: HexHighlight }) {
+  const t = useTheme()
   const color = h.color
   const isLine = h.mode !== 'area'
 
@@ -165,7 +167,7 @@ function HighlightSwatch({ h }: { h: HexHighlight }) {
     return <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}><line x1="1" y1="9" x2="17" y2="9" {...lineProps} /></svg>
   }
 
-  const strokeProps = { stroke: h.strokeEnabled ? color : TK.line, strokeWidth: h.strokeEnabled ? 1.5 : 0.75 }
+  const strokeProps = { stroke: h.strokeEnabled ? color : t.line, strokeWidth: h.strokeEnabled ? 1.5 : 0.75 }
   const patId = `ov2-hatch-${color.replace('#', '')}`
   if ((h.fillPattern ?? 'none') === 'hatched' && h.fillEnabled && h.fillOpacity > 0) {
     return (
@@ -190,6 +192,7 @@ function HighlightSwatch({ h }: { h: HexHighlight }) {
 }
 
 function IconShapeSwatch({ shape, fillColor, strokeColor, strokeWidth }: Pick<IconOverlay, 'shape' | 'fillColor' | 'strokeColor' | 'strokeWidth'>) {
+  const t = useTheme()
   const cx = 9, cy = 9, r = 6
   const sw = Math.min(strokeWidth * 0.55, 2)
   const p = { fill: fillColor, stroke: strokeWidth > 0 ? strokeColor : 'none', strokeWidth: sw }
@@ -203,6 +206,7 @@ function IconShapeSwatch({ shape, fillColor, strokeColor, strokeWidth }: Pick<Ic
 }
 
 function LabelSwatch({ textColor, bgColor, strokeColor }: Pick<LabelOverlay, 'textColor' | 'bgColor' | 'strokeColor'>) {
+  const t = useTheme()
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
       <rect x="1.5" y="4" width="15" height="10" rx="1" fill={bgColor === 'transparent' ? 'none' : bgColor} stroke={strokeColor} strokeWidth="1.2" />
@@ -219,6 +223,7 @@ function OverlayRow({
   swatch: React.ReactNode; label: string; sub?: string; active: boolean
   onSelect: () => void; onCog: () => void; onDelete: () => void
 }) {
+  const t = useTheme()
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -231,29 +236,29 @@ function OverlayRow({
         alignItems: 'center',
         gap: 10,
         padding: '7px 12px 7px 10px',
-        borderLeft: `2px solid ${active ? TK.rust : 'transparent'}`,
-        background: active ? tintBg(TK.rust, 0.08) : 'transparent',
+        borderLeft: `2px solid ${active ? t.rust : 'transparent'}`,
+        background: active ? tintBg(t.rust, 0.08) : 'transparent',
         cursor: 'pointer',
       }}
     >
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{swatch}</div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: TK.sans, fontSize: 12.5, fontWeight: active ? 600 : 500, color: TK.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontFamily: t.sans, fontSize: 12.5, fontWeight: active ? 600 : 500, color: t.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {label}
         </div>
-        {sub && <div style={{ fontFamily: TK.mono, fontSize: 9.5, color: TK.inkFaint, marginTop: 1 }}>{sub}</div>}
+        {sub && <div style={{ fontFamily: t.mono, fontSize: 9.5, color: t.inkFaint, marginTop: 1 }}>{sub}</div>}
       </div>
       <button onClick={e => { e.stopPropagation(); onCog() }}
-        style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: TK.inkFaint, opacity: active || hovered ? 1 : 0, padding: 0 }}
+        style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: t.inkFaint, opacity: active || hovered ? 1 : 0, padding: 0 }}
       >
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3">
           <circle cx="6" cy="6" r="1.8" /><path d="M6 0v2M6 10v2M0 6h2M10 6h2M2 2l1.4 1.4M8.6 8.6L10 10M2 10l1.4-1.4M8.6 3.4L10 2" />
         </svg>
       </button>
       <button onClick={e => { e.stopPropagation(); onDelete() }}
-        style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: TK.inkFaint, opacity: active || hovered ? 1 : 0, padding: 0, fontSize: 14, lineHeight: 1 }}
-        onMouseEnter={e => (e.currentTarget.style.color = TK.rust)}
-        onMouseLeave={e => (e.currentTarget.style.color = TK.inkFaint)}
+        style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: t.inkFaint, opacity: active || hovered ? 1 : 0, padding: 0, fontSize: 14, lineHeight: 1 }}
+        onMouseEnter={e => (e.currentTarget.style.color = t.rust)}
+        onMouseLeave={e => (e.currentTarget.style.color = t.inkFaint)}
       >×</button>
     </div>
   )
@@ -262,20 +267,22 @@ function OverlayRow({
 // ── Detail-view helpers ───────────────────────────────────────────────────────
 
 function SubLabel({ label }: { label: string }) {
+  const t = useTheme()
   return (
-    <div style={{ padding: '6px 14px 2px', fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
+    <div style={{ padding: '6px 14px 2px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
       {label}
     </div>
   )
 }
 
 function ClearBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  const t = useTheme()
   return (
     <div style={{ padding: '2px 14px 6px' }}>
       <button
         onClick={onClick}
-        style={{ width: '100%', padding: '6px 0', background: 'none', border: `1px solid ${TK.rust}`, color: TK.rust, cursor: 'pointer', fontFamily: TK.sans, fontSize: 12 }}
-        onMouseEnter={e => { e.currentTarget.style.background = tintBg(TK.rust, 0.08) }}
+        style={{ width: '100%', padding: '6px 0', background: 'none', border: `1px solid ${t.rust}`, color: t.rust, cursor: 'pointer', fontFamily: t.sans, fontSize: 12 }}
+        onMouseEnter={e => { e.currentTarget.style.background = tintBg(t.rust, 0.08) }}
         onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
       >
         {label}
@@ -287,8 +294,9 @@ function ClearBtn({ label, onClick }: { label: string; onClick: () => void }) {
 type LinePattern = 'none' | 'dotted' | 'dashed' | 'dashdot'
 
 function LinePatternBtn({ pattern, active, onClick }: { pattern: LinePattern; active: boolean; onClick: () => void }) {
+  const t = useTheme()
   const sw = 1.4
-  const color = active ? TK.rust : TK.inkMute
+  const color = active ? t.rust : t.inkMute
   const lp = { stroke: color, strokeWidth: sw }
   const preview: Record<LinePattern, React.ReactNode> = {
     none:    <svg width="32" height="20" viewBox="0 0 32 20"><line x1="2" y1="10" x2="30" y2="10" {...lp} strokeLinecap="round" /></svg>,
@@ -297,15 +305,16 @@ function LinePatternBtn({ pattern, active, onClick }: { pattern: LinePattern; ac
     dashdot: <svg width="32" height="20" viewBox="0 0 32 20"><line x1="2" y1="10" x2="9" y2="10" {...lp} strokeLinecap="butt" /><circle cx="13" cy="10" r="1.5" fill={color} /><line x1="17" y1="10" x2="24" y2="10" {...lp} strokeLinecap="butt" /><circle cx="28" cy="10" r="1.5" fill={color} /></svg>,
   }
   return (
-    <button onClick={onClick} title={pattern} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px 4px', background: active ? tintBg(TK.rust, 0.1) : 'transparent', border: `1px solid ${active ? TK.rust : TK.line}`, cursor: 'pointer', flexShrink: 0 }}>
+    <button onClick={onClick} title={pattern} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px 4px', background: active ? tintBg(t.rust, 0.1) : 'transparent', border: `1px solid ${active ? t.rust : t.line}`, cursor: 'pointer', flexShrink: 0 }}>
       {preview[pattern]}
     </button>
   )
 }
 
 function ShapePreview({ shape }: { shape: IconOverlay['shape'] }) {
+  const t = useTheme()
   const cx = 18, cy = 18, r = 10
-  const p = { fill: TK.inkMute, stroke: TK.line, strokeWidth: 1 }
+  const p = { fill: t.inkMute, stroke: t.line, strokeWidth: 1 }
   if (shape === 'circle')   return <svg width="36" height="36" viewBox="0 0 36 36"><circle cx={cx} cy={cy} r={r} {...p} /></svg>
   if (shape === 'square')   return <svg width="36" height="36" viewBox="0 0 36 36"><rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} {...p} /></svg>
   if (shape === 'triangle') { const s60 = r * Math.sin(Math.PI / 3); return <svg width="36" height="36" viewBox="0 0 36 36"><polygon points={`${cx},${cy - r} ${cx - s60},${cy + r * 0.5} ${cx + s60},${cy + r * 0.5}`} {...p} /></svg> }
@@ -319,6 +328,7 @@ function ShapePreview({ shape }: { shape: IconOverlay['shape'] }) {
 // Order: colour (no section header) → fill (area) → stroke → shape → data
 
 function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void }) {
+  const t = useTheme()
   const { highlights, updateHighlight, clearAllHexHighlights, clearHighlightLine, clearHighlightEdgePath } = useMapStore()
   const h = highlights.find(x => x.id === id)
   if (!h) { onBack(); return null }
@@ -340,13 +350,13 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
     }>
 
       {/* Colour — full-width chips, no section wrapper */}
-      <div style={{ borderBottom: `1px solid ${TK.line2}` }}>
+      <div style={{ borderBottom: `1px solid ${t.line2}` }}>
         <CompactColorPalette value={h.color} onChange={color => upd({ color })} />
       </div>
 
       {/* Fill (areas only) */}
       {isArea && (
-        <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <div style={{ borderTop: `1px solid ${t.line2}` }}>
           <SubLabel label="Fill" />
           <MiniSlider
             label="Opacity"
@@ -373,7 +383,7 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
       )}
 
       {/* Stroke */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Stroke" />
         <MiniSlider label="Opacity" display={h.strokeOpacity === 0 ? 'off' : `${Math.round(h.strokeOpacity * 100)}%`} value={Math.round(h.strokeOpacity * 100)} min={0} max={100} step={10} onChange={v => upd({ strokeOpacity: v / 100, strokeEnabled: v > 0 })} />
         <MiniSlider label="Width"   display={String(h.strokeWidth)} value={h.strokeWidth} min={1} max={20} step={0.5} onChange={v => upd({ strokeWidth: v })} />
@@ -389,7 +399,7 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
       </div>
 
       {/* Shape */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Shape" />
         {isArea && (
           <ToggleRow
@@ -405,7 +415,7 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
       </div>
 
       {/* Data */}
-      <div style={{ borderTop: `1px solid ${TK.line2}`, padding: '8px 14px' }}>
+      <div style={{ borderTop: `1px solid ${t.line2}`, padding: '8px 14px' }}>
         <ClearBtn
           label={isArea ? 'Clear all marked hexes' : 'Clear path'}
           onClick={() => {
@@ -424,6 +434,7 @@ function HighlightDetailView({ id, onBack }: { id: string; onBack: () => void })
 // Order: shape → colours (fill / stroke) → size → data
 
 function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
+  const t = useTheme()
   const { iconOverlays, updateIconOverlay, clearIconOverlay } = useMapStore()
   const o = iconOverlays.find(x => x.id === id)
   if (!o) { onBack(); return null }
@@ -435,12 +446,12 @@ function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
     }>
 
       {/* Shape */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Shape" />
         <div style={{ display: 'flex', gap: 4, padding: '4px 14px' }}>
           {(['circle', 'square', 'triangle', 'diamond', 'star'] as const).map(shape => (
             <button key={shape} onClick={() => upd({ shape })} title={shape.charAt(0).toUpperCase() + shape.slice(1)}
-              style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: o.shape === shape ? tintBg(TK.rust, 0.1) : 'transparent', border: `1px solid ${o.shape === shape ? TK.rust : TK.line}`, cursor: 'pointer', padding: 0, flexShrink: 0 }}
+              style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: o.shape === shape ? tintBg(t.rust, 0.1) : 'transparent', border: `1px solid ${o.shape === shape ? t.rust : t.line}`, cursor: 'pointer', padding: 0, flexShrink: 0 }}
             >
               <ShapePreview shape={shape} />
             </button>
@@ -449,7 +460,7 @@ function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
 
       {/* Colours — fill + stroke */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Fill" />
         <CompactColorPalette value={o.fillColor} onChange={v => upd({ fillColor: v })} />
         <SubLabel label="Stroke" />
@@ -457,13 +468,13 @@ function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
 
       {/* Size */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Size" />
         <MiniSlider label="Size"         display={`${Math.round(o.size * 100)}%`} value={Math.round(o.size * 100)} min={10} max={70} step={5} onChange={v => upd({ size: v / 100 })} />
         <MiniSlider label="Stroke width" display={String(o.strokeWidth)}          value={o.strokeWidth}           min={0}  max={8}  step={0.5} onChange={v => upd({ strokeWidth: v })} />
       </div>
 
-      <div style={{ borderTop: `1px solid ${TK.line2}`, padding: '8px 14px' }}>
+      <div style={{ borderTop: `1px solid ${t.line2}`, padding: '8px 14px' }}>
         <ClearBtn label="Clear all icons" onClick={() => clearIconOverlay(id)} />
       </div>
 
@@ -475,6 +486,7 @@ function IconDetailView({ id, onBack }: { id: string; onBack: () => void }) {
 // Order: colours (text / bg / stroke) → style → data
 
 function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
+  const t = useTheme()
   const { labelOverlays, updateLabelOverlay, clearLabelOverlay } = useMapStore()
   const o = labelOverlays.find(x => x.id === id)
   if (!o) { onBack(); return null }
@@ -486,7 +498,7 @@ function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
     }>
 
       {/* Colours — text / bg / stroke */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Text" />
         <CompactColorPalette value={o.textColor} onChange={v => upd({ textColor: v })} />
 
@@ -497,13 +509,13 @@ function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
             title="Transparent"
             style={{
               width: 26, height: 26, flexShrink: 0, padding: 0, cursor: 'pointer',
-              border: o.bgColor === 'transparent' ? `2px solid ${TK.rust}` : `1px solid ${TK.line}`,
+              border: o.bgColor === 'transparent' ? `2px solid ${t.rust}` : `1px solid ${t.line}`,
               backgroundImage: 'repeating-conic-gradient(#ccc 0% 25%, transparent 0% 50%)',
               backgroundSize: '8px 8px',
-              boxShadow: o.bgColor === 'transparent' ? `0 0 0 1.5px ${TK.rust}` : 'none',
+              boxShadow: o.bgColor === 'transparent' ? `0 0 0 1.5px ${t.rust}` : 'none',
             }}
           />
-          <span style={{ fontFamily: TK.mono, fontSize: 9.5, color: o.bgColor === 'transparent' ? TK.rust : TK.inkFaint }}>
+          <span style={{ fontFamily: t.mono, fontSize: 9.5, color: o.bgColor === 'transparent' ? t.rust : t.inkFaint }}>
             transparent
           </span>
         </div>
@@ -514,14 +526,14 @@ function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
 
       {/* Style */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Style" />
         <MiniSlider label="Text size"    display={`${o.textSize}px`}                  value={o.textSize}             min={1}  max={16}  step={0.5} onChange={v => upd({ textSize: v })} />
         <MiniSlider label="Stroke width" display={String(o.strokeWidth)}              value={o.strokeWidth}          min={0}  max={8}   step={0.5} onChange={v => upd({ strokeWidth: v })} />
         <MiniSlider label="Opacity"      display={`${Math.round(o.opacity * 100)}%`}  value={Math.round(o.opacity * 100)} min={0} max={100} step={5} onChange={v => upd({ opacity: v / 100 })} />
       </div>
 
-      <div style={{ borderTop: `1px solid ${TK.line2}`, padding: '8px 14px' }}>
+      <div style={{ borderTop: `1px solid ${t.line2}`, padding: '8px 14px' }}>
         <ClearBtn label="Clear all labels" onClick={() => clearLabelOverlay(id)} />
       </div>
 
@@ -534,6 +546,7 @@ function LabelDetailView({ id, onBack }: { id: string; onBack: () => void }) {
 type ViewId = 'list' | 'highlight-settings' | 'icon-settings' | 'label-settings'
 
 export function OverlaysSidebarV2() {
+  const t = useTheme()
   const {
     highlights, addHighlight, deleteHighlight,
     activeHighlightId, setActiveHighlightId,
@@ -611,11 +624,11 @@ export function OverlaysSidebarV2() {
       <SidebarHeader title="Overlays" />
 
       <SidebarSection label="Tools">
-        <div onClick={handleEraser} style={{ display: 'grid', gridTemplateColumns: '20px 1fr', alignItems: 'center', gap: 10, padding: '7px 12px 7px 10px', borderLeft: `2px solid ${isErasing ? TK.rust : 'transparent'}`, background: isErasing ? tintBg(TK.rust, 0.08) : 'transparent', cursor: 'pointer' }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={isErasing ? TK.rust : TK.inkMute} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <div onClick={handleEraser} style={{ display: 'grid', gridTemplateColumns: '20px 1fr', alignItems: 'center', gap: 10, padding: '7px 12px 7px 10px', borderLeft: `2px solid ${isErasing ? t.rust : 'transparent'}`, background: isErasing ? tintBg(t.rust, 0.08) : 'transparent', cursor: 'pointer' }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={isErasing ? t.rust : t.inkMute} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 14h12M10 2L14 6 6 14 2 10 10 2z" />
           </svg>
-          <span style={{ fontFamily: TK.sans, fontSize: 12.5, fontWeight: isErasing ? 600 : 500, color: isErasing ? TK.rust : TK.ink }}>Eraser</span>
+          <span style={{ fontFamily: t.sans, fontSize: 12.5, fontWeight: isErasing ? 600 : 500, color: isErasing ? t.rust : t.ink }}>Eraser</span>
         </div>
       </SidebarSection>
 

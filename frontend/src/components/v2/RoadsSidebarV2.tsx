@@ -8,7 +8,7 @@ import { buildRoadChains, buildRailChains } from '../../lib/roadChains'
 import { drawRoadsAndRails } from '../../lib/drawRoadsRails'
 import { PALETTE_RAIL_LIGHT, PALETTE_RAIL_DARK } from '../../palettes'
 import { computePaper } from '../../lib/projection'
-import { TK } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
 import {
   SidebarShell, SidebarHeader, SidebarSection, SidebarDetailHeader,
   DetailSection, DetailViewShell, ToggleRow,
@@ -38,6 +38,7 @@ const RAIL_DARK_GROUPS  = [{ label: 'Dark',  colors: [...PALETTE_RAIL_DARK]  }] 
 // identity project fn, so every style/wiggle/smoothing param reflects live.
 
 function HexPreview({ mode, tier = 0 }: { mode: 'road' | 'rail'; tier?: 0 | 1 | 2 }) {
+  const t = useTheme()
   const {
     hexSizeMm, hexOrientation,
     roadTierStyles, roadWiggleAmp, roadWiggleFreq, roadSmoothing, roadPathSmoothing,
@@ -63,13 +64,13 @@ function HexPreview({ mode, tier = 0 }: { mode: 'road' | 'rail'; tier?: 0 | 1 | 
   // We need to multiply outerW by this physicalScale before drawing.
   const physicalScale = (() => {
     if (!generatedMetadata) return 1
-    const canvasAreaW = window.innerWidth - TK.sidebarWidth - 32
+    const canvasAreaW = window.innerWidth - t.sidebarWidth - 32
     const canvasAreaH = window.innerHeight - 48
     const { pw } = computePaper(canvasAreaW, canvasAreaH, generatedMetadata)
     return PX_PER_MM * generatedMetadata.paper_mm[0] / pw
   })()
 
-  const W = TK.sidebarWidth
+  const W = t.sidebarWidth
   const hexH = (isFlat ? sqrt3 : 2) * hexR
   const H = Math.min(140, Math.max(70, Math.round(hexH * 2.4)))
   const cy = H / 2
@@ -205,7 +206,7 @@ function HexPreview({ mode, tier = 0 }: { mode: 'road' | 'rail'; tier?: 0 | 1 | 
       {/* Hex grid — SVG so it stays crisp and needs no canvas state */}
       <svg width={W} height={H} style={{ display: 'block', position: 'absolute', top: 0, left: 0 }}>
         {centers.map(({ x, y }, i) => (
-          <polygon key={i} points={hexPolyPts(x, y)} fill="none" stroke={TK.line} strokeWidth={0.8} />
+          <polygon key={i} points={hexPolyPts(x, y)} fill="none" stroke={t.line} strokeWidth={0.8} />
         ))}
       </svg>
       {/* Road / rail — drawn by the exact same canvas pipeline as the map */}
@@ -220,8 +221,9 @@ function HexPreview({ mode, tier = 0 }: { mode: 'road' | 'rail'; tier?: 0 | 1 | 
 // ── Sub-label ─────────────────────────────────────────────────────────────────
 
 function SubLabel({ label }: { label: string }) {
+  const t = useTheme()
   return (
-    <div style={{ padding: '6px 14px 0', fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
+    <div style={{ padding: '6px 14px 0', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
       {label}
     </div>
   )
@@ -240,12 +242,13 @@ type ViewId = 'list' | 'road-style' | 'rail-style' | 'road-shape' | 'rail-shape'
 // ── ActionLink — small right-aligned text link for section headers ─────────────
 
 function ActionLink({ label, onClick }: { label: string; onClick: () => void }) {
+  const t = useTheme()
   return (
     <button
       onClick={onClick}
       style={{
         background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-        fontFamily: TK.mono, fontSize: 9, color: TK.inkMute, letterSpacing: 0.3,
+        fontFamily: t.mono, fontSize: 9, color: t.inkMute, letterSpacing: 0.3,
       }}
     >
       {label} ›
@@ -261,6 +264,7 @@ function FetchButton({ label, status, onFetch, onClear }: {
   onFetch: () => void
   onClear?: () => void
 }) {
+  const t = useTheme()
   const loading = status === 'loading'
   const done = status === 'done'
   return (
@@ -271,10 +275,10 @@ function FetchButton({ label, status, onFetch, onClear }: {
         style={{
           flex: 1, padding: '5px 0',
           background: 'none',
-          border: `1px solid ${loading ? TK.line : TK.rust}`,
-          color: loading ? TK.inkFaint : TK.rust,
+          border: `1px solid ${loading ? t.line : t.rust}`,
+          color: loading ? t.inkFaint : t.rust,
           cursor: loading ? 'not-allowed' : 'pointer',
-          fontFamily: TK.mono, fontSize: 10, letterSpacing: 0.3,
+          fontFamily: t.mono, fontSize: 10, letterSpacing: 0.3,
         }}
       >
         {loading ? 'fetching…' : `Fetch ${label}`}
@@ -284,7 +288,7 @@ function FetchButton({ label, status, onFetch, onClear }: {
           onClick={onClear}
           style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-            fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint,
+            fontFamily: t.mono, fontSize: 9, color: t.inkFaint,
           }}
         >
           clear
@@ -303,6 +307,7 @@ function ApplyRow({ tiers, highlightTier, onApply, onHighlight, onUnhighlight }:
   onHighlight: (i: number) => void
   onUnhighlight: () => void
 }) {
+  const t = useTheme()
   return (
     <div style={{ display: 'flex', gap: 4, padding: '4px 14px' }}>
       {tiers.map((label, i) => (
@@ -313,10 +318,10 @@ function ApplyRow({ tiers, highlightTier, onApply, onHighlight, onUnhighlight }:
           onMouseLeave={onUnhighlight}
           style={{
             flex: 1, padding: '4px 0',
-            background: highlightTier === i ? tintBg(TK.rust, 0.1) : 'transparent',
-            border: `1px solid ${highlightTier === i ? TK.rust : TK.line}`,
-            color: highlightTier === i ? TK.rust : TK.inkMute,
-            cursor: 'pointer', fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.3,
+            background: highlightTier === i ? tintBg(t.rust, 0.1) : 'transparent',
+            border: `1px solid ${highlightTier === i ? t.rust : t.line}`,
+            color: highlightTier === i ? t.rust : t.inkMute,
+            cursor: 'pointer', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.3,
           }}
         >
           {label}
@@ -329,6 +334,7 @@ function ApplyRow({ tiers, highlightTier, onApply, onHighlight, onUnhighlight }:
 // ── RoadShapeView ─────────────────────────────────────────────────────────────
 
 function RoadShapeView({ onBack }: { onBack: () => void }) {
+  const t = useTheme()
   const {
     roadWiggleAmp, setRoadWiggleAmp,
     roadWiggleFreq, setRoadWiggleFreq,
@@ -359,10 +365,10 @@ function RoadShapeView({ onBack }: { onBack: () => void }) {
       />
     }>
       <DetailSection label="Geometry" hint="Default wiggle and smoothing for all road tiers.">
-        <MiniSlider label="Wiggle amp" display={`${Math.round(roadWiggleAmp * 100)}%`} value={Math.round(roadWiggleAmp * 100)} min={0} max={100} step={1} accentColor={TK.rust} onChange={v => setRoadWiggleAmp(v / 100)} />
-        <MiniSlider label="Wiggle freq" display={roadWiggleFreq.toFixed(1)} value={Math.round(roadWiggleFreq * 10)} min={5} max={100} step={1} accentColor={TK.rust} onChange={v => setRoadWiggleFreq(v / 10)} />
-        <MiniSlider label="Path smooth" display={roadPathSmoothing} value={roadPathSmoothing} min={0} max={50} step={1} accentColor={TK.rust} onChange={setRoadPathSmoothing} />
-        <MiniSlider label="Line smooth" display={roadSmoothing} value={roadSmoothing} min={0} max={30} step={1} accentColor={TK.rust} onChange={setRoadSmoothing} />
+        <MiniSlider label="Wiggle amp" display={`${Math.round(roadWiggleAmp * 100)}%`} value={Math.round(roadWiggleAmp * 100)} min={0} max={100} step={1} accentColor={t.rust} onChange={v => setRoadWiggleAmp(v / 100)} />
+        <MiniSlider label="Wiggle freq" display={roadWiggleFreq.toFixed(1)} value={Math.round(roadWiggleFreq * 10)} min={5} max={100} step={1} accentColor={t.rust} onChange={v => setRoadWiggleFreq(v / 10)} />
+        <MiniSlider label="Path smooth" display={roadPathSmoothing} value={roadPathSmoothing} min={0} max={50} step={1} accentColor={t.rust} onChange={setRoadPathSmoothing} />
+        <MiniSlider label="Line smooth" display={roadSmoothing} value={roadSmoothing} min={0} max={30} step={1} accentColor={t.rust} onChange={setRoadSmoothing} />
       </DetailSection>
     </DetailViewShell>
   )
@@ -371,6 +377,7 @@ function RoadShapeView({ onBack }: { onBack: () => void }) {
 // ── RailShapeView ─────────────────────────────────────────────────────────────
 
 function RailShapeView({ onBack }: { onBack: () => void }) {
+  const t = useTheme()
   const {
     railWiggleAmp, setRailWiggleAmp,
     railWiggleFreq, setRailWiggleFreq,
@@ -415,6 +422,7 @@ function RailShapeView({ onBack }: { onBack: () => void }) {
 // ── RoadStyleView ─────────────────────────────────────────────────────────────
 
 function RoadStyleView({ tier, onBack }: { tier: 0 | 1 | 2; onBack: () => void }) {
+  const t = useTheme()
   const {
     mapStyle,
     roadTierStyles, setRoadTierStyle,
@@ -494,6 +502,7 @@ function RoadStyleView({ tier, onBack }: { tier: 0 | 1 | 2; onBack: () => void }
 // ── RailStyleView ─────────────────────────────────────────────────────────────
 
 function RailStyleView({ onBack }: { onBack: () => void }) {
+  const t = useTheme()
   const {
     railStyle, setRailStyle,
     railWiggleAmp, railWiggleFreq, railPathSmoothing, railSmoothing,
@@ -522,7 +531,7 @@ function RailStyleView({ onBack }: { onBack: () => void }) {
     }>
       <DetailSection label="Appearance" preview={<HexPreview mode="rail" />}>
         <div style={{ padding: '4px 14px' }}>
-          <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.ink2, marginBottom: 6 }}>Style</div>
+          <div style={{ fontFamily: t.sans, fontSize: 11, color: t.ink2, marginBottom: 6 }}>Style</div>
           <SegmentedControl
             options={[{ value: 'classic', label: 'Classic' }, { value: 'cross', label: 'Cross' }]}
             value={railStyle.railStyle}
@@ -563,6 +572,7 @@ function RailStyleView({ onBack }: { onBack: () => void }) {
 // ── SegmentView ───────────────────────────────────────────────────────────────
 
 function SegmentView({ mode, onBack }: { mode: 'road' | 'rail'; onBack: () => void }) {
+  const t = useTheme()
   const {
     roadWiggleAmp, roadWiggleFreq,
     railWiggleAmp, railWiggleFreq,
@@ -578,7 +588,7 @@ function SegmentView({ mode, onBack }: { mode: 'road' | 'rail'; onBack: () => vo
   } = useMapStore()
 
   const isRoad = mode === 'road'
-  const accentColor = isRoad ? TK.rust : '#4a7a9a'
+  const accentColor = isRoad ? t.rust : '#4a7a9a'
   const selectedKeys = isRoad ? selectedRoadSegmentKeys : selectedRailSegmentKeys
   const segmentProps = isRoad ? roadSegmentProps : railSegmentProps
   const hopProps = isRoad ? roadHopProps : railHopProps
@@ -656,7 +666,7 @@ function SegmentView({ mode, onBack }: { mode: 'road' | 'rail'; onBack: () => vo
                 onClick={() => { clearHopProp(selectedHopKey); setSelectedHopKey(null) }}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                  fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint, letterSpacing: 0.3,
+                  fontFamily: t.mono, fontSize: 9, color: t.inkFaint, letterSpacing: 0.3,
                 }}
               >
                 ↺ reset hop
@@ -672,6 +682,7 @@ function SegmentView({ mode, onBack }: { mode: 'road' | 'rail'; onBack: () => vo
 // ── RoadsSidebarV2 ────────────────────────────────────────────────────────────
 
 export function RoadsSidebarV2() {
+  const t = useTheme()
   const {
     roadPaintMode, roadPaintBrush, roadPaintEraser,
     railPaintMode, railPaintEraser,
@@ -766,13 +777,13 @@ export function RoadsSidebarV2() {
         ))}
         <BrushRow
           label="Eraser"
-          color={TK.inkFaint}
+          color={t.inkFaint}
           active={eraserActive}
           shortcut="E"
           onSelect={selectRoadEraser}
         />
         {(roadNodeEditMode || roadSelectMode) && (
-          <div style={{ padding: '4px 14px 0', fontFamily: TK.sans, fontSize: 10.5, color: TK.inkMute, lineHeight: 1.5 }}>
+          <div style={{ padding: '4px 14px 0', fontFamily: t.sans, fontSize: 10.5, color: t.inkMute, lineHeight: 1.5 }}>
             {roadSelectMode ? 'Click a road to select. Cmd+click for a hop.' : 'Click nodes to edit.'}
           </div>
         )}
@@ -781,7 +792,7 @@ export function RoadsSidebarV2() {
             <FetchButton label="from OSM" status={roadsStatus} onFetch={fetchRoads} onClear={clearRoads} />
             {roadsStatus === 'done' && osmHexPaths.length > 0 && (
               <>
-                <div style={{ padding: '2px 14px 0', fontFamily: TK.sans, fontSize: 10.5, color: TK.inkMute }}>Apply as tier:</div>
+                <div style={{ padding: '2px 14px 0', fontFamily: t.sans, fontSize: 10.5, color: t.inkMute }}>Apply as tier:</div>
                 <ApplyRow
                   tiers={['Highways', 'Primary', 'Secondary']}
                   highlightTier={osmHighlightTier}
@@ -811,12 +822,12 @@ export function RoadsSidebarV2() {
         />
         <BrushRow
           label="Eraser"
-          color={TK.inkFaint}
+          color={t.inkFaint}
           active={railEraserActive}
           onSelect={selectRailEraser}
         />
         {railSelectMode && (
-          <div style={{ padding: '4px 14px 0', fontFamily: TK.sans, fontSize: 10.5, color: TK.inkMute, lineHeight: 1.5 }}>
+          <div style={{ padding: '4px 14px 0', fontFamily: t.sans, fontSize: 10.5, color: t.inkMute, lineHeight: 1.5 }}>
             Right-click a rail to select.
           </div>
         )}
@@ -832,9 +843,9 @@ export function RoadsSidebarV2() {
                   style={{
                     width: '100%', padding: '4px 0',
                     background: osmRailHighlight ? tintBg('#4a7a9a', 0.1) : 'transparent',
-                    border: `1px solid ${osmRailHighlight ? '#4a7a9a' : TK.line}`,
-                    color: osmRailHighlight ? '#4a7a9a' : TK.inkMute,
-                    cursor: 'pointer', fontFamily: TK.mono, fontSize: 10, letterSpacing: 0.3,
+                    border: `1px solid ${osmRailHighlight ? '#4a7a9a' : t.line}`,
+                    color: osmRailHighlight ? '#4a7a9a' : t.inkMute,
+                    cursor: 'pointer', fontFamily: t.mono, fontSize: 10, letterSpacing: 0.3,
                   }}
                 >
                   Apply Rails
@@ -852,7 +863,7 @@ export function RoadsSidebarV2() {
         toggle={{ enabled: bridgesEnabled, onChange: setBridgesEnabled }}
       >
         <div style={{ padding: '4px 14px' }}>
-          <div style={{ fontFamily: TK.sans, fontSize: 11, color: TK.ink2, marginBottom: 6 }}>Style</div>
+          <div style={{ fontFamily: t.sans, fontSize: 11, color: t.ink2, marginBottom: 6 }}>Style</div>
           <SegmentedControl
             options={[{ value: 'plank', label: 'Plank' }, { value: 'icon', label: 'Icon' }]}
             value={bridgeStyle}
@@ -860,30 +871,30 @@ export function RoadsSidebarV2() {
           />
         </div>
 
-        <div style={{ padding: '8px 14px 4px', fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Tiers</div>
+        <div style={{ padding: '8px 14px 4px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Tiers</div>
         {bridgeTiers.map((t, idx) => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 14px' }}>
-            <span style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkFaint, width: 14, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+            <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkFaint, width: 14, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
             <input
               type="color"
               value={t.color}
               onChange={e => updateBridgeTier(t.id, { color: e.target.value })}
-              style={{ width: 22, height: 18, border: `1px solid ${TK.line}`, padding: 0, cursor: 'pointer', background: 'none', flexShrink: 0 }}
+              style={{ width: 22, height: 18, border: `1px solid ${t.line}`, padding: 0, cursor: 'pointer', background: 'none', flexShrink: 0 }}
             />
             <input
               type="text"
               value={t.label}
               onChange={e => updateBridgeTier(t.id, { label: e.target.value })}
               style={{
-                flex: 1, minWidth: 0, background: TK.paper, border: `1px solid ${TK.line}`,
-                color: TK.ink2, fontSize: 11, padding: '2px 6px', fontFamily: TK.sans, outline: 'none',
+                flex: 1, minWidth: 0, background: t.paper, border: `1px solid ${t.line}`,
+                color: t.ink2, fontSize: 11, padding: '2px 6px', fontFamily: t.sans, outline: 'none',
               }}
             />
             <button
               onClick={() => removeBridgeTier(t.id)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: TK.inkFaint, fontSize: 13, lineHeight: 1 }}
-              onMouseEnter={e => (e.currentTarget.style.color = TK.rust)}
-              onMouseLeave={e => (e.currentTarget.style.color = TK.inkFaint)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: t.inkFaint, fontSize: 13, lineHeight: 1 }}
+              onMouseEnter={e => (e.currentTarget.style.color = t.rust)}
+              onMouseLeave={e => (e.currentTarget.style.color = t.inkFaint)}
             >×</button>
           </div>
         ))}
@@ -893,8 +904,8 @@ export function RoadsSidebarV2() {
               onClick={addBridgeTier}
               style={{
                 width: '100%', padding: '4px 0',
-                background: 'transparent', border: `1px dashed ${TK.line}`,
-                color: TK.inkFaint, cursor: 'pointer', fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.5,
+                background: 'transparent', border: `1px dashed ${t.line}`,
+                color: t.inkFaint, cursor: 'pointer', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.5,
               }}
             >
               + Add tier

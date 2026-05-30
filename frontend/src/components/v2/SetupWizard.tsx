@@ -1,18 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
-import { TK } from '../../theme'
+import { TK, TK_DARK } from '../../theme'
 import { useMapStore } from '../../store/mapStore'
 import type { PaperSize, Orientation, HexOrientation } from '../../store/mapStore'
 import { MapView } from '../MapView'
 import { generateMapTitle, nominatimZoomForWidth } from '../../lib/generateMapTitle'
 import type { NominatimResult } from '../../lib/generateMapTitle'
 
+type Theme = typeof TK
 type WizardStep = 'source' | 'paper-blank' | 'paper-area' | 'generating'
 type SourceMode = 'osm' | 'blank' | 'reference'
 
-export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
+export function SetupWizard({ onCancel, onDone, isDark = false }: {
+  onCancel: () => void
+  onDone: () => void
+  isDark?: boolean
+}) {
   const [step, setStep] = useState<WizardStep>('source')
   const [source, setSource] = useState<SourceMode>('osm')
   const { setBlankMap, generateMap, startImageImport } = useMapStore()
+  const t = isDark ? TK_DARK : TK
 
   function handleContinue() {
     if (step === 'source') {
@@ -42,10 +48,10 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
     <div style={{
       height: '100vh', width: '100vw',
       display: 'flex', flexDirection: 'column',
-      background: TK.paper, fontFamily: TK.sans, color: TK.ink,
+      background: t.paper, fontFamily: t.sans, color: t.ink,
       overflow: 'hidden',
     }}>
-      <WizardTopBar step={step} onExit={onCancel} />
+      <WizardTopBar step={step} onExit={onCancel} t={t} />
 
       {step === 'source' && (
         <SourcePickerStep
@@ -53,19 +59,20 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
           onSelect={setSource}
           onBack={onCancel}
           onContinue={handleContinue}
+          t={t}
         />
       )}
 
       {step === 'paper-blank' && (
-        <PaperAreaStep showMap={false} onBack={() => setStep('source')} onGenerate={handleStartBlank} />
+        <PaperAreaStep showMap={false} onBack={() => setStep('source')} onGenerate={handleStartBlank} t={t} />
       )}
 
       {step === 'paper-area' && (
-        <PaperAreaStep onBack={() => setStep('source')} onGenerate={handleGenerate} />
+        <PaperAreaStep onBack={() => setStep('source')} onGenerate={handleGenerate} t={t} />
       )}
 
       {step === 'generating' && (
-        <GeneratingStep onDone={onDone} />
+        <GeneratingStep onDone={onDone} t={t} />
       )}
     </div>
   )
@@ -73,28 +80,29 @@ export function SetupWizard({ onCancel, onDone }: { onCancel: () => void; onDone
 
 // ── Wizard top bar ──────────────────────────────────────────────────────────
 
-function WizardTopBar({ step, onExit }: {
+function WizardTopBar({ step, onExit, t }: {
   step: WizardStep
   onExit: () => void
+  t: Theme
 }) {
   return (
     <div style={{
-      height: TK.topBarHeight,
+      height: t.topBarHeight,
       flexShrink: 0,
       display: 'flex', alignItems: 'center',
       padding: '0 20px',
-      borderBottom: `1px solid ${TK.line2}`,
+      borderBottom: `1px solid ${t.line2}`,
     }}>
       <button
         onClick={onExit}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
       >
-        <HachureLogo />
+        <HachureLogo t={t} />
       </button>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
         {step === 'source' && (
-          <span style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkFaint, letterSpacing: 0.5 }}>
+          <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkFaint, letterSpacing: 0.5 }}>
             DRAFT · UNTITLED
           </span>
         )}
@@ -103,11 +111,11 @@ function WizardTopBar({ step, onExit }: {
             onClick={onExit}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
+              fontFamily: t.mono, fontSize: 10, color: t.inkMute,
               letterSpacing: 0.5, padding: '4px 0',
             }}
-            onMouseEnter={e => { e.currentTarget.style.color = TK.ink }}
-            onMouseLeave={e => { e.currentTarget.style.color = TK.inkMute }}
+            onMouseEnter={e => { e.currentTarget.style.color = t.ink }}
+            onMouseLeave={e => { e.currentTarget.style.color = t.inkMute }}
           >
             ESC · SAVE &amp; EXIT
           </button>
@@ -119,11 +127,12 @@ function WizardTopBar({ step, onExit }: {
 
 // ── Screen 01 — Source picker ───────────────────────────────────────────────
 
-function SourcePickerStep({ selected, onSelect, onBack, onContinue }: {
+function SourcePickerStep({ selected, onSelect, onBack, onContinue, t }: {
   selected: SourceMode
   onSelect: (m: SourceMode) => void
   onBack: () => void
   onContinue: () => void
+  t: Theme
 }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -136,19 +145,19 @@ function SourcePickerStep({ selected, onSelect, onBack, onContinue }: {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontFamily: TK.mono, fontSize: 10, letterSpacing: 2,
-            color: TK.rust, textTransform: 'uppercase', marginBottom: 12,
+            fontFamily: t.mono, fontSize: 10, letterSpacing: 2,
+            color: t.rust, textTransform: 'uppercase', marginBottom: 12,
           }}>
             Step 01 of 03
           </div>
           <h2 style={{
-            fontFamily: TK.serif, fontSize: 52, fontWeight: 400,
-            color: TK.ink, margin: '0 0 14px 0', lineHeight: 1.05,
+            fontFamily: t.serif, fontSize: 52, fontWeight: 400,
+            color: t.ink, margin: '0 0 14px 0', lineHeight: 1.05,
           }}>
             What are we starting <em>from?</em>
           </h2>
           <p style={{
-            fontFamily: TK.sans, fontSize: 13, color: TK.inkMute,
+            fontFamily: t.sans, fontSize: 13, color: t.inkMute,
             maxWidth: 520, lineHeight: 1.6, margin: '0 auto',
           }}>
             One choice — cannot be reversed after generation. Paper, hex size, and
@@ -165,7 +174,8 @@ function SourcePickerStep({ selected, onSelect, onBack, onContinue }: {
             footer="REGION SET IN NEXT STEP"
             selected={selected === 'osm'}
             onClick={() => onSelect('osm')}
-            illustration={<OsmIllustration />}
+            illustration={<OsmIllustration t={t} />}
+            t={t}
           />
           <SourceCard
             num="02" category="EMPTY"
@@ -174,7 +184,8 @@ function SourcePickerStep({ selected, onSelect, onBack, onContinue }: {
             footer="NO AREA SETUP NEEDED"
             selected={selected === 'blank'}
             onClick={() => onSelect('blank')}
-            illustration={<BlankIllustration />}
+            illustration={<BlankIllustration t={t} />}
+            t={t}
           />
           <SourceCard
             num="03" category="REFERENCE"
@@ -183,20 +194,22 @@ function SourcePickerStep({ selected, onSelect, onBack, onContinue }: {
             footer="UPLOAD IMAGE IN NEXT STEP"
             selected={selected === 'reference'}
             onClick={() => onSelect('reference')}
-            illustration={<ReferenceIllustration />}
+            illustration={<ReferenceIllustration t={t} />}
+            t={t}
           />
         </div>
       </div>
 
       {/* Bottom nav */}
       <BottomNav
-        left={<NavButton onClick={onBack} ghost>← CANCEL</NavButton>}
+        t={t}
+        left={<NavButton onClick={onBack} ghost t={t}>← CANCEL</NavButton>}
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            <span style={{ fontFamily: TK.mono, fontSize: 10, color: TK.inkMute, letterSpacing: 0.5 }}>
+            <span style={{ fontFamily: t.mono, fontSize: 10, color: t.inkMute, letterSpacing: 0.5 }}>
               STEP 1 / 3
             </span>
-            <NavButton onClick={onContinue}>CONTINUE →</NavButton>
+            <NavButton onClick={onContinue} t={t}>CONTINUE →</NavButton>
           </div>
         }
       />
@@ -204,9 +217,9 @@ function SourcePickerStep({ selected, onSelect, onBack, onContinue }: {
   )
 }
 
-function SourceCard({ num, category, title, desc, footer, selected, onClick, illustration }: {
+function SourceCard({ num, category, title, desc, footer, selected, onClick, illustration, t }: {
   num: string; category: string; title: string; desc: string; footer: string
-  selected: boolean; onClick: () => void; illustration: React.ReactNode
+  selected: boolean; onClick: () => void; illustration: React.ReactNode; t: Theme
 }) {
   return (
     <button
@@ -214,8 +227,8 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
       style={{
         width: 280,
         display: 'flex', flexDirection: 'column',
-        background: TK.surface,
-        border: `1px solid ${selected ? TK.ink : TK.line}`,
+        background: t.surface,
+        border: `1px solid ${selected ? t.ink : t.line}`,
         borderRadius: 2,
         padding: 0,
         cursor: 'pointer',
@@ -229,9 +242,9 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
         <div style={{
           position: 'absolute', top: 12, right: 12,
           width: 20, height: 20,
-          background: TK.ink,
+          background: t.ink,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, color: '#fff',
+          fontSize: 11, color: t.paper,
           zIndex: 1,
         }}>
           ✓
@@ -241,10 +254,10 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
       {/* Illustration */}
       <div style={{
         height: 140,
-        background: TK.paper2,
+        background: t.paper2,
         overflow: 'hidden',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderBottom: `1px solid ${TK.line2}`,
+        borderBottom: `1px solid ${t.line2}`,
       }}>
         {illustration}
       </div>
@@ -252,19 +265,19 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
       {/* Content */}
       <div style={{ padding: '16px 18px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{
-          fontFamily: TK.mono, fontSize: 9, letterSpacing: 1.5,
-          color: TK.rust, textTransform: 'uppercase',
+          fontFamily: t.mono, fontSize: 9, letterSpacing: 1.5,
+          color: t.rust, textTransform: 'uppercase',
         }}>
           {num} · {category}
         </div>
         <div style={{
-          fontFamily: TK.serif, fontSize: 24, fontWeight: 400,
-          color: TK.ink, lineHeight: 1.1,
+          fontFamily: t.serif, fontSize: 24, fontWeight: 400,
+          color: t.ink, lineHeight: 1.1,
         }}>
           {title}
         </div>
         <div style={{
-          fontFamily: TK.sans, fontSize: 12, color: TK.inkMute,
+          fontFamily: t.sans, fontSize: 12, color: t.inkMute,
           lineHeight: 1.55, flex: 1,
         }}>
           {desc}
@@ -274,9 +287,9 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
       {/* Footer note */}
       <div style={{
         padding: '10px 18px',
-        borderTop: `1px solid ${TK.line2}`,
-        fontFamily: TK.mono, fontSize: 9, letterSpacing: 1.2,
-        color: TK.inkFaint, textTransform: 'uppercase',
+        borderTop: `1px solid ${t.line2}`,
+        fontFamily: t.mono, fontSize: 9, letterSpacing: 1.2,
+        color: t.inkFaint, textTransform: 'uppercase',
       }}>
         {footer}
       </div>
@@ -284,7 +297,9 @@ function SourceCard({ num, category, title, desc, footer, selected, onClick, ill
   )
 }
 
-function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => void; onGenerate: () => void; showMap?: boolean }) {
+function PaperAreaStep({ onBack, onGenerate, showMap = true, t }: {
+  onBack: () => void; onGenerate: () => void; showMap?: boolean; t: Theme
+}) {
   const {
     paperSize, orientation,
     hexSizeMm, hexOrientation, marginMm, hexEdgeMode,
@@ -316,87 +331,86 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
         <div style={{
           width: 380, flexShrink: 0,
           display: 'flex', flexDirection: 'column',
-          borderRight: `1px solid ${TK.line}`,
+          borderRight: `1px solid ${t.line}`,
           overflowY: 'auto',
-          background: TK.surface,
+          background: t.surface,
         }}>
 
           {/* PAPER */}
-          <PanelSection label="PAPER">
-            <FieldLabel>SIZE</FieldLabel>
+          <PanelSection label="PAPER" t={t}>
+            <FieldLabel t={t}>SIZE</FieldLabel>
             <ToggleGroup>
               {(['A4','A3','A2','A1'] as PaperSize[]).map(s => (
-                <ToggleBtn key={s} active={paperSize === s} onClick={() => setPaperSize(s)}>{s}</ToggleBtn>
+                <ToggleBtn key={s} active={paperSize === s} onClick={() => setPaperSize(s)} t={t}>{s}</ToggleBtn>
               ))}
             </ToggleGroup>
 
-            <FieldLabel style={{ marginTop: 14 }}>ORIENTATION</FieldLabel>
+            <FieldLabel style={{ marginTop: 14 }} t={t}>ORIENTATION</FieldLabel>
             <ToggleGroup>
-              <ToggleBtn active={orientation === 'landscape'} onClick={() => setOrientation('landscape' as Orientation)}>Landscape</ToggleBtn>
-              <ToggleBtn active={orientation === 'portrait'}  onClick={() => setOrientation('portrait'  as Orientation)}>Portrait</ToggleBtn>
+              <ToggleBtn active={orientation === 'landscape'} onClick={() => setOrientation('landscape' as Orientation)} t={t}>Landscape</ToggleBtn>
+              <ToggleBtn active={orientation === 'portrait'}  onClick={() => setOrientation('portrait'  as Orientation)} t={t}>Portrait</ToggleBtn>
             </ToggleGroup>
-
           </PanelSection>
 
           {/* HEX SIZE + STYLE */}
-          <PanelSection>
+          <PanelSection t={t}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 8 }}>
               <div>
-                <FieldLabel>HEX SIZE</FieldLabel>
+                <FieldLabel t={t}>HEX SIZE</FieldLabel>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span style={{ fontFamily: TK.serif, fontSize: 40, lineHeight: 1, color: TK.ink }}>{hexSizeMm}</span>
-                  <span style={{ fontFamily: TK.mono, fontSize: 11, color: TK.inkMute }}>mm</span>
+                  <span style={{ fontFamily: t.serif, fontSize: 40, lineHeight: 1, color: t.ink }}>{hexSizeMm}</span>
+                  <span style={{ fontFamily: t.mono, fontSize: 11, color: t.inkMute }}>mm</span>
                 </div>
               </div>
               <div style={{ flex: 1, marginBottom: 6 }}>
-                <span style={{ fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint }}>5–50 mm</span>
+                <span style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint }}>5–50 mm</span>
               </div>
             </div>
             <input
               type="range" min={5} max={50} step={1} value={hexSizeMm}
               onChange={e => setHexSizeMm(Number(e.target.value))}
-              style={{ width: '100%', accentColor: TK.rust, marginBottom: 14 }}
+              style={{ width: '100%', accentColor: t.rust, marginBottom: 14 }}
             />
 
-            <FieldLabel>STYLE</FieldLabel>
+            <FieldLabel t={t}>STYLE</FieldLabel>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ToggleGroup>
-                <ToggleBtn active={hexOrientation === 'pointy'} onClick={() => setHexOrientation('pointy' as HexOrientation)}>Pointy</ToggleBtn>
-                <ToggleBtn active={hexOrientation === 'flat'}   onClick={() => setHexOrientation('flat'   as HexOrientation)}>Flat</ToggleBtn>
+                <ToggleBtn active={hexOrientation === 'pointy'} onClick={() => setHexOrientation('pointy' as HexOrientation)} t={t}>Pointy</ToggleBtn>
+                <ToggleBtn active={hexOrientation === 'flat'}   onClick={() => setHexOrientation('flat'   as HexOrientation)} t={t}>Flat</ToggleBtn>
               </ToggleGroup>
-              <HexOrientIcon orientation={hexOrientation} />
+              <HexOrientIcon orientation={hexOrientation} t={t} />
             </div>
           </PanelSection>
 
           {/* ADVANCED */}
-          <PanelSection>
+          <PanelSection t={t}>
             <button
               onClick={() => setAdvancedOpen(v => !v)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                 display: 'flex', alignItems: 'center', gap: 8,
-                fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
+                fontFamily: t.mono, fontSize: 10, color: t.inkMute,
                 letterSpacing: 1, textTransform: 'uppercase',
               }}
             >
               <span style={{ transform: advancedOpen ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s', fontSize: 8 }}>▶</span>
               ADVANCED
-              <span style={{ color: TK.inkFaint }}>{advancedOpen ? '' : '· SHOW'}</span>
+              <span style={{ color: t.inkFaint }}>{advancedOpen ? '' : '· SHOW'}</span>
             </button>
 
             {advancedOpen && (
               <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
-                  <FieldLabel>PRINT MARGIN — {marginMm}mm</FieldLabel>
+                  <FieldLabel t={t}>PRINT MARGIN — {marginMm}mm</FieldLabel>
                   <input type="range" min={0} max={25} step={1} value={marginMm}
                     onChange={e => setMarginMm(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: TK.rust }} />
+                    style={{ width: '100%', accentColor: t.rust }} />
                 </div>
                 <div>
-                  <FieldLabel>EDGE HEXES</FieldLabel>
+                  <FieldLabel t={t}>EDGE HEXES</FieldLabel>
                   <ToggleGroup>
-                    <ToggleBtn active={hexEdgeMode === 'whole'} onClick={() => setHexEdgeMode('whole')}>Full only</ToggleBtn>
-                    <ToggleBtn active={hexEdgeMode === 'half'}  onClick={() => setHexEdgeMode('half')}>Partial</ToggleBtn>
+                    <ToggleBtn active={hexEdgeMode === 'whole'} onClick={() => setHexEdgeMode('whole')} t={t}>Full only</ToggleBtn>
+                    <ToggleBtn active={hexEdgeMode === 'half'}  onClick={() => setHexEdgeMode('half')} t={t}>Partial</ToggleBtn>
                   </ToggleGroup>
                 </div>
               </div>
@@ -405,14 +419,14 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
 
           {/* AREA — OSM only */}
           {showMap && (
-            <PanelSection label="AREA">
+            <PanelSection label="AREA" t={t}>
               <div style={{
                 display: 'flex', alignItems: 'center',
-                border: `1px solid ${TK.line}`,
-                background: TK.paper,
+                border: `1px solid ${t.line}`,
+                background: t.paper,
                 marginBottom: 10,
               }}>
-                <span style={{ padding: '0 10px', color: TK.inkFaint, fontSize: 13 }}>⌕</span>
+                <span style={{ padding: '0 10px', color: t.inkFaint, fontSize: 13 }}>⌕</span>
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
@@ -420,13 +434,13 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
                   placeholder="Search location…"
                   style={{
                     flex: 1, border: 'none', background: 'transparent',
-                    fontFamily: TK.sans, fontSize: 12, color: TK.ink,
+                    fontFamily: t.sans, fontSize: 12, color: t.ink,
                     padding: '8px 0', outline: 'none',
                   }}
                 />
                 <span style={{
                   padding: '0 10px',
-                  fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint,
+                  fontFamily: t.mono, fontSize: 9, color: t.inkFaint,
                   letterSpacing: 0.5,
                 }}>
                   {zoomDisplay}
@@ -447,11 +461,11 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
         height: 52, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 24px',
-        borderTop: `1px solid ${TK.line2}`,
-        background: TK.surface,
+        borderTop: `1px solid ${t.line2}`,
+        background: t.surface,
       }}>
-        <NavButton onClick={onBack} ghost>← BACK</NavButton>
-        <NavButton onClick={onGenerate} disabled={isDisabled}>
+        <NavButton onClick={onBack} ghost t={t}>← BACK</NavButton>
+        <NavButton onClick={onGenerate} disabled={isDisabled} t={t}>
           {showMap ? 'GENERATE →' : 'START EDITING →'}
         </NavButton>
       </div>
@@ -461,11 +475,11 @@ function PaperAreaStep({ onBack, onGenerate, showMap = true }: { onBack: () => v
 
 // ── Panel primitives ────────────────────────────────────────────────────────
 
-function PanelSection({ label, children }: { label?: string; children: React.ReactNode }) {
+function PanelSection({ label, children, t }: { label?: string; children: React.ReactNode; t: Theme }) {
   return (
-    <div style={{ padding: '18px 20px', borderBottom: `1px solid ${TK.line2}` }}>
+    <div style={{ padding: '18px 20px', borderBottom: `1px solid ${t.line2}` }}>
       {label && (
-        <div style={{ fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
+        <div style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
           {label}
         </div>
       )}
@@ -474,9 +488,9 @@ function PanelSection({ label, children }: { label?: string; children: React.Rea
   )
 }
 
-function FieldLabel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function FieldLabel({ children, style, t }: { children: React.ReactNode; style?: React.CSSProperties; t: Theme }) {
   return (
-    <div style={{ fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 7, ...style }}>
+    <div style={{ fontFamily: t.mono, fontSize: 9, color: t.inkFaint, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 7, ...style }}>
       {children}
     </div>
   )
@@ -486,18 +500,18 @@ function ToggleGroup({ children }: { children: React.ReactNode }) {
   return <div style={{ display: 'flex', gap: 0 }}>{children}</div>
 }
 
-function ToggleBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function ToggleBtn({ active, onClick, children, t }: { active: boolean; onClick: () => void; children: React.ReactNode; t: Theme }) {
   return (
     <button
       onClick={onClick}
       style={{
         padding: '7px 16px',
-        background: active ? TK.ink : TK.paper,
-        color: active ? '#fff' : TK.inkMute,
-        border: `1px solid ${TK.line}`,
+        background: active ? t.ink : t.paper,
+        color: active ? t.paper : t.inkMute,
+        border: `1px solid ${t.line}`,
         marginLeft: -1,
         cursor: 'pointer',
-        fontFamily: TK.sans, fontSize: 11,
+        fontFamily: t.sans, fontSize: 11,
         position: 'relative', zIndex: active ? 1 : 0,
       }}
     >
@@ -506,27 +520,27 @@ function ToggleBtn({ active, onClick, children }: { active: boolean; onClick: ()
   )
 }
 
-function HexOrientIcon({ orientation }: { orientation: HexOrientation }) {
+function HexOrientIcon({ orientation, t }: { orientation: HexOrientation; t: Theme }) {
   const pts = orientation === 'pointy'
     ? '10,2 18,6.5 18,15.5 10,20 2,15.5 2,6.5'
     : '2,11 7.5,2 16.5,2 22,11 16.5,20 7.5,20'
   return (
     <svg width="22" height="22" viewBox="0 0 24 22" fill="none">
-      <polygon points={pts} stroke={TK.inkMute} strokeWidth="1.5" fill="none" strokeLinejoin="round" />
+      <polygon points={pts} stroke={t.inkMute} strokeWidth="1.5" fill="none" strokeLinejoin="round" />
     </svg>
   )
 }
 
 // ── Shared nav primitives ───────────────────────────────────────────────────
 
-function BottomNav({ left, right }: { left: React.ReactNode; right: React.ReactNode }) {
+function BottomNav({ left, right, t }: { left: React.ReactNode; right: React.ReactNode; t: Theme }) {
   return (
     <div style={{
       height: 64, flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 32px',
-      borderTop: `1px solid ${TK.line2}`,
-      background: TK.surface,
+      borderTop: `1px solid ${t.line2}`,
+      background: t.surface,
     }}>
       {left}
       {right}
@@ -534,8 +548,8 @@ function BottomNav({ left, right }: { left: React.ReactNode; right: React.ReactN
   )
 }
 
-function NavButton({ children, onClick, ghost, disabled }: {
-  children: React.ReactNode; onClick: () => void; ghost?: boolean; disabled?: boolean
+function NavButton({ children, onClick, ghost, disabled, t }: {
+  children: React.ReactNode; onClick: () => void; ghost?: boolean; disabled?: boolean; t: Theme
 }) {
   return (
     <button
@@ -543,11 +557,11 @@ function NavButton({ children, onClick, ghost, disabled }: {
       disabled={disabled}
       style={{
         padding: '12px 24px',
-        background: ghost ? 'transparent' : TK.ink,
-        color: ghost ? TK.inkMute : '#fff',
+        background: ghost ? 'transparent' : t.ink,
+        color: ghost ? t.inkMute : t.paper,
         border: 'none',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        fontFamily: TK.mono,
+        fontFamily: t.mono,
         fontSize: 11,
         letterSpacing: 1,
         fontWeight: ghost ? 400 : 600,
@@ -555,12 +569,12 @@ function NavButton({ children, onClick, ghost, disabled }: {
       }}
       onMouseEnter={e => {
         if (disabled) return
-        if (ghost) e.currentTarget.style.color = TK.ink
-        else e.currentTarget.style.background = TK.ink2
+        if (ghost) e.currentTarget.style.color = t.ink
+        else e.currentTarget.style.background = t.ink2
       }}
       onMouseLeave={e => {
-        if (ghost) e.currentTarget.style.color = TK.inkMute
-        else e.currentTarget.style.background = TK.ink
+        if (ghost) e.currentTarget.style.color = t.inkMute
+        else e.currentTarget.style.background = t.ink
       }}
     >
       {children}
@@ -570,7 +584,7 @@ function NavButton({ children, onClick, ghost, disabled }: {
 
 // ── Card illustrations ──────────────────────────────────────────────────────
 
-function OsmIllustration() {
+function OsmIllustration({ t }: { t: Theme }) {
   const sq3 = Math.sqrt(3)
   const R = 14
   const colors = [
@@ -602,22 +616,22 @@ function OsmIllustration() {
   return (
     <svg width="280" height="140" style={{ display: 'block' }}>
       {hexes.map((h, i) => (
-        <polygon key={i} points={pts(h.cx, h.cy)} fill={h.color} stroke={TK.paper2} strokeWidth={0.8} />
+        <polygon key={i} points={pts(h.cx, h.cy)} fill={h.color} stroke={t.paper2} strokeWidth={0.8} />
       ))}
     </svg>
   )
 }
 
-function BlankIllustration() {
+function BlankIllustration({ t }: { t: Theme }) {
   return (
     <div style={{
       width: '100%', height: '100%',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: TK.paper2,
+      background: t.paper2,
     }}>
       <span style={{
-        fontFamily: TK.mono, fontSize: 11, letterSpacing: 2,
-        color: TK.inkFaint, textTransform: 'uppercase',
+        fontFamily: t.mono, fontSize: 11, letterSpacing: 2,
+        color: t.inkFaint, textTransform: 'uppercase',
       }}>
         EMPTY
       </span>
@@ -625,20 +639,20 @@ function BlankIllustration() {
   )
 }
 
-function ReferenceIllustration() {
+function ReferenceIllustration({ t }: { t: Theme }) {
   return (
     <svg width="280" height="140" style={{ display: 'block' }} viewBox="0 0 280 140">
-      <rect width="280" height="140" fill={TK.paper2} />
+      <rect width="280" height="140" fill={t.paper2} />
       {/* Road/river curves */}
       <path d="M 20 100 C 80 80, 140 90, 200 60 S 260 30, 270 20"
-        stroke={TK.inkFaint} strokeWidth="1.5" fill="none" />
+        stroke={t.inkFaint} strokeWidth="1.5" fill="none" />
       <path d="M 30 140 C 90 120, 160 115, 220 100 S 265 90, 270 80"
-        stroke={TK.line} strokeWidth="1" fill="none" />
+        stroke={t.line} strokeWidth="1" fill="none" />
       {/* Settlement dots */}
-      <circle cx="148" cy="82" r="3" fill={TK.ink} />
-      <text x="154" y="79" fontFamily="Geist, sans-serif" fontSize="10" fill={TK.ink} fontStyle="italic">Bruck</text>
-      <circle cx="218" cy="60" r="3" fill={TK.ink} />
-      <text x="224" y="57" fontFamily="Geist, sans-serif" fontSize="10" fill={TK.ink} fontStyle="italic">Aldorf</text>
+      <circle cx="148" cy="82" r="3" fill={t.ink} />
+      <text x="154" y="79" fontFamily="Geist, sans-serif" fontSize="10" fill={t.ink} fontStyle="italic">Bruck</text>
+      <circle cx="218" cy="60" r="3" fill={t.ink} />
+      <text x="224" y="57" fontFamily="Geist, sans-serif" fontSize="10" fill={t.ink} fontStyle="italic">Aldorf</text>
     </svg>
   )
 }
@@ -659,7 +673,7 @@ const LAYER_STEPS = [
   { id: 'elevation',    label: 'ELEVATION' },
 ]
 
-function GeneratingStep({ onDone }: { onDone: () => void }) {
+function GeneratingStep({ onDone, t }: { onDone: () => void; t: Theme }) {
   const {
     generateStatus, generateProgress, center,
     roadsStatus, railsStatus, riversOsmStatus, settlementsStatus,
@@ -671,7 +685,6 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   const [nominatimResult, setNominatimResult]       = useState<NominatimResult | null>(null)
   const [countryNominatim, setCountryNominatim]     = useState<NominatimResult | null>(null)
   const [phase, setPhase]         = useState<'terrain' | 'layers'>('terrain')
-  // tick fires every second purely to trigger re-renders for elapsed time display
   const [tick, setTick]           = useState(0)
 
   const terrainStepStartRef = useRef(Date.now())
@@ -679,9 +692,6 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   const layerStartsRef      = useRef<Record<string, number>>({})
   const layersFetchedRef    = useRef(false)
 
-  // Fire Nominatim once we know the map scale (after terrain metadata arrives).
-  // Always fetch two levels: scale-appropriate (for region name) and zoom=4
-  // (for country bbox used in cardinal direction when region name is ugly).
   useEffect(() => {
     setNominatimResult(null)
     setCountryNominatim(null)
@@ -707,12 +717,10 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     return () => controller.abort()
   }, [generatedMetadata])
 
-  // Generate title once settlements are done; also re-run if Nominatim arrives later.
   useEffect(() => {
     if (!generatedMetadata) return
     if (settlementsStatus !== 'done' && settlementsStatus !== 'error') return
     const widthKm = generatedMetadata.scale_m_per_mm * generatedMetadata.paper_mm[0] / 1000
-    // For small maps settlements are enough; for large maps wait for fresh Nominatim data
     if (widthKm >= 100 && !nominatimResult) return
     const title = generateMapTitle(
       settlements, generatedMetadata,
@@ -722,13 +730,11 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     if (title) setMapTitle(title)
   }, [settlementsStatus, generatedMetadata, nominatimResult, countryNominatim, settlements])
 
-  // Single 1-second ticker for all elapsed timers
   useEffect(() => {
     const id = setInterval(() => setTick(n => n + 1), 1000)
     return () => clearInterval(id)
   }, [])
 
-  // Track which terrain SSE step we're on so elapsed resets per step
   useEffect(() => {
     const step = generateProgress?.step ?? null
     if (step !== prevTerrainStepRef.current) {
@@ -737,7 +743,6 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     }
   }, [generateProgress?.step])
 
-  // Kick off all layer fetches the moment terrain completes
   useEffect(() => {
     if (generateStatus === 'done' && !layersFetchedRef.current) {
       layersFetchedRef.current = true
@@ -752,7 +757,6 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     }
   }, [generateStatus, fetchRoads, fetchRails, fetchRivers, fetchSettlements, fetchElevation])
 
-  // Layer completion (error counts as finished so we don't block forever)
   const roadsRailsDone  = (roadsStatus === 'done' || roadsStatus === 'error')
                        && (railsStatus === 'done' || railsStatus === 'error')
   const riversDone      = riversOsmStatus === 'done'   || riversOsmStatus === 'error'
@@ -762,12 +766,11 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     if (phase === 'layers' && allLayersDone) {
-      const t = setTimeout(onDone, 700)
-      return () => clearTimeout(t)
+      const timer = setTimeout(onDone, 700)
+      return () => clearTimeout(timer)
     }
   }, [phase, allLayersDone, onDone])
 
-  // Elapsed helpers (recomputed on every tick)
   void tick
   const now = Date.now()
   const terrainElapsed = Math.floor((now - terrainStepStartRef.current) / 1000)
@@ -776,30 +779,26 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     return s ? Math.floor((now - s) / 1000) : 0
   }
 
-  // Smooth progress bar: elevation SSE drives a continuous fraction, others are 0 or 1
   const terrainProgress  = generateStatus === 'done' ? 100 : (generateProgress?.progress ?? 0)
   const elevFrac         = elevationDone ? 100 : (elevationProgress?.progress ?? 0)
   const nonElevDoneCount = [roadsRailsDone, riversDone, settlementsDone].filter(Boolean).length
   const layersProgress   = (nonElevDoneCount * 100 + elevFrac) / 4
   const progress         = phase === 'terrain' ? terrainProgress : layersProgress
 
-  // Terrain checklist
   const currentStepId     = generateProgress?.step ?? null
   const currentTerrainIdx = TERRAIN_STEPS.findIndex(s => s.id === currentStepId)
   const terrainAllDone    = generateStatus === 'done'
 
-  // Layer active flags
   const roadsRailsActive  = phase === 'layers' && (roadsStatus === 'loading' || railsStatus === 'loading')
   const riversActive      = phase === 'layers' && riversOsmStatus === 'loading'
   const settlementsActive = phase === 'layers' && settlementsStatus === 'loading'
   const elevationActive   = phase === 'layers' && elevationStatus === 'loading'
 
-  // Detail annotations shown inline on each active row
   const layerDetail: Record<string, string | undefined> = {
-    'roads-rails':  roadsRailsActive  ? `${layerElapsed('roads-rails')}s`            : undefined,
-    'rivers':       riversActive      ? `${layerElapsed('rivers')}s`                 : undefined,
-    'settlements':  settlementsActive ? `${layerElapsed('settlements')}s`            : undefined,
-    'elevation':    elevationActive   ? `${elevationProgress?.progress ?? 0}%`       : undefined,
+    'roads-rails':  roadsRailsActive  ? `${layerElapsed('roads-rails')}s`      : undefined,
+    'rivers':       riversActive      ? `${layerElapsed('rivers')}s`           : undefined,
+    'settlements':  settlementsActive ? `${layerElapsed('settlements')}s`      : undefined,
+    'elevation':    elevationActive   ? `${elevationProgress?.progress ?? 0}%` : undefined,
   }
 
   const layerState = {
@@ -817,25 +816,24 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
     }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{
-          fontFamily: TK.mono, fontSize: 9, letterSpacing: 2,
-          color: TK.inkFaint, textTransform: 'uppercase', marginBottom: 10,
+          fontFamily: t.mono, fontSize: 9, letterSpacing: 2,
+          color: t.inkFaint, textTransform: 'uppercase', marginBottom: 10,
         }}>
           {allLayersDone && phase === 'layers' ? 'COMPLETE' : 'GENERATING'}
         </div>
         <h1 style={{
-          fontFamily: TK.serif, fontSize: 52, fontWeight: 400,
-          color: TK.ink, margin: 0, fontStyle: 'italic',
+          fontFamily: t.serif, fontSize: 52, fontWeight: 400,
+          color: t.ink, margin: 0, fontStyle: 'italic',
         }}>
           {mapTitle || 'Untitled'}
         </h1>
       </div>
 
-      <HexDotBar progress={progress} />
+      <HexDotBar progress={progress} t={t} />
 
-      {/* Terrain phase status line */}
       {phase === 'terrain' && generateProgress && (
         <div style={{
-          fontFamily: TK.mono, fontSize: 10, color: TK.inkMute,
+          fontFamily: t.mono, fontSize: 10, color: t.inkMute,
           letterSpacing: 0.5, textAlign: 'center',
         }}>
           {generateProgress.message} · {terrainElapsed}s
@@ -847,10 +845,10 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
           const done   = terrainAllDone || currentTerrainIdx > i
           const active = !terrainAllDone && s.id === currentStepId
           const detail = active ? `${terrainElapsed}s` : undefined
-          return <CheckRow key={s.id} label={s.label} done={done} active={active} detail={detail} />
+          return <CheckRow key={s.id} label={s.label} done={done} active={active} detail={detail} t={t} />
         })}
 
-        <div style={{ height: 1, background: TK.line2, margin: '4px 0' }} />
+        <div style={{ height: 1, background: t.line2, margin: '4px 0' }} />
 
         {LAYER_STEPS.map(s => {
           const ls = layerState[s.id as keyof typeof layerState]
@@ -862,6 +860,7 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
               active={ls.active}
               pending={phase === 'terrain'}
               detail={layerDetail[s.id]}
+              t={t}
             />
           )
         })}
@@ -870,37 +869,37 @@ function GeneratingStep({ onDone }: { onDone: () => void }) {
   )
 }
 
-function CheckRow({ label, done, active, pending, detail }: {
-  label: string; done: boolean; active: boolean; pending?: boolean; detail?: string
+function CheckRow({ label, done, active, pending, detail, t }: {
+  label: string; done: boolean; active: boolean; pending?: boolean; detail?: string; t: Theme
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {done ? (
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="7" cy="7" r="6" stroke={TK.rust} strokeWidth="1" />
-            <path d="M4.5 7l2 2 3.5-3.5" stroke={TK.rust} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="7" cy="7" r="6" stroke={t.rust} strokeWidth="1" />
+            <path d="M4.5 7l2 2 3.5-3.5" stroke={t.rust} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         ) : active ? (
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: TK.rust }} />
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: t.rust }} />
         ) : (
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: pending ? TK.line2 : TK.line }} />
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: pending ? t.line2 : t.line }} />
         )}
       </div>
       <span style={{
-        fontFamily: TK.mono, fontSize: 10, letterSpacing: 1,
-        color: done ? TK.ink : active ? TK.ink2 : TK.inkFaint,
+        fontFamily: t.mono, fontSize: 10, letterSpacing: 1,
+        color: done ? t.ink : active ? t.ink2 : t.inkFaint,
       }}>
         {label}
         {detail && (
-          <span style={{ marginLeft: 8, color: TK.inkFaint }}>· {detail}</span>
+          <span style={{ marginLeft: 8, color: t.inkFaint }}>· {detail}</span>
         )}
       </span>
     </div>
   )
 }
 
-function HexDotBar({ progress }: { progress: number }) {
+function HexDotBar({ progress, t }: { progress: number; t: Theme }) {
   const TOTAL = 20
   const filled = Math.round((progress / 100) * TOTAL)
   return (
@@ -909,8 +908,8 @@ function HexDotBar({ progress }: { progress: number }) {
         <svg key={i} width="13" height="15" viewBox="0 0 13 15">
           <polygon
             points="6.5,1 12,4 12,11 6.5,14 1,11 1,4"
-            fill={i < filled ? TK.rust : 'none'}
-            stroke={i < filled ? TK.rust : TK.line}
+            fill={i < filled ? t.rust : 'none'}
+            stroke={i < filled ? t.rust : t.line}
             strokeWidth="1"
           />
         </svg>
@@ -921,11 +920,11 @@ function HexDotBar({ progress }: { progress: number }) {
 
 // ── Logo ─────────────────────────────────────────────────────────────────────
 
-function HachureLogo() {
+function HachureLogo({ t }: { t: Theme }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <img src="/icon.png" alt="" style={{ height: 28, display: 'block' }} />
-      <span style={{ fontFamily: TK.serif, fontSize: 17, fontWeight: 400, color: TK.ink }}>Hachure</span>
+      <span style={{ fontFamily: t.serif, fontSize: 17, fontWeight: 400, color: t.ink }}>Hachure</span>
     </div>
   )
 }

@@ -1,6 +1,6 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useCallback } from 'react'
 import { useMapStore } from '../../store/mapStore'
-import { TK } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
 
 const TABS = [
   { id: 'terrain',     label: 'Terrain'     },
@@ -14,16 +14,32 @@ const TABS = [
 ] as const
 
 export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Promise<void>; onGoHome: () => void }) {
+  const t = useTheme()
   const {
     paperSize, generatedHexes, generatedMetadata,
     undoStack, redoStack, undo, redo,
     activePanel, setActivePanel,
     saveProject, restoreProject,
     mapStyle, setMapStyle,
+    mapTitle, setMapTitle,
   } = useMapStore()
 
   const [exporting, setExporting] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const startEditTitle = useCallback(() => {
+    setTitleDraft(mapTitle)
+    setEditingTitle(true)
+  }, [mapTitle])
+
+  const commitTitle = useCallback(() => {
+    const trimmed = titleDraft.trim()
+    if (trimmed) setMapTitle(trimmed)
+    setEditingTitle(false)
+  }, [titleDraft, setMapTitle])
 
   const handlePrint = async () => {
     setExporting(true)
@@ -56,17 +72,17 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
 
   return (
     <div style={{
-      height: TK.topBarHeight,
+      height: t.topBarHeight,
       flexShrink: 0,
       display: 'flex',
       alignItems: 'stretch',
-      background: TK.paper,
-      borderBottom: `1px solid ${TK.line}`,
+      background: t.paper,
+      borderBottom: `1px solid ${t.line}`,
       userSelect: 'none',
     }}>
 
-      {/* Left: wordmark + metadata */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderRight: `1px solid ${TK.line}`, flexShrink: 0 }}>
+      {/* Left: wordmark + metadata + title */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderRight: `1px solid ${t.line}`, flexShrink: 0 }}>
         <button
           onClick={onGoHome}
           title="Back to home"
@@ -74,13 +90,62 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <img src="/icon.png" alt="" style={{ height: 28, display: 'block' }} />
-            <span style={{ fontFamily: TK.serif, fontSize: 17, fontWeight: 400, color: TK.ink }}>Hachure</span>
+            <span style={{ fontFamily: t.serif, fontSize: 17, fontWeight: 400, color: t.ink }}>Hachure</span>
           </div>
         </button>
         {meta && (
           <>
-            <span style={{ color: TK.line, fontSize: 12 }}>|</span>
-            <span style={{ fontFamily: TK.mono, fontSize: 9.5, color: TK.inkFaint, letterSpacing: 0.4 }}>{meta}</span>
+            <span style={{ color: t.line, fontSize: 12 }}>|</span>
+            <span style={{ fontFamily: t.mono, fontSize: 9.5, color: t.inkFaint, letterSpacing: 0.4 }}>{meta}</span>
+          </>
+        )}
+        {(mapTitle || meta) && (
+          <>
+            <span style={{ color: t.line, fontSize: 12 }}>|</span>
+            {editingTitle ? (
+              <input
+                ref={titleInputRef}
+                value={titleDraft}
+                autoFocus
+                onChange={e => setTitleDraft(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') commitTitle()
+                  if (e.key === 'Escape') setEditingTitle(false)
+                }}
+                style={{
+                  fontFamily: t.serif,
+                  fontSize: 13,
+                  fontStyle: 'italic',
+                  color: t.ink,
+                  background: t.paper2,
+                  border: `1px solid ${t.rust}`,
+                  outline: 'none',
+                  padding: '2px 6px',
+                  width: 200,
+                }}
+              />
+            ) : (
+              <button
+                onClick={startEditTitle}
+                title="Click to rename"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '2px 4px',
+                  cursor: 'text',
+                  fontFamily: t.serif,
+                  fontSize: 13,
+                  fontStyle: 'italic',
+                  color: mapTitle ? t.ink2 : t.inkFaint,
+                  borderRadius: 2,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = t.paper2 }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
+              >
+                {mapTitle || 'Untitled'}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -98,12 +163,12 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
                 padding: '0 10px',
                 background: 'none',
                 border: 'none',
-                borderBottom: `2px solid ${active ? TK.rust : 'transparent'}`,
+                borderBottom: `2px solid ${active ? t.rust : 'transparent'}`,
                 cursor: 'pointer',
-                fontFamily: TK.sans,
+                fontFamily: t.sans,
                 fontSize: 12,
                 fontWeight: active ? 600 : 400,
-                color: active ? TK.ink : TK.inkMute,
+                color: active ? t.ink : t.inkMute,
                 letterSpacing: 0.1,
                 whiteSpace: 'nowrap',
               }}
@@ -115,7 +180,7 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
       </div>
 
       {/* Right: style switcher + save/load + undo/redo + PRINT */}
-      <div style={{ display: 'flex', alignItems: 'stretch', borderLeft: `1px solid ${TK.line}`, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', borderLeft: `1px solid ${t.line}`, flexShrink: 0 }}>
         {/* Map style switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 10px' }}>
           {(['standard', 'historical_simple'] as const).map(s => (
@@ -124,11 +189,11 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
               onClick={() => setMapStyle(s)}
               style={{
                 padding: '3px 9px',
-                background: mapStyle === s ? TK.ink : 'transparent',
-                color: mapStyle === s ? TK.paper : TK.inkMute,
-                border: `1px solid ${mapStyle === s ? TK.ink : TK.line}`,
+                background: mapStyle === s ? t.ink : 'transparent',
+                color: mapStyle === s ? t.paper : t.inkMute,
+                border: `1px solid ${mapStyle === s ? t.ink : t.line}`,
                 cursor: 'pointer',
-                fontFamily: TK.mono,
+                fontFamily: t.mono,
                 fontSize: 9.5,
                 letterSpacing: 0.3,
               }}
@@ -138,14 +203,14 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
           ))}
         </div>
 
-        <div style={{ width: 1, background: TK.line, margin: '8px 4px', flexShrink: 0 }} />
+        <div style={{ width: 1, background: t.line, margin: '8px 4px', flexShrink: 0 }} />
 
         {/* Save / Load */}
-        <button onClick={saveProject} style={ghostBtn}>Save</button>
-        <button onClick={() => fileInputRef.current?.click()} style={ghostBtn}>Load</button>
+        <button onClick={saveProject} style={ghostBtnStyle(t)}>Save</button>
+        <button onClick={() => fileInputRef.current?.click()} style={ghostBtnStyle(t)}>Load</button>
         <input ref={fileInputRef} type="file" accept=".ig2,.json" style={{ display: 'none' }} onChange={handleLoad} />
 
-        <div style={{ width: 1, background: TK.line, margin: '8px 4px', flexShrink: 0 }} />
+        <div style={{ width: 1, background: t.line, margin: '8px 4px', flexShrink: 0 }} />
 
         {/* Undo / Redo */}
         <IconBtn onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
@@ -159,7 +224,7 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
           </svg>
         </IconBtn>
 
-        <div style={{ width: 1, background: TK.line, margin: '8px 4px', flexShrink: 0 }} />
+        <div style={{ width: 1, background: t.line, margin: '8px 4px', flexShrink: 0 }} />
 
         {/* PRINT */}
         <button
@@ -168,11 +233,11 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
           style={{
             height: '100%',
             padding: '0 20px',
-            background: exporting ? TK.ink2 : TK.ink,
-            color: TK.paper,
+            background: exporting ? t.ink2 : t.ink,
+            color: t.paper,
             border: 'none',
             cursor: exporting ? 'default' : 'pointer',
-            fontFamily: TK.sans,
+            fontFamily: t.sans,
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: 0.8,
@@ -193,6 +258,7 @@ export function EditorTopBar({ onExportPDF, onGoHome }: { onExportPDF: () => Pro
 function IconBtn({ onClick, disabled, title, children }: {
   onClick: () => void; disabled: boolean; title: string; children: React.ReactNode
 }) {
+  const t = useTheme()
   return (
     <button
       onClick={onClick}
@@ -206,7 +272,7 @@ function IconBtn({ onClick, disabled, title, children }: {
         background: 'none',
         border: 'none',
         cursor: disabled ? 'default' : 'pointer',
-        color: disabled ? TK.inkFaint : TK.ink2,
+        color: disabled ? t.inkFaint : t.ink2,
         flexShrink: 0,
       }}
     >
@@ -215,16 +281,18 @@ function IconBtn({ onClick, disabled, title, children }: {
   )
 }
 
-const ghostBtn: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  height: '100%',
-  padding: '0 12px',
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontFamily: TK.mono,
-  fontSize: 9.5,
-  letterSpacing: 0.4,
-  color: TK.inkMute,
+function ghostBtnStyle(t: ReturnType<typeof useTheme>): React.CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    height: '100%',
+    padding: '0 12px',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: t.mono,
+    fontSize: 9.5,
+    letterSpacing: 0.4,
+    color: t.inkMute,
+  }
 }

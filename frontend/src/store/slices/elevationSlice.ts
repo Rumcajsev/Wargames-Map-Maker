@@ -22,11 +22,15 @@ export type ElevationSlice = {
   hillshadeAzimuth: number
   hillshadeAltitude: number
   hillshadeIntensity: number
+  hillshadeDisabledTerrains: string[]
+  hillshadeDisabledElevClasses: string[]
   contoursEnabled: boolean
   contourInterval: number
   contourBaseElevation: number
   contourSmoothPasses: number
   contourLineWidth: number
+  contourDisabledTerrains: string[]
+  contourDisabledElevClasses: string[]
   fetchElevation: () => Promise<void>
   setShowElevationDebug: (v: boolean) => void
   setClassificationParam: (key: keyof ClassificationParams, v: number) => void
@@ -38,11 +42,15 @@ export type ElevationSlice = {
   setHillshadeAzimuth: (v: number) => void
   setHillshadeAltitude: (v: number) => void
   setHillshadeIntensity: (v: number) => void
+  setHillshadeDisabledTerrains: (v: string[]) => void
+  setHillshadeDisabledElevClasses: (v: string[]) => void
   setContoursEnabled: (v: boolean) => void
   setContourInterval: (v: number) => void
   setContourBaseElevation: (v: number) => void
   setContourSmoothPasses: (v: number) => void
   setContourLineWidth: (v: number) => void
+  setContourDisabledTerrains: (v: string[]) => void
+  setContourDisabledElevClasses: (v: string[]) => void
 }
 
 type Set = (partial: Partial<MapStore> | ((s: MapStore) => Partial<MapStore>)) => void
@@ -60,11 +68,15 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   hillshadeAzimuth: 315,
   hillshadeAltitude: 45,
   hillshadeIntensity: 0.6,
+  hillshadeDisabledTerrains: [],
+  hillshadeDisabledElevClasses: [],
   contoursEnabled: false,
   contourInterval: 50,
   contourBaseElevation: 0,
   contourSmoothPasses: 1,
   contourLineWidth: 1.5,
+  contourDisabledTerrains: [],
+  contourDisabledElevClasses: [],
 
   fetchElevation: async () => {
     const { generatedHexes, generatedMetadata, hexOrientation } = get()
@@ -174,9 +186,13 @@ export const createElevationSlice = (set: Set, get: () => MapStore): ElevationSl
   setHillshadeAzimuth: (v) => set({ hillshadeAzimuth: v }),
   setHillshadeAltitude: (v) => set({ hillshadeAltitude: v }),
   setHillshadeIntensity: (v) => set({ hillshadeIntensity: v }),
+  setHillshadeDisabledTerrains: (v) => set({ hillshadeDisabledTerrains: v }),
+  setHillshadeDisabledElevClasses: (v) => set({ hillshadeDisabledElevClasses: v }),
   setContoursEnabled: (v) => set({ contoursEnabled: v }),
   setContourInterval: (v) => set({ contourInterval: v }),
   setContourBaseElevation: (v) => set({ contourBaseElevation: v }),
   setContourSmoothPasses: (v) => set({ contourSmoothPasses: v }),
   setContourLineWidth: (v) => set({ contourLineWidth: v }),
+  setContourDisabledTerrains: (v) => set({ contourDisabledTerrains: v }),
+  setContourDisabledElevClasses: (v) => set({ contourDisabledElevClasses: v }),
 })

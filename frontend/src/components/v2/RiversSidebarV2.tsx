@@ -7,7 +7,7 @@ import {
   PALETTE_RIVER, PALETTE_RIVER_OUTLINE,
   PALETTE_CANAL, PALETTE_CANAL_OUTLINE,
 } from '../../palettes'
-import { TK } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
 import {
   SidebarShell, SidebarHeader, SidebarSection, SidebarDetailHeader,
   DetailViewShell, BrushRow, MiniSlider, BigColorSwatch, SegmentedControl,
@@ -24,8 +24,9 @@ const CANAL_STROKE_GROUPS: { label: string; colors: string[] }[] = [{ label: 'Da
 // ── SubLabel ──────────────────────────────────────────────────────────────────
 
 function SubLabel({ label }: { label: string }) {
+  const t = useTheme()
   return (
-    <div style={{ padding: '6px 14px 2px', fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
+    <div style={{ padding: '6px 14px 2px', fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
       {label}
     </div>
   )
@@ -36,6 +37,7 @@ function SubLabel({ label }: { label: string }) {
 function FetchButton({ label, status, onFetch, onClear }: {
   label: string; status: string; onFetch: () => void; onClear?: () => void
 }) {
+  const t = useTheme()
   const loading = status === 'loading'
   const done = status === 'done'
   return (
@@ -46,10 +48,10 @@ function FetchButton({ label, status, onFetch, onClear }: {
         style={{
           flex: 1, padding: '5px 0',
           background: 'none',
-          border: `1px solid ${loading ? TK.line : TK.rust}`,
-          color: loading ? TK.inkFaint : TK.rust,
+          border: `1px solid ${loading ? t.line : t.rust}`,
+          color: loading ? t.inkFaint : t.rust,
           cursor: loading ? 'not-allowed' : 'pointer',
-          fontFamily: TK.mono, fontSize: 10, letterSpacing: 0.3,
+          fontFamily: t.mono, fontSize: 10, letterSpacing: 0.3,
         }}
       >
         {loading ? 'fetching…' : `Fetch ${label}`}
@@ -57,7 +59,7 @@ function FetchButton({ label, status, onFetch, onClear }: {
       {done && onClear && (
         <button
           onClick={onClear}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: TK.mono, fontSize: 9, color: TK.inkFaint }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: t.mono, fontSize: 9, color: t.inkFaint }}
         >
           clear
         </button>
@@ -69,6 +71,7 @@ function FetchButton({ label, status, onFetch, onClear }: {
 // ── RiverSettingsView ─────────────────────────────────────────────────────────
 
 function RiverSettingsView({ onBack }: { onBack: () => void }) {
+  const t = useTheme()
   const {
     riverStyle, setRiverStyle,
     riverWidthScale, setRiverWidthScale,
@@ -97,24 +100,24 @@ function RiverSettingsView({ onBack }: { onBack: () => void }) {
       <SubLabel label="Colour" />
       <BigColorSwatch value={riverStyle.color} onChange={c => setRiverStyle({ color: c })} groups={RIVER_FILL_GROUPS} />
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Width" />
         <MiniSlider label="Scale" display={`${riverWidthScale.toFixed(1)}×`} value={Math.round(riverWidthScale * 10)} min={2} max={40} step={1} onChange={v => setRiverWidthScale(v / 10)} />
       </div>
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Wiggle" />
         <MiniSlider label="Amplitude" display={riverWiggleAmp.toFixed(2)}   value={Math.round(riverWiggleAmp * 100)} min={0}  max={100} step={1}  onChange={v => setRiverWiggleAmp(v / 100)} />
         <MiniSlider label="Frequency" display={riverWiggleFreq.toFixed(1)}  value={Math.round(riverWiggleFreq * 10)} min={5}  max={100} step={1}  onChange={v => setRiverWiggleFreq(v / 10)} />
       </div>
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Smoothing" />
         <MiniSlider label="Line smooth" display={String(riverSmoothing)}     value={riverSmoothing}     min={2}  max={30} step={1}  onChange={setRiverSmoothing} />
         <MiniSlider label="Path smooth" display={String(riverPathSmoothing)} value={riverPathSmoothing} min={0}  max={50} step={1}  onChange={setRiverPathSmoothing} />
       </div>
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <div style={{ padding: '6px 14px 4px' }}>
           <ToggleRow label="Outline" checked={riverStyle.strokeEnabled} onChange={v => setRiverStyle({ strokeEnabled: v })} />
         </div>
@@ -134,6 +137,7 @@ function RiverSettingsView({ onBack }: { onBack: () => void }) {
 // ── CanalSettingsView ─────────────────────────────────────────────────────────
 
 function CanalSettingsView({ onBack }: { onBack: () => void }) {
+  const t = useTheme()
   const {
     canalStyle, setCanalStyle,
     canalWidthScale, setCanalWidthScale,
@@ -158,12 +162,12 @@ function CanalSettingsView({ onBack }: { onBack: () => void }) {
       <SubLabel label="Colour" />
       <BigColorSwatch value={canalStyle.color} onChange={c => setCanalStyle({ color: c })} groups={CANAL_FILL_GROUPS} />
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Width" />
         <MiniSlider label="Scale" display={`${canalWidthScale.toFixed(1)}×`} value={Math.round(canalWidthScale * 10)} min={2} max={40} step={1} onChange={v => setCanalWidthScale(v / 10)} />
       </div>
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <div style={{ padding: '6px 14px 4px' }}>
           <ToggleRow label="Outline" checked={canalStyle.strokeEnabled} onChange={v => setCanalStyle({ strokeEnabled: v })} />
         </div>
@@ -183,6 +187,7 @@ function CanalSettingsView({ onBack }: { onBack: () => void }) {
 // ── LakeSettingsView ──────────────────────────────────────────────────────────
 
 function LakeSettingsView({ onBack }: { onBack: () => void }) {
+  const t = useTheme()
   const {
     lakeBlobSmooth, setLakeBlobSmooth,
     lakeBlobOffset, setLakeBlobOffset,
@@ -205,7 +210,7 @@ function LakeSettingsView({ onBack }: { onBack: () => void }) {
       <MiniSlider label="Inset"           display={`${lakeBlobOffset > 0 ? '+' : ''}${Math.round(lakeBlobOffset * 100)}%`}           value={Math.round(lakeBlobOffset * 100)}    min={-80} max={30}  step={1}   onChange={v => setLakeBlobOffset(v / 100)} />
       <MiniSlider label="Wave scale"      display={lakeBlobSweepFreq.toFixed(2)}                                                     value={Math.round(lakeBlobSweepFreq * 100)} min={40}  max={100} step={1}   onChange={v => setLakeBlobSweepFreq(v / 100)} />
 
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <SubLabel label="Fringe" />
         <MiniSlider label="Scale"    display={lakeBlobLobeFreq.toFixed(1)}                   value={Math.round(lakeBlobLobeFreq * 10)}      min={20} max={50}  step={1} onChange={v => setLakeBlobLobeFreq(v / 10)} />
         <MiniSlider label="Strength" display={`${Math.round(lakeBlobLobeAmp * 100)}%`}       value={Math.round(lakeBlobLobeAmp * 100)}      min={0}  max={100} step={1} onChange={v => setLakeBlobLobeAmp(v / 100)} />
@@ -226,6 +231,7 @@ function LakeSettingsView({ onBack }: { onBack: () => void }) {
 // ── SegmentView ───────────────────────────────────────────────────────────────
 
 function SegmentView({ mode, onBack }: { mode: 'river' | 'canal'; onBack: () => void }) {
+  const t = useTheme()
   const {
     riverWidthScale, canalWidthScale,
     riverWiggleAmp, riverWiggleFreq,
@@ -282,9 +288,9 @@ function SegmentView({ mode, onBack }: { mode: 'river' | 'canal'; onBack: () => 
       />
 
       {/* Taper */}
-      <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+      <div style={{ borderTop: `1px solid ${t.line2}` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 2px' }}>
-          <span style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Taper</span>
+          <span style={{ fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>Taper</span>
           <button
             onClick={() => {
               for (const key of selectedKeys) {
@@ -293,7 +299,7 @@ function SegmentView({ mode, onBack }: { mode: 'river' | 'canal'; onBack: () => 
               }
             }}
             title="Flip taper direction"
-            style={{ background: 'none', border: `1px solid ${TK.line}`, color: TK.inkMute, cursor: 'pointer', fontFamily: TK.mono, fontSize: 10, padding: '1px 6px', lineHeight: 1.4 }}
+            style={{ background: 'none', border: `1px solid ${t.line}`, color: t.inkMute, cursor: 'pointer', fontFamily: t.mono, fontSize: 10, padding: '1px 6px', lineHeight: 1.4 }}
           >
             ⇄ flip
           </button>
@@ -320,7 +326,7 @@ function SegmentView({ mode, onBack }: { mode: 'river' | 'canal'; onBack: () => 
 
       {/* Wiggle + path smooth (river only) */}
       {isRiver && (
-        <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+        <div style={{ borderTop: `1px solid ${t.line2}` }}>
           <SubLabel label="Wiggle" />
           <MiniSlider label="Amplitude"   display={`${Math.round(wiggleAmp * 100)}%${firstProps?.wiggleAmp !== undefined ? ' ●' : ''}`} value={Math.round(wiggleAmp * 100)}  min={0} max={100} step={1} onChange={v => setRiverSegmentPropMany(selectedKeys, { wiggleAmp: v / 100 })} />
           <MiniSlider label="Frequency"   display={`${wiggleFreq.toFixed(1)}${firstProps?.wiggleFreq !== undefined ? ' ●' : ''}`}       value={Math.round(wiggleFreq * 10)} min={5} max={100} step={1} onChange={v => setRiverSegmentPropMany(selectedKeys, { wiggleFreq: v / 10 })} />
@@ -335,15 +341,15 @@ function SegmentView({ mode, onBack }: { mode: 'river' | 'canal'; onBack: () => 
         const hopW    = hp?.width  ?? 1
         const hopT    = hp?.taper  ?? 0
         return (
-          <div style={{ borderTop: `1px solid ${TK.line2}` }}>
+          <div style={{ borderTop: `1px solid ${t.line2}` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 2px' }}>
-              <span style={{ fontFamily: TK.mono, fontSize: 9, letterSpacing: 0.8, color: TK.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
+              <span style={{ fontFamily: t.mono, fontSize: 9, letterSpacing: 0.8, color: t.inkFaint, textTransform: 'uppercase', fontWeight: 600 }}>
                 Hop{hopHasOverride ? ' ●' : ''}
               </span>
               {hopHasOverride && (
                 <button
                   onClick={() => { clearRiverHopProp(selectedHopKey); setSelectedHopKey(null) }}
-                  style={{ background: 'none', border: 'none', color: TK.inkFaint, cursor: 'pointer', fontFamily: TK.mono, fontSize: 9 }}
+                  style={{ background: 'none', border: 'none', color: t.inkFaint, cursor: 'pointer', fontFamily: t.mono, fontSize: 9 }}
                 >
                   ↺ reset
                 </button>
@@ -366,6 +372,7 @@ function SegmentView({ mode, onBack }: { mode: 'river' | 'canal'; onBack: () => 
 type ViewId = 'list' | 'river-settings' | 'canal-settings' | 'lake-settings' | 'segment'
 
 export function RiversSidebarV2() {
+  const t = useTheme()
   const {
     riverEdges, canalEdges,
     riverEditMode, canalEditMode, lakePaintMode, riverNodeEditMode,
@@ -441,10 +448,10 @@ export function RiversSidebarV2() {
             onClear={clearOsmRivers}
           />
           {riversOsmStatus === 'error' && riversOsmError && (
-            <div style={{ padding: '2px 14px 4px', fontFamily: TK.sans, fontSize: 10.5, color: TK.rust }}>{riversOsmError}</div>
+            <div style={{ padding: '2px 14px 4px', fontFamily: t.sans, fontSize: 10.5, color: t.rust }}>{riversOsmError}</div>
           )}
           {riversOsmStatus === 'done' && osmRiverWays.length === 0 && (
-            <div style={{ padding: '2px 14px 4px', fontFamily: TK.sans, fontSize: 10.5, color: TK.inkMute }}>No named rivers found.</div>
+            <div style={{ padding: '2px 14px 4px', fontFamily: t.sans, fontSize: 10.5, color: t.inkMute }}>No named rivers found.</div>
           )}
           {riversOsmStatus === 'done' && osmRiverWays.length > 0 && (
             <>
@@ -455,7 +462,7 @@ export function RiversSidebarV2() {
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   width: '100%', padding: '8px 14px',
                   background: 'none', border: 'none', cursor: 'pointer',
-                  fontFamily: TK.mono, fontSize: 10, color: TK.inkMute, letterSpacing: 0.3,
+                  fontFamily: t.mono, fontSize: 10, color: t.inkMute, letterSpacing: 0.3,
                   textAlign: 'left',
                 }}
               >
@@ -486,8 +493,8 @@ export function RiversSidebarV2() {
                           border: `1px solid ${applied ? dotColor : 'transparent'}`,
                         }}
                       >
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: applied ? dotColor : TK.line }} />
-                        <span style={{ flex: 1, fontFamily: TK.sans, fontSize: 11, color: applied ? TK.ink : TK.inkMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: applied ? dotColor : t.line }} />
+                        <span style={{ flex: 1, fontFamily: t.sans, fontSize: 11, color: applied ? t.ink : t.inkMute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {way.name || `(unnamed ${way.type})`}
                         </span>
                         {applied && <span style={{ fontSize: 9, color: dotColor, flexShrink: 0 }}>✓</span>}
@@ -516,7 +523,7 @@ export function RiversSidebarV2() {
         {riverEditMode && (
           <BrushRow
             label="Select segment"
-            color={riverSelectMode ? riverStyle.color : TK.inkFaint}
+            color={riverSelectMode ? riverStyle.color : t.inkFaint}
             active={riverSelectMode}
             onSelect={() => setActiveTool(riverSelectMode ? { type: 'river-paint' } : { type: 'river-select' })}
           />
@@ -535,7 +542,7 @@ export function RiversSidebarV2() {
         {canalEditMode && (
           <BrushRow
             label="Select segment"
-            color={canalSelectMode ? canalStyle.color : TK.inkFaint}
+            color={canalSelectMode ? canalStyle.color : t.inkFaint}
             active={canalSelectMode}
             onSelect={() => setActiveTool(canalSelectMode ? { type: 'canal-paint' } : { type: 'canal-select' })}
           />
@@ -554,19 +561,19 @@ export function RiversSidebarV2() {
 
         <BrushRow
           label="Edit nodes"
-          color={riverNodeEditMode ? '#8ab8d8' : TK.inkFaint}
+          color={riverNodeEditMode ? '#8ab8d8' : t.inkFaint}
           active={riverNodeEditMode}
           shortcut="4"
           onSelect={() => setActiveTool(riverNodeEditMode ? { type: 'none' } : { type: 'river-node-edit' })}
         />
 
         {hint && (
-          <div style={{ padding: '4px 14px 2px', fontFamily: TK.sans, fontSize: 10.5, color: TK.inkMute, lineHeight: 1.5 }}>
+          <div style={{ padding: '4px 14px 2px', fontFamily: t.sans, fontSize: 10.5, color: t.inkMute, lineHeight: 1.5 }}>
             {hint}
           </div>
         )}
         {(riverEdges.length > 0 || canalEdges.length > 0) && (
-          <div style={{ padding: '4px 14px 2px', fontFamily: TK.mono, fontSize: 9.5, color: TK.inkFaint, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ padding: '4px 14px 2px', fontFamily: t.mono, fontSize: 9.5, color: t.inkFaint, display: 'flex', flexDirection: 'column', gap: 1 }}>
             {riverEdges.length > 0 && <span>{riverEdges.length} river edge{riverEdges.length !== 1 ? 's' : ''}</span>}
             {canalEdges.length > 0 && <span>{canalEdges.length} canal edge{canalEdges.length !== 1 ? 's' : ''}</span>}
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMapStore, type SettlementTier } from '../store/mapStore'
+import { shouldSuppressShortcut } from '../lib/keyboard'
 import { SettlementsSettingsFlyout } from './SettlementsSettingsFlyout'
 import { UrbanSettingsFlyout } from './UrbanSettingsFlyout'
 import { sidebarStyle, sectionStyle, labelStyle } from './sidebarStyles'
@@ -82,7 +83,7 @@ export function SettlementsSidebar() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (shouldSuppressShortcut(e)) return
       if (e.key === '1') selectTier(1)
       else if (e.key === '2') selectTier(2)
       else if (e.key === '3') selectTier(3)

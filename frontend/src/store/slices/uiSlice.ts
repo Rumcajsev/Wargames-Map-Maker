@@ -842,6 +842,12 @@ export function migratePersisted(persisted: unknown, fromVersion: number): Recor
     if (s.terrainBlobSatelliteChance === undefined) s.terrainBlobSatelliteChance = 0
     if (s.terrainBlobPatchSize === undefined) s.terrainBlobPatchSize = 0.2
   }
+  if (fromVersion < 59) {
+    if (!s.hillshadeDisabledTerrains) s.hillshadeDisabledTerrains = []
+    if (!s.hillshadeDisabledElevClasses) s.hillshadeDisabledElevClasses = []
+    if (!s.contourDisabledTerrains) s.contourDisabledTerrains = []
+    if (!s.contourDisabledElevClasses) s.contourDisabledElevClasses = []
+  }
   return s
 }
 
